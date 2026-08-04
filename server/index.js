@@ -100,6 +100,60 @@ app.get('/api/reference', A.exigerConnexion, (req, res) => {
   });
 });
 
+/* -------------------------- Calendrier d'un chef --------------------------- */
+
+/**
+ * Toutes les semaines de l'annee avec l'etat de la fiche correspondante, pour
+ * que le chef d'equipe voie d'un coup ce qui lui reste a faire. Les semaines
+ * sans fiche ressortent "manquante" — ou "avenir" si elles ne sont pas encore
+ * arrivees, une semaine future n'etant pas un retard.
+ */
+app.get('/api/calendrier', A.exigerConnexion, (req, res) => {
+  const courante = D.semaineISO(new Date());
+  const annee = Number(req.query.annee) || courante.annee;
+  if (!Number.isInteger(annee) || annee < 2020 || annee > 2100) {
+    return res.status(400).json({ erreur: 'Annee invalide.' });
+  }
+
+  const chefId = req.utilisateur.role === 'chef' ? req.utilisateur.id : Number(req.query.chef);
+  if (!chefId) return res.status(400).json({ erreur: "Precisez le chef d equipe concerne." });
+
+  const fiches = F.listerFiches({ annee, chefId });
+  const parSemaine = new Map(fiches.map((f) => [f.semaine, f]));
+
+  const semaines = [];
+  for (let s = 1; s <= D.nombreSemainesISO(annee); s += 1) {
+    const fiche = parSemaine.get(s) || null;
+    const dates = D.datesDeLaSemaine(annee, s);
+    const future = annee > courante.annee || (annee === courante.annee && s > courante.semaine);
+    semaines.push({
+      semaine: s,
+      debut: dates[0],
+      fin: dates[6],
+      // Rattachee au mois de son jeudi, comme la norme ISO : la semaine 1 se
+      // range ainsi en janvier meme quand son lundi tombe en decembre.
+      mois: Number(dates[3].slice(5, 7)),
+      courante: annee === courante.annee && s === courante.semaine,
+      etat: fiche ? fiche.statut : future ? 'avenir' : 'manquante',
+      fiche,
+    });
+  }
+
+  const compter = (etat) => semaines.filter((s) => s.etat === etat).length;
+  res.json({
+    annee,
+    semaineCourante: courante,
+    semaines,
+    totaux: {
+      manquante: compter('manquante'),
+      brouillon: compter('brouillon'),
+      soumise: compter('soumise'),
+      rejetee: compter('rejetee'),
+      validee: compter('validee'),
+    },
+  });
+});
+
 /* --------------------------------- Fiches --------------------------------- */
 
 app.get('/api/fiches', A.exigerConnexion, (req, res) => {

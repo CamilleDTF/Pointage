@@ -21,15 +21,91 @@ async function demarrer() {
     location.href = '/directeur.html';
     return;
   }
+  definirRole('chef');
   $('entete-chef').textContent = utilisateur.nom;
 
   reference = await API.get('/api/reference');
   $('annee').value = reference.semaineCourante.annee;
   $('semaine').value = reference.semaineCourante.semaine;
 
+  $('annee-calendrier').value = reference.semaineCourante.annee;
+  // Deplie sur grand ecran ; replie sur telephone, ou 53 semaines separeraient
+  // le chef de sa fiche.
+  $('bloc-calendrier').open = window.matchMedia('(min-width: 1024px)').matches;
   majBoutonPresentation();
   surveillerReseau();
+  await chargerCalendrier();
   await ouvrirFiche();
+}
+
+$('annee-calendrier').addEventListener('change', chargerCalendrier);
+
+/* -------------------------- Calendrier de l'annee ------------------------- */
+
+/** Vue d'ensemble : chaque semaine de l'annee avec l'etat de sa fiche. */
+async function chargerCalendrier() {
+  const annee = Number($('annee-calendrier').value);
+  let donnees;
+  try {
+    donnees = await API.get(`/api/calendrier?annee=${annee}`);
+  } catch (e) {
+    message(e.message, 'erreur');
+    return;
+  }
+
+  const aTraiter = [
+    ['rejetee', donnees.totaux.rejetee],
+    ['manquante', donnees.totaux.manquante],
+    ['brouillon', donnees.totaux.brouillon],
+    ['soumise', donnees.totaux.soumise],
+    ['validee', donnees.totaux.validee],
+  ];
+  $('resume-calendrier').innerHTML = aTraiter
+    .filter(([, nombre]) => nombre > 0)
+    .map(([etat, nombre]) => `<span class="etat ${etat}">${nombre} ${echapper(etiquetteStatut(etat))}</span>`)
+    .join('');
+
+  const parMois = new Map();
+  for (const semaine of donnees.semaines) {
+    if (!parMois.has(semaine.mois)) parMois.set(semaine.mois, []);
+    parMois.get(semaine.mois).push(semaine);
+  }
+
+  $('calendrier').innerHTML = [...parMois.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([mois, semaines]) => `
+      <div class="mois">
+        <h3>${Regles.MOIS[mois - 1]}</h3>
+        <div class="semaines">${semaines.map(caseSemaine).join('')}</div>
+      </div>`)
+    .join('');
+
+  $('calendrier').querySelectorAll('.case-semaine').forEach((bouton) => {
+    bouton.addEventListener('click', () => {
+      $('annee').value = donnees.annee;
+      $('semaine').value = bouton.dataset.semaine;
+      ouvrirFiche();
+      $('contenu').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
+function caseSemaine(semaine) {
+  const fiche = semaine.fiche;
+  // Le chantier quand il existe, sinon l'etat en toutes lettres : la couleur
+  // seule ne suffit pas a qui la distingue mal.
+  const detail = fiche && fiche.chantier
+    ? echapper(fiche.chantier)
+    : semaine.etat === 'avenir' ? '' : echapper(etiquetteStatut(semaine.etat));
+  return `
+    <button type="button" class="case-semaine ${semaine.etat}${semaine.courante ? ' courante' : ''}"
+            data-semaine="${semaine.semaine}"
+            title="${echapper(etiquetteStatut(semaine.etat))}">
+      <span class="numero">S${String(semaine.semaine).padStart(2, '0')}</span>
+      <span class="dates">${jourMois(semaine.debut)} – ${jourMois(semaine.fin)}</span>
+      <span class="detail">${detail}</span>
+      ${semaine.courante ? '<span class="marque">cette semaine</span>' : ''}
+    </button>`;
 }
 
 $('btn-ouvrir').addEventListener('click', () => ouvrirFiche());
@@ -503,6 +579,7 @@ async function transmettre() {
     const reponse = await API.post(`/api/fiches/${fiche.id}/soumettre`);
     fiche = reponse.fiche;
     afficher();
+    await chargerCalendrier();
     message('Fiche transmise au directeur.', 'succes');
   } catch (e) {
     if (e.anomalies) afficherAnomalies(e.anomalies);

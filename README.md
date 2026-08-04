@@ -137,6 +137,16 @@ corriger, la valider, ou la lui renvoyer pour correction avec un motif.
   conservé sur l'appareil et transmis dès son rétablissement.
 - Le bouton *Contrôler et transmettre* refuse une fiche incomplète et affiche
   précisément ce qui manque.
+- **Calendrier de l'année** — toutes les semaines avec l'état de leur fiche, en
+  un écran : *à faire*, *à compléter*, *en attente de validation*, *à corriger*,
+  *validé*. Les semaines non encore arrivées sont marquées *à venir* plutôt
+  qu'en retard. Un clic sur une semaine ouvre sa fiche. Déplié sur grand écran,
+  replié sur téléphone — le résumé chiffré reste visible dans les deux cas.
+
+Un même statut ne se dit pas pareil selon qui le lit : une fiche transmise est
+« en attente de validation » pour le chef qui l'a envoyée, et « à vérifier » pour
+le directeur qui doit s'en occuper. Les libellés suivent le rôle
+(`ETIQUETTES_STATUT` dans `public/js/regles.js`).
 
 ### Directeur — `/directeur.html`
 

@@ -12,6 +12,7 @@ async function demarrer() {
     location.href = '/chef.html';
     return;
   }
+  definirRole('directeur');
   $('entete-nom').textContent = utilisateur.nom;
 
   reference = await API.get('/api/reference');

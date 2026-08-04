@@ -193,6 +193,44 @@
     'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
 
   /**
+   * Nombre de semaines ISO d'une annee : 52, ou 53 les annees longues. Le 28
+   * decembre appartient toujours a la derniere semaine, quelle que soit
+   * l'annee — c'est la facon la plus sure de la compter.
+   */
+  function nombreSemainesISO(annee) {
+    return semaineISO(new Date(annee, 11, 28)).semaine;
+  }
+
+  /*
+   * Un meme statut ne se dit pas pareil selon qui le lit : une fiche transmise
+   * est "en attente de validation" pour le chef qui l'a envoyee, et "a verifier"
+   * pour le directeur qui doit s'en occuper.
+   */
+  const ETIQUETTES_STATUT = {
+    chef: {
+      avenir: 'À venir',
+      manquante: 'À faire',
+      brouillon: 'À compléter',
+      soumise: 'En attente de validation',
+      rejetee: 'À corriger',
+      validee: 'Validé',
+    },
+    directeur: {
+      avenir: 'À venir',
+      manquante: 'Non commencée',
+      brouillon: 'En cours',
+      soumise: 'À vérifier',
+      rejetee: 'À corriger',
+      validee: 'Validée',
+    },
+  };
+
+  function etiquetteStatut(statut, role) {
+    const table = ETIQUETTES_STATUT[role] || ETIQUETTES_STATUT.directeur;
+    return table[statut] || statut;
+  }
+
+  /**
    * Controles de coherence appliques avant transmission, puis rappeles au
    * directeur. Une anomalie "bloquant" empeche la transmission ; une "alerte"
    * est signalee mais laisse la main.
@@ -278,6 +316,9 @@
     semainesDuMois,
     sansAccents,
     MOIS,
+    nombreSemainesISO,
+    ETIQUETTES_STATUT,
+    etiquetteStatut,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = Regles;

@@ -238,3 +238,34 @@ test('le cookie de session s adapte au protocole reellement utilise', async () =
     assert.equal(moi.status, 200);
   }
 });
+
+test('le calendrier ne montre que les semaines du chef connecte', async () => {
+  const a = await connexion('chefa', '1111');
+  const b = await connexion('chefb', '2222');
+
+  db.exec('DELETE FROM fiches');
+  const fiche = (await a('POST', '/api/fiches/semaine', { annee: 2026, semaine: 20 })).corps.fiche;
+  await a('PUT', `/api/fiches/${fiche.id}`, { chantier: 'Chantier A', ville: 'Toulouse' });
+
+  const calendrierA = await a('GET', '/api/calendrier?annee=2026');
+  const calendrierB = await b('GET', '/api/calendrier?annee=2026');
+  assert.equal(calendrierA.statut, 200);
+
+  // 2026 compte 53 semaines : le calendrier les couvre toutes.
+  assert.equal(calendrierA.corps.semaines.length, 53);
+  assert.equal(calendrierA.corps.semaines.filter((s) => s.fiche).length, 1);
+  assert.equal(calendrierB.corps.semaines.filter((s) => s.fiche).length, 0, 'le chef B ne voit rien du chef A');
+
+  const s20 = calendrierA.corps.semaines.find((s) => s.semaine === 20);
+  assert.equal(s20.etat, 'brouillon');
+  assert.equal(s20.fiche.chantier, 'Chantier A');
+
+  // Une semaine encore a venir n'est pas un retard.
+  const derniere = calendrierA.corps.semaines[52];
+  assert.equal(derniere.etat, 'avenir');
+  assert.equal(calendrierA.corps.totaux.brouillon, 1);
+
+  // La semaine 1 se range en janvier, bien que son lundi tombe en decembre.
+  assert.equal(calendrierA.corps.semaines[0].mois, 1);
+  assert.equal(calendrierA.corps.semaines[0].debut.slice(5, 7), '12');
+});

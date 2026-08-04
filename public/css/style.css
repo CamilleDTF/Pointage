@@ -188,6 +188,95 @@ td.weekend { background: #f5f7fa; }
 .jour.repos .entete { color: var(--orange); }
 .jour input.absent { background: #fdf6e3; border-color: #e5c976; }
 
+/* ------------------------- Calendrier de l'année -------------------------- */
+
+.titre-calendrier {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.titre-calendrier .intitule {
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bleu);
+  font-weight: 700;
+}
+
+.etats-resume { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+
+#calendrier { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+
+.mois h3 {
+  margin: 0 0 6px;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gris-texte);
+  border-bottom: 1px solid var(--gris-bord);
+  padding-bottom: 4px;
+}
+
+.mois .semaines { display: flex; flex-direction: column; gap: 5px; }
+
+/* Chaque semaine est un bouton : l'état se lit à la couleur, le détail au texte. */
+.case-semaine {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 'numero dates' 'numero detail';
+  gap: 0 10px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: 1px solid var(--gris-bord);
+  border-left: 4px solid var(--gris-bord);
+  border-radius: 7px;
+  background: #fff;
+  font-weight: 400;
+  align-items: center;
+}
+.case-semaine:hover { background: #f4f8fc; border-color: var(--bleu-clair); }
+.case-semaine .numero {
+  grid-area: numero;
+  font-weight: 700;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--bleu);
+}
+.case-semaine .dates { grid-area: dates; font-size: 0.76rem; color: var(--gris-texte); }
+.case-semaine .detail {
+  grid-area: detail;
+  font-size: 0.72rem;
+  color: #8b95a3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.case-semaine .marque {
+  grid-column: 1 / -1;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--orange);
+}
+
+.case-semaine.avenir { opacity: 0.5; background: #fbfcfd; }
+.case-semaine.avenir .numero { color: var(--gris-texte); }
+.case-semaine.manquante { border-left-color: #b7c0cc; border-left-style: dashed; }
+.case-semaine.brouillon { border-left-color: var(--orange); background: #fdf9f2; }
+.case-semaine.soumise   { border-left-color: var(--bleu-clair); background: #f3f8fc; }
+.case-semaine.rejetee   { border-left-color: var(--rouge); background: #fdf4f3; }
+.case-semaine.validee   { border-left-color: var(--vert); background: #f4faf6; }
+.case-semaine.courante  { box-shadow: 0 0 0 2px var(--orange); }
+
+@media (max-width: 640px) {
+  #calendrier { grid-template-columns: 1fr; }
+  .etats-resume { margin-left: 0; }
+}
+
 /* ------------------- Grille de saisie (PC portable) ---------------------- */
 
 .grille-pointage { font-size: 0.86rem; }

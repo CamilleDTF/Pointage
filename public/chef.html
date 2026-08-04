@@ -22,6 +22,23 @@
   <div class="hors-ligne masque" id="banniere-reseau"></div>
 
   <main>
+    <details class="carte" id="bloc-calendrier">
+      <summary class="titre-calendrier">
+        <span class="intitule">Mes fiches de l'année</span>
+        <span id="resume-calendrier" class="etats-resume"></span>
+      </summary>
+
+      <div class="rangee" style="margin-top:14px">
+        <div style="width:120px">
+          <label for="annee-calendrier">Année</label>
+          <input id="annee-calendrier" type="number" min="2020" max="2100" step="1">
+        </div>
+      </div>
+
+      <div id="calendrier" style="margin-top:16px"></div>
+      <p class="aide">Cliquez sur une semaine pour ouvrir sa fiche.</p>
+    </details>
+
     <section class="carte">
       <h2>Semaine</h2>
       <div class="rangee">

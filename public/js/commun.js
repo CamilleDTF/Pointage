@@ -47,17 +47,15 @@ const { versMinutes, versTexte, versSaisie, jourMois, controlerFiche } = Regles;
 
 const semaineISOCourante = () => Regles.semaineISO(new Date());
 
-const etiquetteStatut = (statut) =>
-  ({
-    manquante: 'Non commencée',
-    brouillon: 'En cours',
-    soumise: 'À vérifier',
-    validee: 'Validée',
-    rejetee: 'À corriger',
-  })[statut] || statut;
+// Le role de la personne connectee, renseigne au demarrage de chaque ecran :
+// un meme statut ne se dit pas pareil selon qu'on transmet ou qu'on valide.
+let roleCourant = 'directeur';
+const definirRole = (role) => { roleCourant = role; };
 
-function badgeStatut(statut) {
-  return `<span class="etat ${statut}">${etiquetteStatut(statut)}</span>`;
+const etiquetteStatut = (statut, role) => Regles.etiquetteStatut(statut, role || roleCourant);
+
+function badgeStatut(statut, role) {
+  return `<span class="etat ${statut}">${echapper(etiquetteStatut(statut, role))}</span>`;
 }
 
 function echapper(texte) {
