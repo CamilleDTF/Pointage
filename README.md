@@ -45,9 +45,15 @@ silencieusement de l'original.
 Il suffit d'avoir [Node.js](https://nodejs.org) 20 ou plus. Aucun droit
 particulier, aucune installation serveur.
 
+**Windows** : double-cliquez sur `DEMARRER.bat`, à la racine du dossier. Un
+fichier `.bat` échappe à la politique d'exécution qui bloque les scripts
+PowerShell sur la plupart des postes d'entreprise — c'est la voie la plus sûre.
+`scripts\demarrer.ps1` fait la même chose pour qui préfère PowerShell.
+
+**macOS et Linux** :
+
 ```bash
-./scripts/demarrer.sh      # macOS, Linux
-.\scripts\demarrer.ps1     # Windows (clic droit > Exécuter avec PowerShell)
+./scripts/demarrer.sh
 ```
 
 Le script installe les dépendances au premier lancement, crée un compte directeur
