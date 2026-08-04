@@ -11,7 +11,7 @@ sans abonnement.
 |---|---|---|---|
 | **A. Votre NAS + Tailscale** ← retenue | **0 €** | Le NAS de l'entreprise, avec Docker | Votre cas |
 | B. Oracle Cloud Always Free | 0 € (carte demandée à l'inscription, jamais débitée) | Un compte Oracle Cloud | Si aucune machine ne peut rester allumée |
-| C. Réseau local seul | 0 € | Un PC au dépôt | Si les fiches sont remplies au dépôt et jamais sur chantier |
+| C. Réseau local seul | 0 € | Une machine au dépôt | **Seulement si** la saisie a toujours lieu au dépôt |
 
 ---
 
@@ -157,12 +157,35 @@ pour Tailscale, qui n'en demande aucun.
 
 ## Option C — réseau local seul
 
-Si les fiches sont toujours remplies au dépôt, sur le Wi-Fi de l'entreprise, une
-adresse locale du type `http://192.168.1.20:3000` suffit et ne coûte rien.
+Une adresse locale du type `http://192.168.1.20:3000` fonctionne telle quelle :
+l'application détecte qu'elle est jointe en clair et n'exige pas HTTPS. Elle
+l'écrit une fois dans son journal au premier accès.
 
-Limite à connaître : **sans HTTPS, les codes circulent en clair** sur le réseau, et
-l'installation sur l'écran d'accueil du téléphone n'est pas proposée. Cette option
-ne convient donc que si la saisie a toujours lieu au dépôt, sur votre propre Wi-Fi.
+Trois limites, dont une rédhibitoire selon l'usage :
+
+1. **Une adresse locale n'est joignable que depuis vos locaux.** Un chef d'équipe
+   sur chantier, en 4G, ne l'atteindra pas. C'est la limite qui décide : cette
+   option ne convient que si la saisie a systématiquement lieu au dépôt, sur le
+   Wi-Fi de l'entreprise.
+2. **Les codes circulent en clair** sur le réseau. Acceptable sur un réseau
+   d'entreprise maîtrisé, à peser tout de même.
+3. **Pas d'installation sur l'écran d'accueil** des téléphones : les navigateurs
+   la réservent aux sites en HTTPS. L'application reste utilisable dans le
+   navigateur, simplement moins pratique à ouvrir.
+
+Ouvrir un port de votre box vers l'application pour la rendre accessible depuis
+les chantiers serait le pire des choix : cela exposerait vos données de paie à
+tout Internet, sans chiffrement. Tailscale règle exactement ce problème, sans
+ouvrir quoi que ce soit.
+
+### Forcer HTTPS malgré tout
+
+Si vous placez l'application derrière un reverse proxy dont vous êtes sûr, vous
+pouvez exiger que le cookie de session ne circule jamais en clair :
+
+```
+COOKIE_SECURE=true
+```
 
 ---
 
@@ -214,7 +237,8 @@ sqlite3 /tmp/verif.db "SELECT COUNT(*) FROM fiches;"
 | `PORT` | Port d'écoute | `3000` |
 | `DATA_DIR` | Dossier de la base et de la clé de session | `./data` |
 | `SESSION_SECRET` | Clé de signature des sessions | générée dans `DATA_DIR/session.key` |
-| `NODE_ENV` | `production` active le cookie `Secure` (HTTPS requis) | — |
+| `NODE_ENV` | `production` : messages d'erreur non détaillés | — |
+| `COOKIE_SECURE` | `true` force le cookie `Secure`, même joint en HTTP | déduit du protocole utilisé |
 
 ---
 

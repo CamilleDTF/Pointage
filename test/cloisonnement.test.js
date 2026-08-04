@@ -210,3 +210,31 @@ test('une correction partielle du directeur ne detruit pas la saisie du chef', a
   assert.equal(apres.corps.fiche.lignes[0].nom_affiche, 'ANDRE Alain');
   assert.equal(apres.corps.fiche.total_minutes, 2250);
 });
+
+test('le cookie de session s adapte au protocole reellement utilise', async () => {
+  const connecter = (entetes) =>
+    fetch(`${base}/api/connexion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...entetes },
+      body: JSON.stringify({ identifiant: 'chefa', pin: '1111' }),
+    });
+
+  // Sur le reseau local, en http:// : un cookie Secure serait rejete par le
+  // navigateur, et la connexion echouerait sans le moindre message.
+  const clair = await connecter({});
+  assert.equal(clair.status, 200);
+  assert.ok(!clair.headers.getSetCookie()[0].includes('Secure'), 'pas de Secure en HTTP simple');
+
+  // Derriere Tailscale ou un reverse proxy, la connexion est chiffree : le
+  // cookie doit alors porter Secure.
+  const chiffre = await connecter({ 'X-Forwarded-Proto': 'https' });
+  assert.equal(chiffre.status, 200);
+  assert.ok(chiffre.headers.getSetCookie()[0].includes('Secure'), 'Secure attendu derriere un proxy HTTPS');
+
+  // Dans les deux cas, la session obtenue reste utilisable.
+  for (const reponse of [clair, chiffre]) {
+    const cookie = reponse.headers.getSetCookie()[0].split(';')[0];
+    const moi = await fetch(`${base}/api/moi`, { headers: { Cookie: cookie } });
+    assert.equal(moi.status, 200);
+  }
+});

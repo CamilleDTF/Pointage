@@ -234,7 +234,8 @@ chaque correction est tracée dans le journal.
 | `PORT` | Port d'écoute | `3000` |
 | `DATA_DIR` | Dossier de la base et de la clé de session | `./data` |
 | `SESSION_SECRET` | Clé de signature des sessions | générée dans `DATA_DIR/session.key` |
-| `NODE_ENV` | `production` active le cookie `Secure` (HTTPS obligatoire) | — |
+| `NODE_ENV` | `production` : messages d'erreur non détaillés | — |
+| `COOKIE_SECURE` | `true` force le cookie `Secure`, même joint en HTTP | déduit du protocole utilisé |
 
 Mise en production sans abonnement : voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 

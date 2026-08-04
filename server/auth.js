@@ -69,9 +69,41 @@ function session(req, res, next) {
   next();
 }
 
-function ouvrirSession(res, utilisateur) {
+/**
+ * La connexion en cours est-elle chiffree ? Derriere un proxy (Tailscale serve,
+ * Caddy, reverse proxy du NAS), c'est l'en-tete transmise qui fait foi.
+ */
+function connexionChiffree(req) {
+  if (req.secure) return true;
+  const transmis = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  return transmis === 'https';
+}
+
+let avertissementEmis = false;
+
+function ouvrirSession(req, res, utilisateur) {
   const jeton = signer({ uid: utilisateur.id, role: utilisateur.role, exp: Date.now() + DUREE_SESSION_MS });
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+
+  /*
+   * L'attribut Secure est pose selon la facon dont l'application est REELLEMENT
+   * jointe, pas selon NODE_ENV. Sinon, une installation en HTTPS derriere
+   * Tailscale et un acces direct en http:// sur le reseau local ne peuvent pas
+   * cohabiter : le navigateur rejette silencieusement un cookie Secure recu en
+   * clair, et la connexion echoue sans le moindre message.
+   */
+  const chiffree = connexionChiffree(req);
+  const force = process.env.COOKIE_SECURE === 'true';
+  const secure = chiffree || force ? '; Secure' : '';
+
+  if (!chiffree && !force && !avertissementEmis) {
+    avertissementEmis = true;
+    console.warn(
+      'Attention : application jointe en HTTP simple. Les codes circulent en clair ' +
+        "et l'installation sur l'ecran d'accueil des telephones n'est pas proposee. " +
+        'Voir docs/DEPLOIEMENT.md pour passer en HTTPS via Tailscale.'
+    );
+  }
+
   res.setHeader(
     'Set-Cookie',
     `${NOM_COOKIE}=${encodeURIComponent(jeton)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${
@@ -131,6 +163,7 @@ const verifierPin = (pin, hash) => bcrypt.compareSync(String(pin), hash);
 module.exports = {
   session,
   ouvrirSession,
+  connexionChiffree,
   fermerSession,
   exigerConnexion,
   exigerDirecteur,

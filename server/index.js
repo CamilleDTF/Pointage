@@ -48,7 +48,7 @@ app.post('/api/connexion', (req, res) => {
   }
 
   A.reinitialiserTentatives(cle);
-  A.ouvrirSession(res, utilisateur);
+  A.ouvrirSession(req, res, utilisateur);
   res.json({ utilisateur: { id: utilisateur.id, nom: utilisateur.nom, role: utilisateur.role } });
 });
 
