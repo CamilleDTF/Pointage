@@ -109,7 +109,41 @@ corriger, la valider, ou la lui renvoyer pour correction avec un motif.
   les fiches à vérifier, ou toutes.
 - Écran **Équipes** : comptes des chefs, codes, salariés et leur affectation.
 
-## Contenu des exports
+## Le tableau mensuel pour la paie
+
+Depuis le tableau de bord, le bouton **Télécharger le tableau mensuel** produit le
+classeur au format du tableau interne : une feuille `Total` et une feuille par
+salarié, avec les six emplacements de semaine, la ligne de totaux et le bloc de
+calcul de paie. Les formules d'origine sont conservées (`INDIRECT` depuis Total,
+taux horaire remonté vers les feuilles individuelles).
+
+| Colonne | D'où elle vient |
+|---|---|
+| Lundi → dimanche | Heures du jour, ou code absence si la journée n'a pas été travaillée |
+| `0,25` | Les 8 premières heures au-delà de 35 h **sur la semaine** |
+| `0,5` | Les heures supplémentaires suivantes |
+| `TRAJET 50%` / `TRAJET 100%` | Colonnes trajet 50 % et route 100 % de la fiche |
+| `AMIANTE 1` / `AMIANTE 2` | Jours en zone, selon que le masque est `VA` ou `AA` |
+| `PANIER` | Jours de déplacement |
+| `GD 72` / `GD 80` | Ces mêmes jours, ventilés selon la ville du chantier |
+| `Contrôle` | `total − 25 % − 50 % − 100 % − 35` : ce qui reste à redistribuer |
+
+Restent en **jaune**, à la main du directeur : `NUIT`, `DIMANCHE`, `FÉRIÉS`, la
+colonne `1` (100 %), `PERFO`, `EDEN RED`, `GD AUTRES`, les heures d'absence, le
+nombre d'heures du mois et le taux horaire.
+
+### Deux conventions à valider
+
+- **Grand déplacement.** La ville du chantier décide : `Nice` et `Paris` relèvent
+  du GD 80, toute autre ville du GD 72. La liste est dans
+  `public/js/regles.js` (`VILLES_GRAND_DEPLACEMENT_80`) et s'étend en une ligne.
+- **Semaines à cheval sur deux mois.** Chaque tableau ne retient que ses propres
+  jours — comme dans votre fichier, où le 29 et le 30 juin restent vides sur la
+  feuille de juillet. Les primes de la semaine suivent au prorata des jours
+  pointés. Conséquence à connaître : les heures supplémentaires d'une semaine
+  partagée sont calculées sur la portion du mois, pas sur la semaine entière.
+
+## Contenu des exports hebdomadaires
 
 Le classeur Excel contient trois choses dans un seul fichier :
 
@@ -126,7 +160,9 @@ français l'ouvre directement).
 
 ```
 server/
-  domaine.js    Règles métier : conversion des heures, semaines ISO, contrôles de cohérence
+  domaine.js    Point d'entrée des règles métier (réexporte public/js/regles.js)
+  mensuel.js    Agrégation d'un mois de paie par salarié et par semaine
+  export-mensuel.js  Classeur mensuel au format du tableau interne du directeur
   db.js         Schéma SQLite et journal des actions
   auth.js       Sessions signées, codes PIN, limitation des tentatives
   fiches.js     Cycle de vie d'une fiche : création, saisie, transmission, validation
@@ -142,6 +178,8 @@ public/
   sw.js         Service worker : mise en cache de la coquille de l'application
 test/
   domaine.test.js       Conversion des heures, semaines ISO, contrôles de cohérence
+  paie.test.js          Majorations 25 / 50 %, grand déplacement, découpage des mois
+  mensuel.test.js       Agrégation d'un mois depuis les fiches
   cloisonnement.test.js Cloisonnement des accès par code, bout en bout sur l'API
 Dockerfile, docker-compose.yml   Installation en une commande sur votre machine
 ```
@@ -177,5 +215,4 @@ Mise en production sans abonnement : voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT
 
 ## Suite prévue
 
-- Caler l'export sur le tableau Excel interne du directeur, dès réception du fichier.
 - Fiches d'exposition journalières : projet distinct, dans un second temps.

@@ -8,6 +8,8 @@ const D = require('./domaine');
 const F = require('./fiches');
 const A = require('./auth');
 const X = require('./export');
+const XM = require('./export-mensuel');
+const M = require('./mensuel');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -206,6 +208,45 @@ app.get(
     res.send(Buffer.from(buffer));
   })
 );
+
+app.get(
+  '/api/export/mois.xlsx',
+  A.exigerDirecteur,
+  asyncRoute(async (req, res) => {
+    const annee = Number(req.query.annee);
+    const mois = Number(req.query.mois);
+    if (!Number.isInteger(annee) || annee < 2020 || annee > 2100) {
+      return res.status(400).json({ erreur: 'Annee invalide.' });
+    }
+    if (!Number.isInteger(mois) || mois < 1 || mois > 12) {
+      return res.status(400).json({ erreur: 'Mois invalide (1 a 12).' });
+    }
+
+    const donnees = M.agregerMois(annee, mois, { statut: req.query.statut || 'validee' });
+    const buffer = await XM.exporterMois(donnees);
+    const nom = nomFichier(`pointage_mensuel_${annee}_${String(mois).padStart(2, '0')}.xlsx`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${nom}"`);
+    res.send(Buffer.from(buffer));
+  })
+);
+
+/** Ce que contiendra l'export mensuel, pour l'annoncer avant de le telecharger. */
+app.get('/api/export/mois-apercu', A.exigerDirecteur, (req, res) => {
+  const annee = Number(req.query.annee);
+  const mois = Number(req.query.mois);
+  if (!Number.isInteger(annee) || !Number.isInteger(mois) || mois < 1 || mois > 12) {
+    return res.status(400).json({ erreur: 'Période invalide.' });
+  }
+  const donnees = M.agregerMois(annee, mois, { statut: req.query.statut || 'validee' });
+  res.json({
+    annee,
+    mois,
+    semaines: donnees.semaines.map((s) => ({ annee: s.annee, semaine: s.semaine, debut: s.dates[0] })),
+    nbSalaries: donnees.salaries.length,
+    minutes: donnees.salaries.reduce((s, x) => s + x.minutesMois, 0),
+  });
+});
 
 app.get('/api/export/periode.csv', A.exigerDirecteur, (req, res) => {
   const lignes = F.lignesPourExport({

@@ -109,6 +109,82 @@
     return (ligne.jours || []).reduce((s, j) => s + (Number(j.minutes) || 0), 0);
   }
 
+  /* ------------------------- Preparation de la paie ------------------------- */
+
+  const BASE_HEBDOMADAIRE_MINUTES = 35 * 60;
+  const SEUIL_MAJORATION_25_MINUTES = 8 * 60; // les 8 premieres heures supplementaires
+
+  /**
+   * Repartit les heures supplementaires d'UNE semaine : les 8 premieres sont
+   * majorees a 25 %, les suivantes a 50 %. Le calcul est hebdomadaire, jamais
+   * mensuel — c'est pour cela que le tableau mensuel raisonne par semaine.
+   */
+  function heuresSupplementaires(minutesSemaine) {
+    const supplement = Math.max(0, (Number(minutesSemaine) || 0) - BASE_HEBDOMADAIRE_MINUTES);
+    const minutes25 = Math.min(supplement, SEUIL_MAJORATION_25_MINUTES);
+    return { minutes25, minutes50: supplement - minutes25 };
+  }
+
+  /**
+   * Villes ouvrant droit au grand deplacement au taux 80 (GD 80) ; toute autre
+   * ville releve du taux 72 (GD 72). Liste volontairement explicite : elle se
+   * complete ici si d'autres agglomerations sont concernees.
+   */
+  const VILLES_GRAND_DEPLACEMENT_80 = ['NICE', 'PARIS'];
+
+  function sansAccents(texte) {
+    return String(texte || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // diacritiques laissees par la decomposition NFD
+      .toUpperCase();
+  }
+
+  /** Le chantier se situe-t-il dans une ville au taux 80 ? */
+  function estGrandDeplacement80(ville) {
+    const normalisee = sansAccents(ville);
+    return VILLES_GRAND_DEPLACEMENT_80.some(
+      (v) => normalisee === v || new RegExp(`(^|[^A-Z])${v}([^A-Z]|$)`).test(normalisee)
+    );
+  }
+
+  /**
+   * Les six emplacements de semaine du tableau mensuel, a partir de celle qui
+   * contient le 1er du mois.
+   *
+   * Une semaine a cheval sur deux mois figure dans les deux tableaux, mais
+   * chacun ne retient que ses propres jours : `joursDuMois` dit, pour chacun des
+   * sept jours, s'il appartient au mois. C'est ce qui evite de compter deux fois
+   * les heures d'une semaine partagee. Les emplacements excedentaires (souvent
+   * le sixieme) ressortent entierement a false : ils restent vides, comme dans le
+   * classeur d'origine.
+   */
+  function semainesDuMois(annee, mois) {
+    const premier = new Date(Date.UTC(annee, mois - 1, 1));
+    const dernier = new Date(Date.UTC(annee, mois, 0));
+    const curseur = new Date(premier);
+    curseur.setUTCDate(premier.getUTCDate() - ((premier.getUTCDay() + 6) % 7));
+
+    return Array.from({ length: 6 }, () => {
+      const { annee: a, semaine: s } = semaineISO(
+        new Date(curseur.getUTCFullYear(), curseur.getUTCMonth(), curseur.getUTCDate())
+      );
+      const dates = datesDeLaSemaine(a, s);
+      curseur.setUTCDate(curseur.getUTCDate() + 7);
+      return {
+        annee: a,
+        semaine: s,
+        dates,
+        joursDuMois: dates.map((iso) => {
+          const jour = new Date(`${iso}T00:00:00Z`);
+          return jour >= premier && jour <= dernier;
+        }),
+      };
+    });
+  }
+
+  const MOIS = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin',
+    'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
+
   /**
    * Controles de coherence appliques avant transmission, puis rappeles au
    * directeur. Une anomalie "bloquant" empeche la transmission ; une "alerte"
@@ -186,6 +262,14 @@
     semaineISO,
     controlerFiche,
     totalMinutesLigne,
+    BASE_HEBDOMADAIRE_MINUTES,
+    SEUIL_MAJORATION_25_MINUTES,
+    VILLES_GRAND_DEPLACEMENT_80,
+    heuresSupplementaires,
+    estGrandDeplacement80,
+    semainesDuMois,
+    sansAccents,
+    MOIS,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = Regles;

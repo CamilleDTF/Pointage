@@ -17,7 +17,9 @@ async function demarrer() {
   reference = await API.get('/api/reference');
   $('annee').value = reference.semaineCourante.annee;
   $('semaine').value = reference.semaineCourante.semaine;
+  preparerSelecteurMois();
   await charger();
+  await apercuMois();
 }
 
 $('btn-charger').addEventListener('click', charger);
@@ -27,6 +29,34 @@ $('btn-suivante').addEventListener('click', () => decalerSemaine(1));
 $('btn-admin').addEventListener('click', basculerAdmin);
 $('btn-export-xlsx').addEventListener('click', () => exporter('xlsx'));
 $('btn-export-csv').addEventListener('click', () => exporter('csv'));
+$('btn-export-mois').addEventListener('click', () => {
+  window.location.href = `/api/export/mois.xlsx?annee=${$('annee-mois').value}&mois=${$('mois').value}`;
+});
+for (const champ of ['mois', 'annee-mois']) $(champ).addEventListener('change', apercuMois);
+
+/** Annonce ce que contiendra le tableau mensuel avant de le telecharger. */
+async function apercuMois() {
+  const zone = $('apercu-mois');
+  try {
+    const a = await API.get(`/api/export/mois-apercu?annee=${$('annee-mois').value}&mois=${$('mois').value}`);
+    const semaines = a.semaines.map((s) => `S${s.semaine}`).join(', ');
+    zone.textContent = a.nbSalaries
+      ? `${a.nbSalaries} salarié(s), ${versTexte(a.minutes)} au total — semaines ${semaines}.`
+      : `Aucune fiche validée sur les semaines ${semaines}.`;
+    zone.style.color = a.nbSalaries ? '' : 'var(--orange)';
+  } catch (e) {
+    zone.textContent = e.message;
+    zone.style.color = 'var(--rouge)';
+  }
+}
+
+function preparerSelecteurMois() {
+  const courant = new Date();
+  $('mois').innerHTML = Regles.MOIS
+    .map((nom, i) => `<option value="${i + 1}"${i === courant.getMonth() ? ' selected' : ''}>${nom}</option>`)
+    .join('');
+  $('annee-mois').value = courant.getFullYear();
+}
 
 function decalerSemaine(pas) {
   let semaine = Number($('semaine').value) + pas;

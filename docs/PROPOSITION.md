@@ -143,11 +143,25 @@ Le classeur remis au directeur contient, dans un seul fichier :
 Un export **CSV** est également disponible pour les logiciels de paie qui
 n'acceptent pas le `.xlsx`.
 
-> **En attente de votre tableau interne.** Les colonnes de l'onglet « Récap
-> hebdo » ont été construites à partir des rubriques de la fiche, faute d'avoir
-> le tableau du directeur. Dès sa réception, je cale l'export exactement sur ses
-> colonnes et leur ordre, pour que le collage soit direct — voire l'import
-> automatique. C'est une demi-journée de travail, sans impact sur le reste.
+### Le tableau mensuel du directeur
+
+Un quatrième export produit directement le **tableau mensuel** au format interne :
+une feuille `Total` et une feuille par salarié, avec les six emplacements de
+semaine, la ligne de totaux et le bloc de calcul de paie, formules comprises.
+
+Sont calculés depuis les fiches : les heures jour par jour, les majorations à
+25 % (les 8 premières heures au-delà de 35 h sur la semaine) et à 50 %, les
+trajets, Amiante 1 et 2 (jours en zone selon le masque VA ou AA), le panier, et
+la ventilation GD 72 / GD 80. Restent en jaune, à la main du directeur : nuit,
+dimanche, fériés, 100 %, perfo, Eden Red, GD autres, heures d'absence et taux
+horaire. La case `Contrôle` conserve sa formule d'origine et retombe à zéro dès
+que les heures supplémentaires sont réparties.
+
+Deux conventions ont été déduites du fichier et méritent votre confirmation :
+la ville du chantier décide du GD 72 ou GD 80 (`Nice` et `Paris` au taux 80), et
+une semaine à cheval sur deux mois n'apporte à chaque tableau que ses propres
+jours — exactement comme dans votre fichier, où le 29 et le 30 juin restent vides
+sur la feuille de juillet.
 
 ## 4. Pourquoi une application dédiée plutôt qu'une solution no-code
 
