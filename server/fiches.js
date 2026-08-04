@@ -147,7 +147,10 @@ function enregistrerFiche(ficheId, corps, utilisateur) {
     };
   }
 
-  const lignes = (corps.lignes || []).slice(0, NB_LIGNES_FICHE).map(normaliserLigne);
+  // Une mise a jour qui ne porte que sur l entete ne touche pas aux lignes :
+  // sans ce garde-fou, un PUT partiel effacerait toute la saisie de la semaine.
+  const remplacerLignes = Array.isArray(corps.lignes);
+  const lignes = remplacerLignes ? corps.lignes.slice(0, NB_LIGNES_FICHE).map(normaliserLigne) : [];
 
   const ecrire = db.transaction(() => {
     const maj = {};
@@ -164,30 +167,32 @@ function enregistrerFiche(ficheId, corps, utilisateur) {
       db.prepare("UPDATE fiches SET maj_le = datetime('now') WHERE id = ?").run(ficheId);
     }
 
-    const anciennes = db
-      .prepare('SELECT id, signature FROM fiche_lignes WHERE fiche_id = ? ORDER BY ordre, id')
-      .all(ficheId);
-    db.prepare('DELETE FROM fiche_lignes WHERE fiche_id = ?').run(ficheId);
+    if (remplacerLignes) {
+      const anciennes = db
+        .prepare('SELECT id, signature FROM fiche_lignes WHERE fiche_id = ? ORDER BY ordre, id')
+        .all(ficheId);
+      db.prepare('DELETE FROM fiche_lignes WHERE fiche_id = ?').run(ficheId);
 
-    const insLigne = db.prepare(
-      `INSERT INTO fiche_lignes
-         (fiche_id, salarie_id, nom_affiche, ordre, minutes_route, minutes_trajet,
-          jours_zone, type_masque, nb_deplacement, observation, signature)
-       VALUES (@fiche_id, @salarie_id, @nom_affiche, @ordre, @minutes_route, @minutes_trajet,
-               @jours_zone, @type_masque, @nb_deplacement, @observation, @signature)`
-    );
-    const insJour = db.prepare(
-      'INSERT INTO fiche_jours (ligne_id, jour, minutes, code_absence) VALUES (?, ?, ?, ?)'
-    );
+      const insLigne = db.prepare(
+        `INSERT INTO fiche_lignes
+           (fiche_id, salarie_id, nom_affiche, ordre, minutes_route, minutes_trajet,
+            jours_zone, type_masque, nb_deplacement, observation, signature)
+         VALUES (@fiche_id, @salarie_id, @nom_affiche, @ordre, @minutes_route, @minutes_trajet,
+                 @jours_zone, @type_masque, @nb_deplacement, @observation, @signature)`
+      );
+      const insJour = db.prepare(
+        'INSERT INTO fiche_jours (ligne_id, jour, minutes, code_absence) VALUES (?, ?, ?, ?)'
+      );
 
-    lignes.forEach((ligne, i) => {
-      // signature === undefined : le client ne l a pas renvoyee, on conserve l existante.
-      const signature = ligne.signature === undefined ? (anciennes[i] || {}).signature ?? null : ligne.signature;
-      const r = insLigne.run({ ...ligne, fiche_id: ficheId, signature });
-      for (const jour of ligne.jours) {
-        insJour.run(r.lastInsertRowid, jour.jour, jour.minutes, jour.code_absence);
-      }
-    });
+      lignes.forEach((ligne, i) => {
+        // signature === undefined : le client ne l a pas renvoyee, on conserve l existante.
+        const signature = ligne.signature === undefined ? (anciennes[i] || {}).signature ?? null : ligne.signature;
+        const r = insLigne.run({ ...ligne, fiche_id: ficheId, signature });
+        for (const jour of ligne.jours) {
+          insJour.run(r.lastInsertRowid, jour.jour, jour.minutes, jour.code_absence);
+        }
+      });
+    }
 
     if (estDirecteur && fiche.chef_id !== utilisateur.id) {
       journaliser(ficheId, utilisateur.id, 'correction_directeur', 'Fiche corrigee par le directeur');

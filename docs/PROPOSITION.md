@@ -85,6 +85,25 @@ absence, mêmes primes (zone, masque VA/AA, déplacements), mêmes signatures.
 - Chaque action (création, transmission, correction, validation, renvoi) est
   horodatée et attribuée à son auteur.
 
+### Chaque code ouvre sur ses propres données
+
+Il n'y a pas de fiche commune : le code saisi à la connexion détermine
+entièrement ce qui s'affiche.
+
+| Qui se connecte | Ce qu'il voit |
+|---|---|
+| Un chef d'équipe | Ses fiches à lui, et sa seule équipe. Il ne voit ni les fiches, ni les salariés, ni même le nom des autres chefs. |
+| Le directeur | Les 8 chefs, toutes les fiches, les exports et la gestion des comptes. |
+
+Le cloisonnement est appliqué **côté serveur**, pas seulement dans l'affichage :
+un chef qui tenterait d'ouvrir directement l'adresse de la fiche d'un collègue
+reçoit un refus. Onze tests automatisés vérifient ce cloisonnement à chaque
+modification du code — c'est le fichier `test/cloisonnement.test.js`.
+
+Chaque chef change son code lui-même à la première connexion ; le directeur peut
+en réinitialiser un à tout moment depuis l'écran **Équipes**. Après huit
+tentatives infructueuses, les essais sont bloqués un quart d'heure.
+
 ### Les contrôles automatiques
 
 Bloquants — la fiche ne peut pas être transmise :
@@ -118,11 +137,11 @@ Le classeur remis au directeur contient, dans un seul fichier :
 Un export **CSV** est également disponible pour les logiciels de paie qui
 n'acceptent pas le `.xlsx`.
 
-> **Point restant à caler avec vous.** Je n'ai pas le tableau Excel interne du
-> directeur, seulement la fiche de pointage. Les colonnes de l'onglet « Récap
-> hebdo » ont donc été construites à partir des rubriques de la fiche. Envoyez-moi
-> ce tableau et je cale l'export exactement sur ses colonnes et son ordre, pour
-> que le collage soit direct — voire l'import automatique.
+> **En attente de votre tableau interne.** Les colonnes de l'onglet « Récap
+> hebdo » ont été construites à partir des rubriques de la fiche, faute d'avoir
+> le tableau du directeur. Dès sa réception, je cale l'export exactement sur ses
+> colonnes et leur ordre, pour que le collage soit direct — voire l'import
+> automatique. C'est une demi-journée de travail, sans impact sur le reste.
 
 ## 4. Pourquoi une application dédiée plutôt qu'une solution no-code
 
@@ -133,16 +152,33 @@ J'ai écarté deux alternatives, pour des raisons précises :
 | **Microsoft Forms / Google Forms** | Un formulaire est linéaire. Ici il faut saisir une grille de 11 personnes × 7 jours, revenir en arrière, corriger. Sur un formulaire, cela représente 77 questions à la suite — inutilisable sur un chantier. Aucun fonctionnement hors réseau, aucune signature. |
 | **Power Apps / AppSheet** | Techniquement faisables, mais ils imposent une licence par utilisateur, dépendent de votre tenant, et le mode hors ligne y est limité et fragile. Le coût récurrent dépasse rapidement celui d'un hébergement simple, et vous ne maîtrisez ni le code ni les données. |
 
-L'application dédiée coûte un hébergement (**10 à 20 € par mois** sur un service
-type Railway, Render, Scalingo ou un petit VPS OVH), n'impose aucune licence par
-utilisateur, fonctionne hors réseau, et les données restent chez vous dans un
-fichier que vous pouvez sauvegarder et emporter.
+L'application dédiée n'impose aucune licence par utilisateur, fonctionne hors
+réseau, et les données restent chez vous dans un fichier que vous pouvez
+sauvegarder et emporter.
+
+### Coût d'hébergement : 0 €
+
+L'application tourne sur une machine que vous possédez déjà — un PC de bureau,
+un NAS ou un Raspberry Pi qui reste allumé. L'accès depuis les chantiers passe
+par **Tailscale**, gratuit jusqu'à 100 appareils, qui fournit une adresse HTTPS
+définitive et son certificat sans nom de domaine à acheter et sans ouvrir le
+moindre port sur Internet.
+
+Le résultat : **aucun abonnement, aucune carte bancaire, aucun nom de domaine**.
+Et vos données de paie ne quittent jamais vos locaux — ce qui est aussi le
+meilleur argument côté RGPD.
+
+Si aucune machine ne peut rester allumée, l'offre **Oracle Cloud Always Free**
+fournit une machine virtuelle gratuite à vie (une carte est demandée à
+l'inscription pour vérifier l'identité, mais n'est jamais débitée).
+
+Le détail des trois options est dans le [guide de déploiement](DEPLOIEMENT.md).
 
 ## 5. Mise en service
 
 | Étape | Contenu | Durée |
 |---|---|---|
-| 1 | Hébergement + nom de domaine + certificat HTTPS | ½ journée |
+| 1 | Installation sur votre machine + Tailscale (gratuit, HTTPS compris) | ½ journée |
 | 2 | Création des 8 chefs, saisie des salariés et de leur affectation | 1 h |
 | 3 | Calage de l'export sur le tableau interne du directeur | ½ journée (dès réception du fichier) |
 | 4 | Prise en main : 20 min par chef, sur son propre téléphone | 1 demi-journée |
@@ -162,11 +198,11 @@ totaux de la paie sont rigoureusement identiques avant d'abandonner le papier.
   de conservation à fixer (5 ans est l'usage pour les éléments de paie).
 - **Sauvegardes.** La base est un fichier unique (`data/pointage.db`). Une copie
   quotidienne automatique doit être mise en place dès la mise en production —
-  c'est deux lignes de configuration, mais elles sont indispensables.
-- **Fiches d'exposition journalières.** La fiche papier précise qu'elles
-  accompagnent obligatoirement le pointage. Elles ne sont pas couvertes par cette
-  première version. Les numériser au même endroit est l'extension la plus
-  évidente, et la plus utile en cas de contrôle.
+  c'est deux lignes de configuration, mais elles sont indispensables. La
+  procédure est dans le [guide de déploiement](DEPLOIEMENT.md).
+- **Fiches d'exposition journalières.** Traitées dans un second projet, comme
+  convenu. Le modèle de données prévoit déjà de les rattacher à une fiche de
+  pointage le moment venu : rien ne sera à défaire.
 
 ## 7. Ce qui est livré aujourd'hui
 

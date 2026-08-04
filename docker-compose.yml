@@ -1,0 +1,27 @@
+# Demarrage sur une machine que vous possedez deja (PC de bureau, NAS,
+# Raspberry Pi). Cout d'hebergement : 0 EUR.
+#
+#   1. Generer le secret de session :
+#        node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+#      puis le placer dans un fichier .env a cote de ce fichier :
+#        SESSION_SECRET=...
+#   2. docker compose up -d
+#   3. docker compose exec pointage node server/seed.js
+#
+# L'acces depuis les chantiers se fait ensuite via Tailscale : docs/DEPLOIEMENT.md
+
+services:
+  pointage:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATA_DIR: /data
+      SESSION_SECRET: ${SESSION_SECRET:?definissez SESSION_SECRET dans le fichier .env}
+    volumes:
+      - pointage-donnees:/data
+
+volumes:
+  pointage-donnees:

@@ -18,6 +18,11 @@ signer ses opérateurs à l'écran, et la transmet. Le directeur la reçoit dans
 grille qu'il **corrige directement**, la valide, et exporte le tout vers son
 tableau Excel interne — sans jamais retaper une heure.
 
+**Hébergement : 0 €.** L'application tourne sur une machine que vous possédez
+déjà et reste accessible depuis les chantiers via Tailscale (gratuit, HTTPS
+compris). Aucun abonnement, aucun nom de domaine — voir
+[docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
+
 ## Démarrage
 
 ```bash
@@ -37,8 +42,24 @@ Chacun change son code depuis le bouton **Code** de l'en-tête ; le directeur pe
 réinitialiser n'importe quel code depuis l'écran **Équipes**.
 
 ```bash
-npm test                   # contrôles métier et calcul des semaines ISO
+npm test                   # contrôles métier, semaines ISO, cloisonnement des accès
 ```
+
+## Chaque code ouvre sur ses propres données
+
+Le code saisi à la connexion détermine entièrement ce qui s'affiche :
+
+| Qui se connecte | Ce qu'il voit |
+|---|---|
+| Un chef d'équipe | Ses fiches et sa seule équipe — ni les fiches, ni les salariés, ni les noms des autres chefs |
+| Le directeur | Les 8 chefs, toutes les fiches, les exports, la gestion des comptes |
+
+Le cloisonnement est appliqué côté serveur, pas seulement à l'affichage : un chef
+qui ouvrirait directement l'adresse de la fiche d'un collègue reçoit un refus.
+`test/cloisonnement.test.js` le vérifie à chaque modification du code.
+
+Une fiche transmise n'est plus modifiable par son chef ; seul le directeur peut la
+corriger, la valider, ou la lui renvoyer pour correction avec un motif.
 
 ## Les deux écrans
 
@@ -97,7 +118,10 @@ public/
   directeur.html Tableau de bord        + js/directeur.js
   js/commun.js  API, format des heures, signature tactile, file d'attente hors ligne
   sw.js         Service worker : l'application s'ouvre sans réseau
-test/           Contrôles métier et calcul des semaines
+test/
+  domaine.test.js       Conversion des heures, semaines ISO, contrôles de cohérence
+  cloisonnement.test.js Cloisonnement des accès par code, bout en bout sur l'API
+Dockerfile, docker-compose.yml   Installation en une commande sur votre machine
 ```
 
 `server/domaine.js` et `public/js/commun.js` partagent volontairement les mêmes
@@ -126,4 +150,9 @@ chaque correction est tracée dans le journal.
 | `SESSION_SECRET` | Clé de signature des sessions | générée dans `DATA_DIR/session.key` |
 | `NODE_ENV` | `production` active le cookie `Secure` (HTTPS obligatoire) | — |
 
-Mise en production : voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
+Mise en production sans abonnement : voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
+
+## Suite prévue
+
+- Caler l'export sur le tableau Excel interne du directeur, dès réception du fichier.
+- Fiches d'exposition journalières : projet distinct, dans un second temps.

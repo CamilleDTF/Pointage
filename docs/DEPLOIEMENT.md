@@ -1,42 +1,75 @@
-# Mise en production
+# Mise en service — sans abonnement
 
-## Ce qu'il faut
+L'application n'a besoin d'aucun service payant. Elle tient dans un processus
+Node.js et un fichier SQLite : tout ce qu'il lui faut, c'est une machine allumée
+et un moyen d'y accéder depuis les chantiers.
 
-- Node.js 20 ou plus récent.
-- Un nom de domaine et un certificat HTTPS. **Ce n'est pas optionnel** : les
-  cookies de session sont marqués `Secure` en production, et le service worker
-  qui permet le fonctionnement hors ligne n'est actif qu'en HTTPS.
-- Un disque persistant pour le dossier `data/` (base SQLite + clé de session).
+**Coût de la solution retenue : 0 €**, sans carte bancaire, sans nom de domaine,
+sans abonnement.
 
-## Option A — plateforme gérée (recommandé)
+| Option | Coût | Ce qu'il vous faut | Pour qui |
+|---|---|---|---|
+| **A. Machine que vous avez déjà + Tailscale** ← recommandée | **0 €** | Un PC de bureau, un NAS ou un Raspberry Pi qui reste allumé | Le cas général |
+| B. Oracle Cloud Always Free | 0 € (carte demandée à l'inscription, jamais débitée) | Un compte Oracle Cloud | Si aucune machine ne peut rester allumée |
+| C. Réseau local seul | 0 € | Un PC au dépôt | Si les fiches sont remplies au dépôt et jamais sur chantier |
 
-Railway, Render, Scalingo, Clever Cloud : environ 10 à 20 € par mois, HTTPS et
-certificat automatiques.
+---
 
-1. Connecter le dépôt Git.
-2. Commande de démarrage : `npm start`.
-3. Monter un **volume persistant** sur `/data` et définir `DATA_DIR=/data`.
-   Sans volume, la base est effacée à chaque redéploiement.
-4. Définir les variables :
-   ```
-   NODE_ENV=production
-   DATA_DIR=/data
-   SESSION_SECRET=<64 caractères aléatoires>
-   ```
-   Générer le secret : `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
-5. Au premier démarrage : `npm run seed`, puis se connecter en directeur et
-   changer tous les codes.
+## Option A — votre machine + Tailscale (recommandée)
 
-## Option B — VPS
+Le principe : l'application tourne sur une machine à vous, et **Tailscale**
+(gratuit jusqu'à 100 appareils) crée un réseau privé entre cette machine et les
+téléphones des chefs d'équipe. Aucun port ouvert sur Internet, aucun nom de
+domaine à acheter, un vrai certificat HTTPS fourni gratuitement.
 
-Environ 5 € par mois (OVH, Hetzner, Scaleway).
+Les avantages vont au-delà du prix : vos données de paie ne quittent jamais vos
+locaux, et l'application n'est pas exposée publiquement.
+
+### 1. Installer l'application
+
+Avec Docker, sur la machine qui restera allumée :
+
+```bash
+git clone <dépôt> /opt/pointage && cd /opt/pointage
+node -e "console.log('SESSION_SECRET=' + require('crypto').randomBytes(32).toString('hex'))" > .env
+docker compose up -d
+docker compose exec pointage node server/seed.js
+```
+
+Sans Docker (Node.js 20 ou plus) :
 
 ```bash
 git clone <dépôt> /opt/pointage && cd /opt/pointage
 npm ci --omit=dev
+npm run seed
+NODE_ENV=production npm start
 ```
 
-Service systemd — `/etc/systemd/system/pointage.service` :
+Vérifier : `http://localhost:3000` doit afficher l'écran de connexion.
+
+### 2. Rendre l'application accessible depuis les chantiers
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+sudo tailscale serve --bg 3000
+```
+
+La dernière commande affiche une adresse du type
+`https://bureau.votre-reseau.ts.net`. C'est **l'adresse HTTPS définitive** de
+l'application. Le certificat est gratuit et renouvelé automatiquement.
+
+Sur chaque téléphone : installer Tailscale (App Store / Play Store), se connecter
+au même compte, ouvrir l'adresse, puis **Ajouter à l'écran d'accueil**.
+
+> HTTPS n'est pas un luxe ici : sans lui, le mode hors ligne (service worker) ne
+> s'active pas. C'est la raison pour laquelle on passe par Tailscale plutôt que
+> par une simple adresse IP locale.
+
+### 3. Démarrage automatique
+
+Docker s'en charge (`restart: unless-stopped`). Sans Docker, créer
+`/etc/systemd/system/pointage.service` :
 
 ```ini
 [Unit]
@@ -64,14 +97,29 @@ WantedBy=multi-user.target
 SESSION_SECRET=<64 caractères aléatoires>
 ```
 
-Puis :
-
 ```bash
 install -d -o pointage -g pointage /var/lib/pointage
 systemctl enable --now pointage
 ```
 
-Reverse proxy Caddy — le certificat HTTPS est obtenu et renouvelé tout seul :
+Vérifier enfin que la machine redémarre bien toute seule après une coupure de
+courant (réglage « Restore on AC power loss » dans le BIOS de la plupart des PC).
+
+---
+
+## Option B — Oracle Cloud Always Free
+
+Si aucune machine ne peut rester allumée. L'offre « Always Free » d'Oracle Cloud
+inclut une machine virtuelle ARM gratuite **à vie** (jusqu'à 4 cœurs et 24 Go de
+RAM), largement surdimensionnée pour cet usage. Une carte bancaire est demandée à
+l'inscription pour vérifier l'identité, mais le compte reste en mode gratuit tant
+que vous ne le passez pas manuellement en payant.
+
+1. Créer une instance **Ampere A1** (Ubuntu), en choisissant une région
+   européenne — vos données restent alors dans l'UE.
+2. Installer l'application comme à l'option A.
+3. Pour l'accès : soit Tailscale à nouveau (le plus simple et le plus sûr), soit
+   une exposition publique avec Caddy si vous possédez un nom de domaine :
 
 ```
 pointage.mondomaine.fr {
@@ -79,10 +127,27 @@ pointage.mondomaine.fr {
 }
 ```
 
-## Sauvegardes
+Caddy obtient et renouvelle le certificat Let's Encrypt tout seul, gratuitement.
+Seul le nom de domaine reste payant (environ 10 € par an) — d'où la préférence
+pour Tailscale, qui n'en demande aucun.
 
-**À mettre en place le jour de la mise en production.** Toute la base tient dans
-un fichier ; `sqlite3 .backup` produit une copie cohérente même serveur allumé.
+---
+
+## Option C — réseau local seul
+
+Si les fiches sont toujours remplies au dépôt, sur le Wi-Fi de l'entreprise, une
+adresse locale du type `http://192.168.1.20:3000` suffit et ne coûte rien.
+
+Limite à connaître : **sans HTTPS, le mode hors ligne ne fonctionne pas.** Un chef
+qui ouvrirait l'application sans réseau n'y aurait pas accès. Cette option ne
+convient donc que si la saisie a toujours lieu à portée du Wi-Fi.
+
+---
+
+## Sauvegardes — à mettre en place le jour de la mise en service
+
+Toute la base tient dans un seul fichier. `sqlite3 .backup` en produit une copie
+cohérente même serveur allumé.
 
 ```bash
 cat > /usr/local/bin/sauvegarde-pointage <<'EOF'
@@ -98,40 +163,44 @@ EOF
 chmod +x /usr/local/bin/sauvegarde-pointage
 ```
 
-Tâche quotidienne :
+Avec Docker, la base est dans le volume : remplacer le chemin par
+`docker compose exec -T pointage sqlite3 /data/pointage.db ".backup '/data/sauvegarde.db'"`.
+
+Tâche quotidienne (`crontab -e`) :
 
 ```
 15 2 * * * /usr/local/bin/sauvegarde-pointage
 ```
 
-Copier ces archives **hors du serveur** (S3, NAS, autre machine). Une sauvegarde
-qui vit sur le disque qu'elle protège ne protège de rien.
+**Copiez ces archives hors de la machine** — un disque externe, un autre poste, un
+espace cloud gratuit. Une sauvegarde qui vit sur le disque qu'elle protège ne
+protège de rien.
 
-Vérifier une restauration au moins une fois avant la bascule complète :
+Testez une restauration au moins une fois avant d'abandonner le papier :
 
 ```bash
 gunzip -c /var/backups/pointage/pointage-<horodatage>.db.gz > /tmp/verif.db
 sqlite3 /tmp/verif.db "SELECT COUNT(*) FROM fiches;"
 ```
 
-## Installation sur les téléphones
+---
 
-Chaque chef d'équipe, une seule fois :
+## Configuration
 
-1. Ouvrir `https://pointage.mondomaine.fr` dans Chrome (Android) ou Safari (iOS).
-2. Se connecter avec son identifiant et son code.
-3. Menu du navigateur → **Ajouter à l'écran d'accueil**.
+| Variable | Rôle | Défaut |
+|---|---|---|
+| `PORT` | Port d'écoute | `3000` |
+| `DATA_DIR` | Dossier de la base et de la clé de session | `./data` |
+| `SESSION_SECRET` | Clé de signature des sessions | générée dans `DATA_DIR/session.key` |
+| `NODE_ENV` | `production` active le cookie `Secure` (HTTPS requis) | — |
 
-L'application s'ouvre alors comme une application installée, y compris sans
-réseau. Les saisies faites hors couverture partent automatiquement au retour du
-signal ; une bannière orange indique ce qui reste en attente.
+---
 
 ## Après la mise en service
 
-- Créer les vrais comptes et désactiver les comptes de démonstration
-  (écran **Équipes**).
-- Saisir les salariés et leur affectation à un chef : c'est ce qui pré-remplit
+- Écran **Équipes** : créer les vrais comptes, désactiver ceux de démonstration.
+- Saisir les salariés et leur affectation à un chef — c'est ce qui pré-remplit
   les fiches chaque semaine.
-- Faire changer son code à chaque chef dès la première connexion.
-- Mener les **deux semaines de double saisie** papier + application avant
-  d'abandonner le papier, et comparer les totaux de paie.
+- Faire changer son code à chaque chef dès la première connexion (bouton **Code**).
+- Mener **deux semaines de double saisie** papier + application, et comparer les
+  totaux de paie avant de basculer.

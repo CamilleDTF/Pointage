@@ -84,7 +84,11 @@ app.get('/api/reference', A.exigerConnexion, (req, res) => {
     typesMasque: D.TYPES_MASQUE,
     semaineCourante: { annee, semaine },
     nbLignes: F.NB_LIGNES_FICHE,
-    chefs: db.prepare("SELECT id, nom FROM utilisateurs WHERE role = 'chef' AND actif = 1 ORDER BY nom").all(),
+    // Un chef d equipe n a pas a connaitre la liste de ses collegues.
+    chefs:
+      req.utilisateur.role === 'directeur'
+        ? db.prepare("SELECT id, nom FROM utilisateurs WHERE role = 'chef' AND actif = 1 ORDER BY nom").all()
+        : [],
     equipe:
       req.utilisateur.role === 'chef'
         ? db
