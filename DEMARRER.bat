@@ -4,19 +4,26 @@ rem  Demarrage de l'application sur un poste Windows.
 rem
 rem  Double-cliquez simplement sur ce fichier.
 rem
-rem  Un fichier .bat n'est pas soumis a la politique d'execution qui bloque les
-rem  scripts PowerShell : c'est la voie la plus sure sur un poste d'entreprise.
-rem  Les messages sont volontairement sans accents, l'invite de commandes
-rem  Windows les affichant mal par defaut.
+rem  Ecrit volontairement sans accents : l'invite de commandes Windows les
+rem  affiche mal avec sa page de codes par defaut.
+rem
+rem  Deux precautions valent d'etre signalees :
+rem   - "call" devant npm et node : sans lui, l'appel d'un script .cmd depuis un
+rem     .bat rend la main a l'appelant et interrompt la suite du fichier ;
+rem   - l'ouverture du navigateur est deleguee a scripts\ouvrir-navigateur.bat,
+rem     pour n'imbriquer aucun guillemet.
 rem ---------------------------------------------------------------------------
 
 setlocal
 cd /d "%~dp0"
 title Pointage hebdomadaire
 
+echo.
+echo   Demarrage de l'application de pointage...
+echo.
+
 where node >nul 2>nul
 if errorlevel 1 (
-  echo.
   echo   Node.js est introuvable sur ce poste.
   echo.
   echo   Installez-le depuis https://nodejs.org - le gros bouton "LTS" -
@@ -26,58 +33,47 @@ if errorlevel 1 (
   exit /b 1
 )
 
-for /f %%v in ('node -e "process.stdout.write(process.versions.node.split('.')[0])"') do set NODE_MAJEURE=%%v
-if %NODE_MAJEURE% LSS 22 (
+call node --version
+echo.
+
+if not exist node_modules (
+  echo   Installation des composants. Comptez une a deux minutes...
   echo.
-  echo   Node.js %NODE_MAJEURE% detecte, version 22 ou plus requise.
-  echo   Mettez a jour depuis https://nodejs.org, puis relancez ce fichier.
+  call npm install --no-audit --no-fund
+  echo.
+)
+
+if not exist node_modules (
+  echo   L'installation des composants a echoue.
+  echo   Lancez DIAGNOSTIC.bat et transmettez le fichier diagnostic.txt produit.
   echo.
   pause
   exit /b 1
 )
 
-if not exist node_modules (
-  echo.
-  echo   Installation des composants, comptez une minute...
-  echo.
-  call npm install --no-audit --no-fund
-  if errorlevel 1 (
-    echo.
-    echo   L'installation a echoue. Copiez le message ci-dessus et transmettez-le.
-    echo.
-    pause
-    exit /b 1
-  )
-)
-
 if not exist data\pointage.db (
-  echo.
-  echo   Premiere utilisation : creation du compte directeur.
-  echo.
+  echo   Creation du compte directeur...
   call node scripts\creer-compte.js --nom "Direction" --identifiant directeur --code 246810 --role directeur
+  echo.
 )
 
-echo.
 echo   ============================================================
-echo     Demarrage en cours, patientez quelques secondes...
-echo.
 echo     Adresse      http://localhost:3000
 echo     Identifiant  directeur
 echo     Code         246810
 echo.
+echo     Le navigateur s'ouvre dans quelques secondes.
 echo     NE FERMEZ PAS cette fenetre : elle fait tourner
-echo     l'application. Fermez-la pour arreter.
+echo     l'application. La fermer arrete tout.
 echo   ============================================================
 echo.
 
-rem  Le navigateur est ouvert en differe : lance immediatement, il arriverait
-rem  avant que le serveur n'ecoute, et afficherait "localhost inaccessible".
-rem  ping sert de temporisation, plus fiable que timeout quand l'entree standard
-rem  est redirigee.
-start "" /b cmd /c "ping -n 5 127.0.0.1 >nul & start """" http://localhost:3000"
+start "" /b "%~dp0scripts\ouvrir-navigateur.bat"
 
-node server\index.js
+call node server\index.js
 
 echo.
 echo   L'application s'est arretee.
+echo   Si un message d'erreur apparait ci-dessus, transmettez-le.
+echo.
 pause
