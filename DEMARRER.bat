@@ -49,17 +49,23 @@ if not exist data\pointage.db (
 
 echo.
 echo   ============================================================
-echo     Application demarree
+echo     Demarrage en cours, patientez quelques secondes...
 echo.
 echo     Adresse      http://localhost:3000
 echo     Identifiant  directeur
 echo     Code         246810
 echo.
-echo     Fermez cette fenetre pour arreter l'application.
+echo     NE FERMEZ PAS cette fenetre : elle fait tourner
+echo     l'application. Fermez-la pour arreter.
 echo   ============================================================
 echo.
 
-start "" http://localhost:3000
+rem  Le navigateur est ouvert en differe : lance immediatement, il arriverait
+rem  avant que le serveur n'ecoute, et afficherait "localhost inaccessible".
+rem  ping sert de temporisation, plus fiable que timeout quand l'entree standard
+rem  est redirigee.
+start "" /b cmd /c "ping -n 5 127.0.0.1 >nul & start """" http://localhost:3000"
+
 node server\index.js
 
 echo.

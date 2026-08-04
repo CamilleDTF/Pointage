@@ -38,8 +38,12 @@ if (-not (Test-Path data\pointage.db)) {
     Write-Host ""
 }
 
-Write-Host "Application démarrée sur http://localhost:3000" -ForegroundColor Green
+Write-Host "Démarrage en cours sur http://localhost:3000" -ForegroundColor Green
 Write-Host "Identifiant « directeur », code 246810.  Ctrl+C pour arrêter."
 Write-Host ""
-Start-Process "http://localhost:3000"
+
+# Le navigateur est ouvert en différé : lancé tout de suite, il arriverait avant
+# que le serveur n'écoute et afficherait « localhost inaccessible ».
+Start-Job { Start-Sleep -Seconds 4; Start-Process "http://localhost:3000" } | Out-Null
+
 node server/index.js
