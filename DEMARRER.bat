@@ -26,6 +26,16 @@ if errorlevel 1 (
   exit /b 1
 )
 
+for /f %%v in ('node -e "process.stdout.write(process.versions.node.split('.')[0])"') do set NODE_MAJEURE=%%v
+if %NODE_MAJEURE% LSS 22 (
+  echo.
+  echo   Node.js %NODE_MAJEURE% detecte, version 22 ou plus requise.
+  echo   Mettez a jour depuis https://nodejs.org, puis relancez ce fichier.
+  echo.
+  pause
+  exit /b 1
+)
+
 if not exist node_modules (
   echo.
   echo   Installation des composants, comptez une minute...

@@ -2,7 +2,33 @@
 
 const fs = require('fs');
 const path = require('path');
-const Database = require('better-sqlite3');
+
+/*
+ * better-sqlite3 est un composant compile. Un binaire precompile existe pour
+ * chaque version de Node, mais pas au-dela de celles connues au moment de sa
+ * publication : sur une version de Node plus recente, l'installation bascule sur
+ * une compilation locale, qui echoue faute d'outils de compilation. Le message
+ * brut n'aide alors personne — celui-ci nomme la cause et la solution.
+ */
+let Database;
+try {
+  Database = require('better-sqlite3');
+} catch (erreur) {
+  const majeure = Number(process.versions.node.split('.')[0]);
+  console.error('\nImpossible de charger la base de donnees (better-sqlite3).\n');
+  console.error(`Node.js installe : ${process.version} (${process.platform} ${process.arch})`);
+  console.error('Version requise  : Node.js 22 ou 24.\n');
+  if (majeure < 22) {
+    console.error('Votre version de Node.js est trop ancienne.');
+  } else {
+    console.error("Le composant n'a pas pu etre installe pour cette version de Node.js.");
+  }
+  console.error('A essayer, dans le dossier de l application :');
+  console.error('  1. supprimer le dossier "node_modules"');
+  console.error('  2. relancer DEMARRER.bat, qui refera l installation\n');
+  console.error(`Message d origine : ${erreur.message}\n`);
+  process.exit(1);
+}
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });

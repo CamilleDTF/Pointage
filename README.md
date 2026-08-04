@@ -42,7 +42,7 @@ silencieusement de l'original.
 
 ## Essayer sur son poste, avant tout hébergement
 
-Il suffit d'avoir [Node.js](https://nodejs.org) 20 ou plus. Aucun droit
+Il suffit d'avoir [Node.js](https://nodejs.org) 22 ou plus. Aucun droit
 particulier, aucune installation serveur.
 
 **Windows** : double-cliquez sur `DEMARRER.bat`, à la racine du dossier. Un

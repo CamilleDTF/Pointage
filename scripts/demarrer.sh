@@ -11,13 +11,13 @@ cd "$(dirname "$0")/.."
 
 if ! command -v node >/dev/null 2>&1; then
   echo "Node.js est introuvable."
-  echo "Installez-le depuis https://nodejs.org (version 20 ou plus), puis relancez ce script."
+  echo "Installez-le depuis https://nodejs.org (version 22 ou plus), puis relancez ce script."
   exit 1
 fi
 
 version=$(node -e 'process.stdout.write(String(process.versions.node.split(".")[0]))')
-if [ "$version" -lt 20 ]; then
-  echo "Node.js $version détecté, version 20 ou plus requise."
+if [ "$version" -lt 22 ]; then
+  echo "Node.js $version détecté, version 22 ou plus requise."
   echo "Mettez à jour depuis https://nodejs.org, puis relancez ce script."
   exit 1
 fi

@@ -10,14 +10,14 @@ Set-Location (Join-Path $PSScriptRoot '..')
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     Write-Host "Node.js est introuvable." -ForegroundColor Red
-    Write-Host "Installez-le depuis https://nodejs.org (version 20 ou plus), puis relancez ce script."
+    Write-Host "Installez-le depuis https://nodejs.org (version 22 ou plus), puis relancez ce script."
     Read-Host "Appuyez sur Entrée pour fermer"
     exit 1
 }
 
 $version = [int](node -e 'process.stdout.write(String(process.versions.node.split(".")[0]))')
-if ($version -lt 20) {
-    Write-Host "Node.js $version détecté, version 20 ou plus requise." -ForegroundColor Red
+if ($version -lt 22) {
+    Write-Host "Node.js $version détecté, version 22 ou plus requise." -ForegroundColor Red
     Write-Host "Mettez à jour depuis https://nodejs.org, puis relancez ce script."
     Read-Host "Appuyez sur Entrée pour fermer"
     exit 1
