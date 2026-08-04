@@ -114,6 +114,13 @@
   const BASE_HEBDOMADAIRE_MINUTES = 35 * 60;
   const SEUIL_MAJORATION_25_MINUTES = 8 * 60; // les 8 premieres heures supplementaires
 
+  /*
+   * Duree d'une journee de reference, utilisee pour valoriser en heures un jour
+   * ferie repere par le code "F" : la fiche de pointage n'indique qu'un code,
+   * pas un nombre d'heures. 7 h decoule de la base hebdomadaire sur 5 jours.
+   */
+  const DUREE_JOURNEE_REFERENCE_MINUTES = BASE_HEBDOMADAIRE_MINUTES / 5;
+
   /**
    * Repartit les heures supplementaires d'UNE semaine : les 8 premieres sont
    * majorees a 25 %, les suivantes a 50 %. Le calcul est hebdomadaire, jamais
@@ -264,6 +271,7 @@
     totalMinutesLigne,
     BASE_HEBDOMADAIRE_MINUTES,
     SEUIL_MAJORATION_25_MINUTES,
+    DUREE_JOURNEE_REFERENCE_MINUTES,
     VILLES_GRAND_DEPLACEMENT_80,
     heuresSupplementaires,
     estGrandDeplacement80,

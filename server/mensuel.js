@@ -60,6 +60,8 @@ function semaineVide(semaine) {
     joursPanier: 0,
     joursGD72: 0,
     joursGD80: 0,
+    joursFeries: 0,
+    minutesFeries: 0,
     chantiers: [],
   };
 }
@@ -162,6 +164,11 @@ function agregerMois(annee, mois, { statut = 'validee' } = {}) {
       const sup = D.heuresSupplementaires(semaine.minutesTotal);
       semaine.minutes25 = sup.minutes25;
       semaine.minutes50 = sup.minutes50;
+
+      // Les jours feries se deduisent du code "F" de la fiche. La fiche ne porte
+      // qu'un code, pas d'heures : on les valorise a la journee de reference.
+      semaine.joursFeries = semaine.jours.filter((j) => j.codes.includes('F')).length;
+      semaine.minutesFeries = semaine.joursFeries * D.DUREE_JOURNEE_REFERENCE_MINUTES;
     }
     salarie.minutesMois = salarie.semaines.reduce((s, x) => s + x.minutesTotal, 0);
   }

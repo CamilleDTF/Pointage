@@ -17,9 +17,12 @@ const ExcelJS = require('exceljs');
 const D = require('./domaine');
 
 const POLICE = 'Calibri';
-const JAUNE = 'FFFFF2CC'; // cases a completer par le directeur
+const JAUNE = 'FFFFF2CC';   // case a completer par le directeur, une fois remplie
+const ORANGE = 'FFF8CBAD';  // la meme, tant qu'elle est vide : elle reclame une saisie
+const ROUGE = 'FF9C0006';
 const GRIS = 'FFD9D9D9';
 const BLEU_PALE = 'FFDCE6F1';
+const VERT_PALE = 'FFE2EFDA'; // valeur calculee depuis les fiches, rien a faire
 
 const BORDURE = {
   top: { style: 'thin', color: { argb: 'FF999999' } },
@@ -48,8 +51,8 @@ const COLONNES = {
   ],
   // Colonnes cumulees en ligne 22 puis remontees dans la feuille Total.
   cumulees: ['J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'],
-  // Colonnes laissees a la main du directeur.
-  directeur: ['K', 'L', 'M', 'P', 'U', 'W', 'Z'],
+  // Colonnes laissees a la main du directeur, signalees tant qu'elles sont vides.
+  directeur: ['K', 'L', 'P', 'U', 'W', 'Z'],
 };
 
 const LARGEURS_SALARIE = {
@@ -70,6 +73,49 @@ function remplir(cellule, couleur) {
   cellule.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: couleur } };
 }
 
+/**
+ * Signale en orange toute case attendue du directeur qui n'a pas encore ete
+ * saisie. Le signalement disparait de lui-meme des qu'une valeur est tapee :
+ * c'est une mise en forme conditionnelle, pas une couleur figee.
+ */
+function signalerSiVide(ws, plages) {
+  for (const plage of plages) {
+    const premiere = plage.split(':')[0];
+    ws.addConditionalFormatting({
+      ref: plage,
+      rules: [
+        {
+          type: 'expression',
+          formulae: [`ISBLANK(${premiere})`],
+          priority: 1,
+          style: {
+            fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: ORANGE } },
+            font: { color: { argb: ROUGE }, bold: true },
+          },
+        },
+      ],
+    });
+  }
+}
+
+/** Rappel du code couleur, pour qu'il se lise sans explication exterieure. */
+function ecrireLegende(ws, ligne) {
+  const entrees = [
+    ['C', 'à compléter', ORANGE],
+    ['H', 'complété', JAUNE],
+    ['M', 'calculé depuis les fiches de pointage', null],
+  ];
+  for (const [col, texte, couleur] of entrees) {
+    const cellule = ws.getCell(`${col}${ligne}`);
+    cellule.value = texte;
+    cellule.font = { name: POLICE, size: 9, italic: true };
+    cellule.alignment = { horizontal: 'left', vertical: 'middle' };
+    if (couleur) remplir(cellule, couleur);
+    cellule.border = BORDURE;
+  }
+  ws.getRow(ligne).height = 14;
+}
+
 /* ---------------------------- Feuille d'un salarie ------------------------- */
 
 function ecrireFeuilleSalarie(ws, salarie, ligneDansTotal, ligneTotalGenerale) {
@@ -78,6 +124,8 @@ function ecrireFeuilleSalarie(ws, salarie, ligneDansTotal, ligneTotalGenerale) {
   ws.mergeCells('A1:AA1');
   ws.getCell('A1').value = salarie.feuille;
   ws.getCell('A1').font = { name: POLICE, size: 11, bold: true };
+
+  ecrireLegende(ws, 2);
 
   // En-tetes
   D.JOURS_COURTS.forEach((jour, i) => {
@@ -148,6 +196,7 @@ function ecrireFeuilleSalarie(ws, salarie, ligneDansTotal, ligneTotalGenerale) {
       O: { valeur: D.versDecimal(semaine.minutes50) },
       Q: { valeur: D.versDecimal(semaine.minutesTrajet) },
       R: { valeur: D.versDecimal(semaine.minutesRoute) },
+      M: { valeur: D.versDecimal(semaine.minutesFeries) },
       S: { valeur: semaine.joursAmiante1 },
       T: { valeur: semaine.joursAmiante2 },
       V: { valeur: semaine.joursPanier },
@@ -171,6 +220,19 @@ function ecrireFeuilleSalarie(ws, salarie, ligneDansTotal, ligneTotalGenerale) {
     ws.getCell(`AB${rd}`).font = { name: POLICE, size: 9 };
     ws.getCell(`AB${rd}`).alignment = { vertical: 'middle', wrapText: true };
   });
+
+  // L'alerte ne porte que sur les semaines effectivement pointees : un
+  // emplacement de semaine reste vide ne reclame aucune saisie.
+  const semainesPointees = salarie.semaines
+    .map((semaine, i) => (semaine.minutesTotal > 0 ? BLOCS_SEMAINE[i].valeurs : null))
+    .filter(Boolean);
+  if (semainesPointees.length) {
+    signalerSiVide(
+      ws,
+      COLONNES.directeur.flatMap((col) => semainesPointees.map((r) => `${col}${r}`))
+    );
+  }
+  signalerSiVide(ws, ['J27']);
 
   // Ligne des totaux du mois
   const lignesValeurs = BLOCS_SEMAINE.map((b) => b.valeurs);
@@ -290,6 +352,8 @@ const REMONTEES = ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', '
 function ecrireFeuilleTotal(ws, mois) {
   for (const [col, largeur] of Object.entries(LARGEURS_TOTAL)) ws.getColumn(col).width = largeur;
 
+  ecrireLegende(ws, 1);
+
   for (const [col, libelle] of ENTETES_TOTAL) {
     const cellule = ws.getCell(`${col}3`);
     cellule.value = libelle;
@@ -347,6 +411,10 @@ function ecrireFeuilleTotal(ws, mois) {
     ws.getCell(`J${premiere}`).alignment = { horizontal: 'center', vertical: 'middle' };
     remplir(ws.getCell(`J${premiere}`), JAUNE);
     ws.getCell(`J${premiere}`).numFmt = '#,##0.00';
+  }
+
+  if (mois.salaries.length) {
+    signalerSiVide(ws, [`AA${premiere}:AA${derniere}`, `J${premiere}`]);
   }
 
   const rTotal = derniere + 1;

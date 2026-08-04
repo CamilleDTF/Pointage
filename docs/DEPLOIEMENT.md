@@ -9,48 +9,60 @@ sans abonnement.
 
 | Option | Coût | Ce qu'il vous faut | Pour qui |
 |---|---|---|---|
-| **A. Machine que vous avez déjà + Tailscale** ← recommandée | **0 €** | Un PC de bureau, un NAS ou un Raspberry Pi qui reste allumé | Le cas général |
+| **A. Votre NAS + Tailscale** ← retenue | **0 €** | Le NAS de l'entreprise, avec Docker | Votre cas |
 | B. Oracle Cloud Always Free | 0 € (carte demandée à l'inscription, jamais débitée) | Un compte Oracle Cloud | Si aucune machine ne peut rester allumée |
 | C. Réseau local seul | 0 € | Un PC au dépôt | Si les fiches sont remplies au dépôt et jamais sur chantier |
 
 ---
 
-## Option A — votre machine + Tailscale (recommandée)
+## Option A — votre NAS + Tailscale (retenue)
 
-Le principe : l'application tourne sur une machine à vous, et **Tailscale**
-(gratuit jusqu'à 100 appareils) crée un réseau privé entre cette machine et les
+Le principe : l'application tourne sur le NAS de l'entreprise, et **Tailscale**
+(gratuit jusqu'à 100 appareils) crée un réseau privé entre le NAS et les
 téléphones des chefs d'équipe. Aucun port ouvert sur Internet, aucun nom de
 domaine à acheter, un vrai certificat HTTPS fourni gratuitement.
 
 Les avantages vont au-delà du prix : vos données de paie ne quittent jamais vos
 locaux, et l'application n'est pas exposée publiquement.
 
-### 1. Installer l'application
+### 1. Installer l'application sur le NAS
 
-Avec Docker, sur la machine qui restera allumée :
+Activez **Docker** (Synology : *Centre de paquets → Container Manager* ;
+QNAP : *Container Station*), puis en SSH sur le NAS :
 
 ```bash
-git clone <dépôt> /opt/pointage && cd /opt/pointage
+git clone <dépôt> /volume1/docker/pointage && cd /volume1/docker/pointage
 node -e "console.log('SESSION_SECRET=' + require('crypto').randomBytes(32).toString('hex'))" > .env
 docker compose up -d
-docker compose exec pointage node server/seed.js
 ```
 
-Sans Docker (Node.js 20 ou plus) :
+Adaptez le chemin si votre volume principal ne s'appelle pas `volume1`. Les
+données vivent ensuite dans un volume Docker, sauvegardé avec le NAS.
+
+Vérifier : `http://<ip-du-nas>:3000` doit afficher l'écran de connexion.
+
+### 2. Charger l'effectif
+
+Plutôt que de saisir les 40 personnes à la main, importez le tableau
+d'affectation des opérateurs :
 
 ```bash
-git clone <dépôt> /opt/pointage && cd /opt/pointage
-npm ci --omit=dev
-npm run seed
-NODE_ENV=production npm start
+docker compose exec pointage node scripts/importer-effectif.js /data/affectation.xlsx
+docker compose exec pointage node scripts/importer-effectif.js /data/affectation.xlsx --appliquer
 ```
 
-Vérifier : `http://localhost:3000` doit afficher l'écran de connexion.
+Le premier passage ne fait que simuler : il liste les chefs et les opérateurs
+reconnus, et signale ceux dont la colonne « chef d'équipe » ne désigne personne
+de connu. Le second écrit réellement. La commande est rejouable : elle met à jour
+l'existant au lieu de créer des doublons, ce qui permet de la relancer à chaque
+mouvement de personnel.
 
-### 2. Rendre l'application accessible depuis les chantiers
+### 3. Rendre l'application accessible depuis les chantiers
+
+Installez Tailscale sur le NAS (Synology : paquet **Tailscale** dans le Centre de
+paquets ; sinon en ligne de commande), puis :
 
 ```bash
-curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
 sudo tailscale serve --bg 3000
 ```
@@ -67,9 +79,10 @@ au même compte, ouvrir l'adresse, puis **Ajouter à l'écran d'accueil**.
 > raison pour laquelle on passe par Tailscale plutôt que par une simple adresse IP
 > locale.
 
-### 3. Démarrage automatique
+### 4. Démarrage automatique
 
-Docker s'en charge (`restart: unless-stopped`). Sans Docker, créer
+Docker s'en charge (`restart: unless-stopped`) : au redémarrage du NAS,
+l'application repart seule. Sur une machine sans Docker, créer
 `/etc/systemd/system/pointage.service` :
 
 ```ini
@@ -103,8 +116,8 @@ install -d -o pointage -g pointage /var/lib/pointage
 systemctl enable --now pointage
 ```
 
-Vérifier enfin que la machine redémarre bien toute seule après une coupure de
-courant (réglage « Restore on AC power loss » dans le BIOS de la plupart des PC).
+Vérifiez enfin que le NAS lui-même redémarre après une coupure de courant
+(Synology : *Panneau de configuration → Alimentation → Redémarrage automatique*).
 
 ---
 
@@ -199,9 +212,9 @@ sqlite3 /tmp/verif.db "SELECT COUNT(*) FROM fiches;"
 
 ## Après la mise en service
 
-- Écran **Équipes** : créer les vrais comptes, désactiver ceux de démonstration.
-- Saisir les salariés et leur affectation à un chef — c'est ce qui pré-remplit
-  les fiches chaque semaine.
+- Écran **Équipes** : affecter les opérateurs que l'import n'a pas pu rattacher
+  (ceux dont la colonne « chef » indiquait « non indiqué » ou « dépôt »).
+- Désactiver les comptes de démonstration s'ils ont été créés.
 - Faire changer son code à chaque chef dès la première connexion (bouton **Code**).
 - Mener **deux semaines de double saisie** papier + application, et comparer les
   totaux de paie avant de basculer.

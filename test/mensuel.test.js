@@ -213,3 +213,40 @@ test('un salarie sans fiche du mois n apparait pas dans le tableau', () => {
   db.exec('DELETE FROM fiches');
   assert.deepEqual(agregerMois(ANNEE, MOIS).salaries, []);
 });
+
+test('les jours feries sont deduits du code F et valorises en heures', () => {
+  db.exec('DELETE FROM fiches');
+  poserFiche({
+    semaine: PLEINE,
+    lignes: [{
+      salarie_id: salaries[0],
+      nom: 'ANDRE Alain',
+      heures: [8, 0, 8, 8, 8],
+      codes: ['', 'F', '', '', ''],
+    }],
+  });
+
+  const semaine = trouver(agregerMois(ANNEE, MOIS), 'ANDRE_Alain').semaines[IDX_PLEINE];
+  assert.equal(semaine.joursFeries, 1);
+  assert.equal(semaine.minutesFeries, D.DUREE_JOURNEE_REFERENCE_MINUTES);
+  // Le ferie ne gonfle pas le total travaille de la semaine.
+  assert.equal(semaine.minutesTotal, 32 * 60);
+  assert.equal(semaine.minutes25, 0);
+});
+
+test('seul le code F alimente les feries, pas les autres absences', () => {
+  db.exec('DELETE FROM fiches');
+  poserFiche({
+    semaine: PLEINE,
+    lignes: [{
+      salarie_id: salaries[0],
+      nom: 'ANDRE Alain',
+      heures: [7, 0, 0, 7, 7],
+      codes: ['', 'CP', 'AT', '', ''],
+    }],
+  });
+
+  const semaine = trouver(agregerMois(ANNEE, MOIS), 'ANDRE_Alain').semaines[IDX_PLEINE];
+  assert.equal(semaine.joursFeries, 0);
+  assert.equal(semaine.minutesFeries, 0);
+});

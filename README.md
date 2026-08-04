@@ -57,8 +57,22 @@ Chacun change son code depuis le bouton **Code** de l'en-tête ; le directeur pe
 réinitialiser n'importe quel code depuis l'écran **Équipes**.
 
 ```bash
-npm test                   # contrôles métier, semaines ISO, cloisonnement des accès
+npm test                   # contrôles métier, semaines ISO, paie, cloisonnement des accès
 ```
+
+## Charger l'effectif depuis le tableau d'affectation
+
+```bash
+node scripts/importer-effectif.js effectif.xlsx              # simulation
+node scripts/importer-effectif.js effectif.xlsx --appliquer  # écriture
+```
+
+Le classeur attendu comporte une feuille `identifiant`
+(*Chef de chantier | Identifiant | Mdp*) et une feuille `Affectation opérateurs`
+(*Matricule | NOM | Prénom | Chef d'équipe assigné*). Le rapprochement se fait sur
+le nom, sans tenir compte des accents ni de la casse ; un opérateur dont le chef
+n'est pas reconnu est créé sans affectation et signalé. La commande est
+rejouable : elle met à jour l'existant plutôt que de créer des doublons.
 
 ## Chaque code ouvre sur ses propres données
 
@@ -123,25 +137,36 @@ taux horaire remonté vers les feuilles individuelles).
 | `0,25` | Les 8 premières heures au-delà de 35 h **sur la semaine** |
 | `0,5` | Les heures supplémentaires suivantes |
 | `TRAJET 50%` / `TRAJET 100%` | Colonnes trajet 50 % et route 100 % de la fiche |
+| `FÉRIÉS` | Jours marqués `F` sur la fiche, valorisés à 7 h par jour |
 | `AMIANTE 1` / `AMIANTE 2` | Jours en zone, selon que le masque est `VA` ou `AA` |
 | `PANIER` | Jours de déplacement |
 | `GD 72` / `GD 80` | Ces mêmes jours, ventilés selon la ville du chantier |
 | `Contrôle` | `total − 25 % − 50 % − 100 % − 35` : ce qui reste à redistribuer |
 
-Restent en **jaune**, à la main du directeur : `NUIT`, `DIMANCHE`, `FÉRIÉS`, la
-colonne `1` (100 %), `PERFO`, `EDEN RED`, `GD AUTRES`, les heures d'absence, le
-nombre d'heures du mois et le taux horaire.
+Restent à la main du directeur : `NUIT`, `DIMANCHE`, la colonne `1` (100 %),
+`PERFO`, `EDEN RED`, `GD AUTRES`, les heures d'absence, le nombre d'heures du mois
+et le taux horaire.
 
-### Deux conventions à valider
+**Code couleur** — une case attendue de la direction s'affiche en **orange** tant
+qu'elle est vide, et revient au **jaune** dès qu'elle est saisie. C'est une mise en
+forme conditionnelle : l'alerte s'éteint d'elle-même, sans rien à effacer. Elle ne
+porte que sur les semaines effectivement pointées : un emplacement de semaine
+inutilisé ne réclame rien. La légende figure en haut de chaque feuille.
 
-- **Grand déplacement.** La ville du chantier décide : `Nice` et `Paris` relèvent
-  du GD 80, toute autre ville du GD 72. La liste est dans
-  `public/js/regles.js` (`VILLES_GRAND_DEPLACEMENT_80`) et s'étend en une ligne.
-- **Semaines à cheval sur deux mois.** Chaque tableau ne retient que ses propres
-  jours — comme dans votre fichier, où le 29 et le 30 juin restent vides sur la
-  feuille de juillet. Les primes de la semaine suivent au prorata des jours
-  pointés. Conséquence à connaître : les heures supplémentaires d'une semaine
-  partagée sont calculées sur la portion du mois, pas sur la semaine entière.
+### Conventions retenues
+
+- **Grand déplacement** *(validé)* — dès que la ville du chantier contient `Nice`
+  ou `Paris`, le déplacement passe en GD 80 ; toute autre ville relève du GD 72.
+  La liste est dans `public/js/regles.js` (`VILLES_GRAND_DEPLACEMENT_80`).
+- **Semaines à cheval sur deux mois** *(validé)* — chaque tableau ne retient que
+  ses propres jours, comme dans le classeur d'origine où le 29 et le 30 juin
+  restent vides sur la feuille de juillet. Les primes suivent au prorata des jours
+  pointés, et les heures supplémentaires sont calculées sur la portion du mois.
+- **Valorisation d'un jour férié** *(à confirmer)* — la fiche de pointage porte un
+  code `F`, pas un nombre d'heures. Un jour férié est donc compté
+  `DUREE_JOURNEE_REFERENCE_MINUTES`, soit **7 h** (35 h sur 5 jours). C'est la
+  seule hypothèse chiffrée de l'export : elle se change sur une ligne dans
+  `public/js/regles.js`.
 
 ## Contenu des exports hebdomadaires
 
