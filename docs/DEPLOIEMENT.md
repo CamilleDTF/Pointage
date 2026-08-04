@@ -62,9 +62,10 @@ l'application. Le certificat est gratuit et renouvelé automatiquement.
 Sur chaque téléphone : installer Tailscale (App Store / Play Store), se connecter
 au même compte, ouvrir l'adresse, puis **Ajouter à l'écran d'accueil**.
 
-> HTTPS n'est pas un luxe ici : sans lui, le mode hors ligne (service worker) ne
-> s'active pas. C'est la raison pour laquelle on passe par Tailscale plutôt que
-> par une simple adresse IP locale.
+> HTTPS n'est pas un luxe ici : les codes des chefs d'équipe circulent sur le
+> réseau, et l'installation sur l'écran d'accueil du téléphone en dépend. C'est la
+> raison pour laquelle on passe par Tailscale plutôt que par une simple adresse IP
+> locale.
 
 ### 3. Démarrage automatique
 
@@ -138,9 +139,9 @@ pour Tailscale, qui n'en demande aucun.
 Si les fiches sont toujours remplies au dépôt, sur le Wi-Fi de l'entreprise, une
 adresse locale du type `http://192.168.1.20:3000` suffit et ne coûte rien.
 
-Limite à connaître : **sans HTTPS, le mode hors ligne ne fonctionne pas.** Un chef
-qui ouvrirait l'application sans réseau n'y aurait pas accès. Cette option ne
-convient donc que si la saisie a toujours lieu à portée du Wi-Fi.
+Limite à connaître : **sans HTTPS, les codes circulent en clair** sur le réseau, et
+l'installation sur l'écran d'accueil du téléphone n'est pas proposée. Cette option
+ne convient donc que si la saisie a toujours lieu au dépôt, sur votre propre Wi-Fi.
 
 ---
 

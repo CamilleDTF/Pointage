@@ -5,7 +5,7 @@
  * d'attente locale de commun.js.
  */
 
-const CACHE = 'pointage-v1';
+const CACHE = 'pointage-v2';
 
 const COQUILLE = [
   '/',
@@ -13,6 +13,7 @@ const COQUILLE = [
   '/chef.html',
   '/directeur.html',
   '/css/style.css',
+  '/js/regles.js',
   '/js/commun.js',
   '/js/chef.js',
   '/js/directeur.js',

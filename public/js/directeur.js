@@ -84,7 +84,7 @@ function afficherIndicateurs() {
     { valeur: tableau.fiches.filter((f) => f.statut === 'soumise').length, libelle: 'À vérifier' },
     { valeur: manquantes, libelle: 'Fiches manquantes' },
     { valeur: t.salaries, libelle: 'Salariés pointés' },
-    { valeur: versTexteTotal(t.minutes), libelle: 'Total heures semaine' },
+    { valeur: versTexte(t.minutes), libelle: 'Total heures semaine' },
   ];
   $('indicateurs').innerHTML = cartes
     .map((c) => `<div class="indicateur"><div class="valeur">${c.valeur}</div><div class="libelle">${c.libelle}</div></div>`)
@@ -101,7 +101,7 @@ function afficherSuivi() {
         <td>${echapper(f ? f.chantier : '—')}</td>
         <td>${echapper(f ? f.ville : '—')}</td>
         <td class="num">${f ? f.nb_salaries : '—'}</td>
-        <td class="num">${f ? versTexteTotal(f.total_minutes) : '—'}</td>
+        <td class="num">${f ? versTexte(f.total_minutes) : '—'}</td>
         <td>${badgeStatut(entree.statut)}</td>
         <td>${f ? `<button class="petit" onclick="allerA(${f.id})">Ouvrir</button>` : '<span class="aide">à relancer</span>'}</td>
       </tr>`;
@@ -139,7 +139,7 @@ function construireFiche(fiche) {
             .map((c) => `<option value="${c.code}"${c.code === jour.code_absence ? ' selected' : ''}>${c.code}</option>`)
             .join('');
           return `<td class="num ${j >= 5 ? 'weekend' : ''}">
-            <input class="cellule heures" data-jour="${j}" value="${versTexte(jour.minutes)}"
+            <input class="cellule heures" data-jour="${j}" value="${versSaisie(jour.minutes)}"
                    style="padding:5px;text-align:center;min-width:56px">
             <select class="cellule code" data-jour="${j}" style="padding:2px;font-size:0.72rem;margin-top:3px">
               <option value="">—</option>${codes}
@@ -151,9 +151,9 @@ function construireFiche(fiche) {
       return `<tr data-index="${index}" data-ligne-id="${ligne.id}">
         <td style="min-width:170px">${echapper(ligne.nom_affiche)}</td>
         ${cellulesJours}
-        <td class="num total" style="font-weight:700">${versTexteTotal(ligne.total_minutes)}</td>
-        <td class="num"><input class="cellule route" value="${versTexte(ligne.minutes_route)}" style="padding:5px;text-align:center;min-width:60px"></td>
-        <td class="num"><input class="cellule trajet" value="${versTexte(ligne.minutes_trajet)}" style="padding:5px;text-align:center;min-width:60px"></td>
+        <td class="num total" style="font-weight:700">${versTexte(ligne.total_minutes)}</td>
+        <td class="num"><input class="cellule route" value="${versSaisie(ligne.minutes_route)}" style="padding:5px;text-align:center;min-width:60px"></td>
+        <td class="num"><input class="cellule trajet" value="${versSaisie(ligne.minutes_trajet)}" style="padding:5px;text-align:center;min-width:60px"></td>
         <td class="num"><input class="cellule zone" type="number" min="0" max="7" step="0.5" value="${ligne.jours_zone || ''}" style="padding:5px;text-align:center;min-width:56px"></td>
         <td class="num"><select class="cellule masque-type" style="padding:5px;min-width:62px">
           <option value=""${!ligne.type_masque ? ' selected' : ''}>—</option>
@@ -172,7 +172,7 @@ function construireFiche(fiche) {
       <strong>${echapper(fiche.chef_nom)}</strong>
       <span>${echapper(fiche.chantier || 'chantier non renseigné')} — ${echapper(fiche.ville)}</span>
       ${badgeStatut(fiche.statut)}
-      <span class="pousse aide" style="margin:0">${lignes.length} salarié(s) · ${versTexteTotal(fiche.total_minutes)}</span>
+      <span class="pousse aide" style="margin:0">${lignes.length} salarié(s) · ${versTexte(fiche.total_minutes)}</span>
     </summary>
 
     <div style="margin-top:14px">
@@ -229,14 +229,14 @@ function cablerFiche(bloc, fiche) {
 
   bloc.querySelectorAll('input.heures').forEach((champ) => {
     champ.addEventListener('blur', () => {
-      champ.value = versTexte(versMinutes(champ.value));
+      champ.value = versSaisie(versMinutes(champ.value));
       recalculerTotal(champ.closest('tr'));
     });
     champ.addEventListener('input', () => recalculerTotal(champ.closest('tr')));
   });
   for (const classe of ['input.route', 'input.trajet']) {
     bloc.querySelectorAll(classe).forEach((champ) => {
-      champ.addEventListener('blur', () => { champ.value = versTexte(versMinutes(champ.value)); });
+      champ.addEventListener('blur', () => { champ.value = versSaisie(versMinutes(champ.value)); });
     });
   }
   bloc.querySelectorAll('select.code').forEach((select) => {
@@ -282,7 +282,7 @@ function cablerFiche(bloc, fiche) {
 function recalculerTotal(rang) {
   let total = 0;
   rang.querySelectorAll('input.heures').forEach((champ) => { total += versMinutes(champ.value); });
-  rang.querySelector('.total').textContent = versTexteTotal(total);
+  rang.querySelector('.total').textContent = versTexte(total);
 }
 
 function collecter(bloc, fiche) {

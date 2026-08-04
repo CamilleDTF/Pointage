@@ -188,6 +188,43 @@ td.weekend { background: #f5f7fa; }
 .jour.repos .entete { color: var(--orange); }
 .jour input.absent { background: #fdf6e3; border-color: #e5c976; }
 
+/* ------------------- Grille de saisie (PC portable) ---------------------- */
+
+.grille-pointage { font-size: 0.86rem; }
+.grille-pointage th { white-space: nowrap; }
+.grille-pointage td { padding: 4px 5px; vertical-align: middle; }
+.grille-pointage input,
+.grille-pointage select { padding: 6px 4px; font-size: 0.86rem; }
+.grille-pointage td.num input,
+.grille-pointage td.num select { text-align: center; min-width: 52px; }
+.grille-pointage input.heures { font-variant-numeric: tabular-nums; }
+.grille-pointage select.code { padding: 2px; font-size: 0.7rem; margin-top: 3px; }
+.grille-pointage .total { font-weight: 700; color: var(--bleu); font-variant-numeric: tabular-nums; }
+.grille-pointage tbody tr:hover { background: #f8fafc; }
+.grille-pointage button.valide { background: var(--vert); border-color: var(--vert); color: #fff; }
+
+/* --------------------------------- Fenêtre -------------------------------- */
+
+.fenetre {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(16, 37, 58, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.fenetre-corps {
+  background: #fff;
+  border-radius: var(--rayon);
+  padding: 18px;
+  width: min(560px, 100%);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+
+.fenetre-corps h2 { margin: 0 0 12px; font-size: 0.95rem; color: var(--bleu); }
+
 /* -------------------------------- Signature ------------------------------ */
 
 .signature { border: 1px dashed var(--gris-bord); border-radius: 8px; background: #fdfdfe; padding: 8px; }
@@ -206,6 +243,7 @@ td.weekend { background: #f5f7fa; }
 }
 .anomalies li.bloquant { background: #fbe6e3; border-color: var(--rouge); }
 .anomalies li.alerte { background: #fdf3e2; border-color: var(--orange); }
+.anomalies li.conforme { background: #e2f4ea; border-color: var(--vert); }
 
 /* ------------------------------- Indicateurs ----------------------------- */
 

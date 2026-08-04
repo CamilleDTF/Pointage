@@ -1,9 +1,15 @@
-/* Espace chef d'equipe : saisie de la fiche hebdomadaire sur telephone. */
+/*
+ * Espace chef d'equipe. Deux presentations de la meme fiche :
+ *  - "cartes"  : une carte depliante par salarie, pour la saisie au telephone ;
+ *  - "tableau" : la grille complete de la fiche papier, pour le PC portable.
+ * Les deux produisent le meme balisage de champs, donc un seul collecteur.
+ */
 
 let reference = null;
 let fiche = null;
 let signaturesLignes = [];
 let modifiable = true;
+let presentation = window.matchMedia('(min-width: 1024px)').matches ? 'tableau' : 'cartes';
 
 const $ = (id) => document.getElementById(id);
 
@@ -21,7 +27,8 @@ async function demarrer() {
   $('annee').value = reference.semaineCourante.annee;
   $('semaine').value = reference.semaineCourante.semaine;
 
-  surveillerReseau(() => ouvrirFiche(false));
+  majBoutonPresentation();
+  surveillerReseau();
   await ouvrirFiche();
 }
 
@@ -29,9 +36,22 @@ $('btn-ouvrir').addEventListener('click', () => ouvrirFiche());
 $('btn-quitter').addEventListener('click', deconnexion);
 $('btn-code').addEventListener('click', changerCode);
 $('btn-transmettre').addEventListener('click', transmettre);
+$('btn-presentation').addEventListener('click', () => {
+  presentation = presentation === 'tableau' ? 'cartes' : 'tableau';
+  majBoutonPresentation();
+  construireSalaries();
+});
 $('btn-excel').addEventListener('click', () => {
   if (fiche) window.location.href = `/api/export/fiche/${fiche.id}.xlsx`;
 });
+
+function majBoutonPresentation() {
+  $('btn-presentation').textContent = presentation === 'tableau' ? 'Vue téléphone' : 'Vue tableau';
+  $('btn-presentation').title =
+    presentation === 'tableau'
+      ? 'Basculer vers la saisie en cartes, adaptée au téléphone'
+      : 'Basculer vers la grille complète, adaptée au PC portable';
+}
 
 async function changerCode() {
   const actuel = prompt('Code actuel :');
@@ -53,8 +73,7 @@ async function ouvrirFiche(afficherMessage = true) {
   const semaine = Number($('semaine').value);
   try {
     const reponse = await API.post('/api/fiches/semaine', { annee, semaine });
-    fiche = reponse.fiche;
-    const detail = await API.get(`/api/fiches/${fiche.id}`);
+    const detail = await API.get(`/api/fiches/${reponse.fiche.id}`);
     fiche = detail.fiche;
     afficher();
     if (afficherMessage) message(`Semaine ${semaine} ouverte.`, 'info', 2000);
@@ -91,157 +110,226 @@ function afficher() {
     : 'Fiche déjà transmise';
 }
 
+/* --------------------------- Fragments de formulaire ---------------------- */
+
+/**
+ * Un seul champ pour le nom, avec l'equipe du chef en autocompletion : il choisit
+ * dans sa liste en deux frappes, et reste libre de saisir un renfort ponctuel.
+ */
+function listeEquipe() {
+  return `<datalist id="liste-equipe">${reference.equipe
+    .map((s) => `<option value="${echapper(`${s.nom} ${s.prenom}`)}"></option>`)
+    .join('')}</datalist>`;
+}
+
+function champNom(ligne) {
+  return `<input class="nom-libre" list="liste-equipe" value="${echapper(ligne.nom_affiche)}"
+                 placeholder="NOM Prénom" autocomplete="off">`;
+}
+
+function optionsCodes(codeActuel) {
+  return reference.codesAbsence
+    .map((c) => `<option value="${c.code}"${c.code === codeActuel ? ' selected' : ''}>${c.code}</option>`)
+    .join('');
+}
+
+function optionsMasque(actuel) {
+  return ['', 'VA', 'AA']
+    .map((v) => `<option value="${v}"${v === actuel ? ' selected' : ''}>${v || '—'}</option>`)
+    .join('');
+}
+
 /* ------------------------------ Saisie des lignes ------------------------- */
 
 function construireSalaries() {
   const zone = $('salaries');
-  zone.innerHTML = '';
+  zone.className = presentation === 'tableau' ? 'enveloppe-table' : '';
+  zone.innerHTML = presentation === 'tableau' ? gabaritTableau() : '';
 
-  fiche.lignes.forEach((ligne, index) => {
-    const bloc = document.createElement('details');
-    bloc.className = 'salarie';
-    bloc.dataset.index = index;
-    if (ligne.nom_affiche && index < 3) bloc.open = true;
+  if (presentation === 'cartes') {
+    zone.insertAdjacentHTML('beforeend', listeEquipe());
+    fiche.lignes.forEach((ligne, index) => {
+      zone.appendChild(carteSalarie(ligne, index));
+    });
+  }
 
-    const options = reference.equipe
-      .map((s) => {
-        const nom = `${s.nom} ${s.prenom}`;
-        return `<option value="${echapper(nom)}"${nom === ligne.nom_affiche ? ' selected' : ''}>${echapper(nom)}</option>`;
-      })
-      .join('');
-
-    const jours = ligne.jours
-      .map((jour, j) => {
-        const codes = reference.codesAbsence
-          .map((c) => `<option value="${c.code}"${c.code === jour.code_absence ? ' selected' : ''}>${c.code}</option>`)
-          .join('');
-        return `
-          <div class="jour ${j >= 5 ? 'repos' : ''}">
-            <div class="entete">${reference.joursCourts[j]}</div>
-            <div class="date">${jourMois(fiche.dates[j])}</div>
-            <input class="heures ${jour.code_absence ? 'absent' : ''}" data-jour="${j}"
-                   inputmode="text" placeholder="—" value="${versTexte(jour.minutes)}">
-            <select class="code" data-jour="${j}">
-              <option value="">—</option>${codes}
-            </select>
-          </div>`;
-      })
-      .join('');
-
-    bloc.innerHTML = `
-      <summary>
-        <span class="rang">${index + 1}</span>
-        <span class="nom">${echapper(ligne.nom_affiche || 'Ligne libre')}</span>
-        <span class="total">${versTexteTotal(ligne.total_minutes)}</span>
-      </summary>
-      <div class="corps">
-        <div class="grille deux" style="margin-bottom:12px">
-          <div>
-            <label>Salarié</label>
-            <select class="choix-salarie"><option value="">— aucun —</option>${options}</select>
-          </div>
-          <div>
-            <label>ou saisir un nom</label>
-            <input class="nom-libre" value="${echapper(ligne.nom_affiche)}" placeholder="NOM Prénom">
-          </div>
-        </div>
-
-        <label>Heures de travail (hors repas et trajet)</label>
-        <div class="jours">${jours}</div>
-
-        <div class="grille trois" style="margin-top:14px">
-          <div>
-            <label>Heures route 100%</label>
-            <input class="route" value="${versTexte(ligne.minutes_route)}" placeholder="0h00">
-          </div>
-          <div>
-            <label>Heures trajet 50%</label>
-            <input class="trajet" value="${versTexte(ligne.minutes_trajet)}" placeholder="0h00">
-          </div>
-          <div>
-            <label>Jours en zone</label>
-            <input class="zone" type="number" min="0" max="7" step="0.5" value="${ligne.jours_zone || ''}">
-          </div>
-          <div>
-            <label>Type de masque</label>
-            <select class="masque-type">
-              <option value=""${!ligne.type_masque ? ' selected' : ''}>—</option>
-              <option value="VA"${ligne.type_masque === 'VA' ? ' selected' : ''}>VA</option>
-              <option value="AA"${ligne.type_masque === 'AA' ? ' selected' : ''}>AA</option>
-            </select>
-          </div>
-          <div>
-            <label>Nb déplacements</label>
-            <input class="deplacement" type="number" min="0" step="1" value="${ligne.nb_deplacement || ''}">
-          </div>
-        </div>
-
-        <div style="margin-top:12px">
-          <label>Observations</label>
-          <input class="observation" value="${echapper(ligne.observation)}">
-        </div>
-
-        <div style="margin-top:12px">
-          <label>Signature du salarié (obligatoire)</label>
-          <div class="signature">
-            <div class="apercu-signature"></div>
-            <canvas class="toile-signature"></canvas>
-            <button class="petit effacer-signature" type="button" style="margin-top:6px">Effacer</button>
-          </div>
-        </div>
-      </div>`;
-
-    zone.appendChild(bloc);
-    cablerLigne(bloc, index);
+  document.querySelectorAll('[data-ligne]').forEach((conteneur) => {
+    cablerLigne(conteneur, Number(conteneur.dataset.ligne));
   });
 }
 
-function cablerLigne(bloc, index) {
+function carteSalarie(ligne, index) {
+  const bloc = document.createElement('details');
+  bloc.className = 'salarie';
+  bloc.dataset.ligne = index;
+  if (ligne.nom_affiche && index < 3) bloc.open = true;
+
+  const jours = ligne.jours
+    .map(
+      (jour, j) => `
+        <div class="jour ${j >= 5 ? 'repos' : ''}">
+          <div class="entete">${reference.joursCourts[j]}</div>
+          <div class="date">${jourMois(fiche.dates[j])}</div>
+          <input class="heures ${jour.code_absence ? 'absent' : ''}" data-jour="${j}"
+                 inputmode="text" placeholder="—" value="${versSaisie(jour.minutes)}">
+          <select class="code" data-jour="${j}">
+            <option value="">—</option>${optionsCodes(jour.code_absence)}
+          </select>
+        </div>`
+    )
+    .join('');
+
+  bloc.innerHTML = `
+    <summary>
+      <span class="rang">${index + 1}</span>
+      <span class="nom">${echapper(ligne.nom_affiche || 'Ligne libre')}</span>
+      <span class="total">${versTexte(ligne.total_minutes)}</span>
+    </summary>
+    <div class="corps">
+      <div style="margin-bottom:12px">
+        <label>Salarié</label>
+        ${champNom(ligne)}
+      </div>
+
+      <label>Heures de travail (hors repas et trajet)</label>
+      <div class="jours">${jours}</div>
+
+      <div class="grille trois" style="margin-top:14px">
+        <div><label>Heures route 100%</label><input class="route" value="${versSaisie(ligne.minutes_route)}" placeholder="0h00"></div>
+        <div><label>Heures trajet 50%</label><input class="trajet" value="${versSaisie(ligne.minutes_trajet)}" placeholder="0h00"></div>
+        <div><label>Jours en zone</label><input class="zone" type="number" min="0" max="7" step="0.5" value="${ligne.jours_zone || ''}"></div>
+        <div><label>Type de masque</label><select class="masque-type">${optionsMasque(ligne.type_masque)}</select></div>
+        <div><label>Nb déplacements</label><input class="deplacement" type="number" min="0" step="1" value="${ligne.nb_deplacement || ''}"></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <label>Observations</label>
+        <input class="observation" value="${echapper(ligne.observation)}">
+      </div>
+
+      <div style="margin-top:12px">
+        <label>Signature du salarié (obligatoire)</label>
+        <div class="signature">
+          <div class="apercu-signature"></div>
+          <canvas class="toile-signature"></canvas>
+          <button class="petit effacer-signature" type="button" style="margin-top:6px">Effacer</button>
+        </div>
+      </div>
+    </div>`;
+
+  return bloc;
+}
+
+function gabaritTableau() {
+  const entetesJours = fiche.dates
+    .map(
+      (iso, j) =>
+        `<th class="num ${j >= 5 ? 'weekend' : ''}">${reference.joursCourts[j]}<br><small>${jourMois(iso)}</small></th>`
+    )
+    .join('');
+
+  const rangs = fiche.lignes
+    .map((ligne, index) => {
+      const cellulesJours = ligne.jours
+        .map(
+          (jour, j) => `
+            <td class="num ${j >= 5 ? 'weekend' : ''}">
+              <input class="cellule heures ${jour.code_absence ? 'absent' : ''}" data-jour="${j}"
+                     value="${versSaisie(jour.minutes)}" placeholder="—">
+              <select class="cellule code" data-jour="${j}"><option value="">—</option>${optionsCodes(jour.code_absence)}</select>
+            </td>`
+        )
+        .join('');
+
+      return `
+        <tr data-ligne="${index}">
+          <td class="cellule-nom">${champNom(ligne)}</td>
+          ${cellulesJours}
+          <td class="num total">${versTexte(ligne.total_minutes)}</td>
+          <td class="num"><input class="cellule route" value="${versSaisie(ligne.minutes_route)}" placeholder="0h00"></td>
+          <td class="num"><input class="cellule trajet" value="${versSaisie(ligne.minutes_trajet)}" placeholder="0h00"></td>
+          <td class="num"><input class="cellule zone" type="number" min="0" max="7" step="0.5" value="${ligne.jours_zone || ''}"></td>
+          <td class="num"><select class="cellule masque-type">${optionsMasque(ligne.type_masque)}</select></td>
+          <td class="num"><input class="cellule deplacement" type="number" min="0" step="1" value="${ligne.nb_deplacement || ''}"></td>
+          <td><input class="cellule observation" value="${echapper(ligne.observation)}"></td>
+          <td class="num"><button type="button" class="petit signer">Signer</button></td>
+        </tr>`;
+    })
+    .join('');
+
+  return `
+    ${listeEquipe()}
+    <table class="grille-pointage">
+      <thead><tr>
+        <th style="min-width:165px">Nom - Prénom</th>${entetesJours}
+        <th class="num">Total<br>semaine</th><th class="num">Route<br>100%</th><th class="num">Trajet<br>50%</th>
+        <th class="num">Jours<br>zone</th><th class="num">Masque</th><th class="num">Nb<br>dépl.</th>
+        <th style="min-width:110px">Observations</th><th class="num">Signature</th>
+      </tr></thead>
+      <tbody>${rangs}</tbody>
+    </table>`;
+}
+
+function cablerLigne(conteneur, index) {
   const surSaisie = () => {
-    recalculerLigne(bloc, index);
+    recalculerLigne(conteneur);
     enregistrerPlusTard();
   };
 
-  bloc.querySelectorAll('input, select').forEach((champ) => {
+  conteneur.querySelectorAll('input, select').forEach((champ) => {
     champ.disabled = !modifiable;
     champ.addEventListener('input', surSaisie);
     champ.addEventListener('change', surSaisie);
   });
+  conteneur.querySelectorAll('button').forEach((bouton) => { bouton.disabled = !modifiable; });
 
-  const choix = bloc.querySelector('.choix-salarie');
-  const libre = bloc.querySelector('.nom-libre');
-  choix.addEventListener('change', () => {
-    if (choix.value) libre.value = choix.value;
-    bloc.querySelector('.nom').textContent = libre.value || 'Ligne libre';
-    enregistrerPlusTard();
-  });
+  const libre = conteneur.querySelector('.nom-libre');
+  const etiquette = conteneur.querySelector('.nom');
   libre.addEventListener('input', () => {
-    bloc.querySelector('.nom').textContent = libre.value || 'Ligne libre';
+    if (etiquette) etiquette.textContent = libre.value || 'Ligne libre';
   });
 
   // Un code absence remet la journee a zero : les deux ne se cumulent pas.
-  bloc.querySelectorAll('select.code').forEach((select) => {
+  conteneur.querySelectorAll('select.code').forEach((select) => {
     select.addEventListener('change', () => {
-      const saisieHeures = bloc.querySelector(`input.heures[data-jour="${select.dataset.jour}"]`);
-      saisieHeures.classList.toggle('absent', Boolean(select.value));
-      if (select.value) saisieHeures.value = '';
+      const saisie = conteneur.querySelector(`input.heures[data-jour="${select.dataset.jour}"]`);
+      saisie.classList.toggle('absent', Boolean(select.value));
+      if (select.value) saisie.value = '';
+      recalculerLigne(conteneur);
     });
   });
 
-  bloc.querySelectorAll('input.heures').forEach((champ) => {
+  conteneur.querySelectorAll('input.heures').forEach((champ) => {
     champ.addEventListener('blur', () => {
-      const minutes = versMinutes(champ.value);
-      champ.value = versTexte(minutes);
-      recalculerLigne(bloc, index);
+      champ.value = versSaisie(versMinutes(champ.value));
+      recalculerLigne(conteneur);
     });
   });
   for (const classe of ['.route', '.trajet']) {
-    const champ = bloc.querySelector(classe);
-    champ.addEventListener('blur', () => { champ.value = versTexte(versMinutes(champ.value)); });
+    const champ = conteneur.querySelector(classe);
+    champ.addEventListener('blur', () => { champ.value = versSaisie(versMinutes(champ.value)); });
   }
 
-  const toile = bloc.querySelector('.toile-signature');
-  const apercu = bloc.querySelector('.apercu-signature');
+  cablerSignature(conteneur, index);
+}
+
+function cablerSignature(conteneur, index) {
+  const bouton = conteneur.querySelector('button.signer');
+  if (bouton) {
+    // Vue tableau : la signature ne tient pas dans une cellule, on l'ouvre en fenetre.
+    const rafraichir = () => {
+      bouton.textContent = signaturesLignes[index] ? 'Signée ✔' : 'Signer';
+      bouton.classList.toggle('valide', Boolean(signaturesLignes[index]));
+    };
+    rafraichir();
+    bouton.addEventListener('click', () => {
+      ouvrirFenetreSignature(conteneur.querySelector('.nom-libre').value, index, rafraichir);
+    });
+    return;
+  }
+
+  const toile = conteneur.querySelector('.toile-signature');
+  const apercu = conteneur.querySelector('.apercu-signature');
   if (signaturesLignes[index]) {
     apercu.innerHTML = `<img src="${signaturesLignes[index]}" alt="Signature enregistrée">`;
     toile.classList.add('masque');
@@ -250,7 +338,7 @@ function cablerLigne(bloc, index) {
     signaturesLignes[index] = image;
     enregistrerPlusTard();
   });
-  bloc.querySelector('.effacer-signature').addEventListener('click', () => {
+  conteneur.querySelector('.effacer-signature').addEventListener('click', () => {
     if (!modifiable) return;
     apercu.innerHTML = '';
     toile.classList.remove('masque');
@@ -260,10 +348,47 @@ function cablerLigne(bloc, index) {
   });
 }
 
-function recalculerLigne(bloc, index) {
+function ouvrirFenetreSignature(nom, index, auxChangements) {
+  const fenetre = document.createElement('div');
+  fenetre.className = 'fenetre';
+  fenetre.innerHTML = `
+    <div class="fenetre-corps">
+      <h2>Signature — ${echapper(nom || `ligne ${index + 1}`)}</h2>
+      <div class="signature"><canvas class="toile-signature" style="height:180px"></canvas></div>
+      <div class="rangee" style="margin-top:12px">
+        <button type="button" class="petit effacer">Effacer</button>
+        <span class="pousse"></span>
+        <button type="button" class="petit fermer">Annuler</button>
+        <button type="button" class="petit principal valider">Enregistrer</button>
+      </div>
+    </div>`;
+  document.body.appendChild(fenetre);
+
+  const toile = fenetre.querySelector('.toile-signature');
+  let capturee = signaturesLignes[index];
+  const pad = activerSignature(toile, (image) => { capturee = image; });
+  if (signaturesLignes[index]) {
+    const img = new Image();
+    img.onload = () => toile.getContext('2d').drawImage(img, 0, 0, toile.clientWidth, toile.clientHeight);
+    img.src = signaturesLignes[index];
+  }
+
+  const fermer = () => fenetre.remove();
+  fenetre.querySelector('.effacer').addEventListener('click', () => { pad.effacer(); capturee = null; });
+  fenetre.querySelector('.fermer').addEventListener('click', fermer);
+  fenetre.addEventListener('click', (e) => { if (e.target === fenetre) fermer(); });
+  fenetre.querySelector('.valider').addEventListener('click', () => {
+    signaturesLignes[index] = capturee;
+    auxChangements();
+    enregistrerPlusTard();
+    fermer();
+  });
+}
+
+function recalculerLigne(conteneur) {
   let total = 0;
-  bloc.querySelectorAll('input.heures').forEach((champ) => { total += versMinutes(champ.value); });
-  bloc.querySelector('.total').textContent = versTexteTotal(total);
+  conteneur.querySelectorAll('input.heures').forEach((champ) => { total += versMinutes(champ.value); });
+  conteneur.querySelector('.total').textContent = versTexte(total);
 }
 
 function construireSignatureResponsable() {
@@ -304,26 +429,27 @@ function collecter() {
   for (const champ of document.querySelectorAll('[data-entete]')) corps[champ.dataset.entete] = champ.value;
   if (fiche.signature_responsable !== undefined) corps.signature_responsable = fiche.signature_responsable;
 
-  document.querySelectorAll('.salarie').forEach((bloc, index) => {
+  document.querySelectorAll('[data-ligne]').forEach((conteneur) => {
+    const index = Number(conteneur.dataset.ligne);
     const jours = [];
     for (let j = 0; j < 7; j += 1) {
       jours.push({
         jour: j,
-        minutes: versMinutes(bloc.querySelector(`input.heures[data-jour="${j}"]`).value),
-        code_absence: bloc.querySelector(`select.code[data-jour="${j}"]`).value,
+        minutes: versMinutes(conteneur.querySelector(`input.heures[data-jour="${j}"]`).value),
+        code_absence: conteneur.querySelector(`select.code[data-jour="${j}"]`).value,
       });
     }
-    const nom = bloc.querySelector('.nom-libre').value.trim();
+    const nom = conteneur.querySelector('.nom-libre').value.trim();
     const choisi = reference.equipe.find((s) => `${s.nom} ${s.prenom}` === nom);
     corps.lignes.push({
       salarie_id: choisi ? choisi.id : null,
       nom_affiche: nom,
-      minutes_route: versMinutes(bloc.querySelector('.route').value),
-      minutes_trajet: versMinutes(bloc.querySelector('.trajet').value),
-      jours_zone: Number(bloc.querySelector('.zone').value) || 0,
-      type_masque: bloc.querySelector('.masque-type').value,
-      nb_deplacement: Number(bloc.querySelector('.deplacement').value) || 0,
-      observation: bloc.querySelector('.observation').value,
+      minutes_route: versMinutes(conteneur.querySelector('.route').value),
+      minutes_trajet: versMinutes(conteneur.querySelector('.trajet').value),
+      jours_zone: Number(conteneur.querySelector('.zone').value) || 0,
+      type_masque: conteneur.querySelector('.masque-type').value,
+      nb_deplacement: Number(conteneur.querySelector('.deplacement').value) || 0,
+      observation: conteneur.querySelector('.observation').value,
       signature: signaturesLignes[index] ?? null,
       jours,
     });
@@ -334,6 +460,11 @@ function collecter() {
 async function enregistrer() {
   if (!fiche || !modifiable) return;
   const corps = collecter();
+
+  // Controle immediat, avec les memes regles que le serveur : le chef voit ce
+  // qui manque sans attendre la reponse.
+  afficherAnomalies(controlerFiche({ ...fiche, ...corps }, corps.lignes));
+
   $('etat-sauvegarde').textContent = 'Enregistrement…';
   try {
     const reponse = await API.put(`/api/fiches/${fiche.id}`, corps);
@@ -342,7 +473,7 @@ async function enregistrer() {
     $('etat-sauvegarde').textContent = `Enregistré à ${new Date().toLocaleTimeString('fr-FR')}`;
   } catch (e) {
     FileAttente.ajouter(fiche.id, corps);
-    $('etat-sauvegarde').textContent = 'Conservé sur l’appareil — sera transmis au retour du réseau.';
+    $('etat-sauvegarde').textContent = 'Connexion perdue — saisie conservée, transmise dès son rétablissement.';
   }
 }
 
@@ -354,7 +485,8 @@ function afficherAnomalies(anomalies) {
   const liste = $('anomalies');
   liste.innerHTML = '';
   if (!anomalies.length) {
-    liste.innerHTML = '<li style="background:#e2f4ea;border-color:var(--vert)" class="alerte">Aucune anomalie détectée : la fiche peut être transmise.</li>';
+    liste.innerHTML =
+      '<li class="conforme">Aucune anomalie détectée : la fiche peut être transmise.</li>';
     return;
   }
   for (const anomalie of anomalies) {

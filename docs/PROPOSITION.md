@@ -31,7 +31,8 @@ absence, mêmes primes (zone, masque VA/AA, déplacements), mêmes signatures.
   de la semaine
   (équipe pré-remplie)
         │
-        │ saisit les heures, même sans réseau
+        │ saisit les heures sur chantier,
+        │ au téléphone ou au PC portable
         │ fait signer chaque salarié sur l'écran
         ▼
   Contrôles automatiques
@@ -63,8 +64,13 @@ absence, mêmes primes (zone, masque VA/AA, déplacements), mêmes signatures.
 - Sa fiche de la semaine s'ouvre déjà pré-remplie avec les noms de son équipe.
 - Les heures se saisissent comme il en a l'habitude : `7h30`, `7:30` ou `7,5`.
 - Le total de la semaine se calcule tout seul, ligne par ligne.
-- **La saisie fonctionne sans réseau.** Sur chantier, tout est conservé sur le
-  téléphone et transmis automatiquement dès le retour de la couverture.
+- **La fiche s'adapte à l'appareil.** Au téléphone, une carte dépliante par
+  salarié, dimensionnée pour le pouce. Au PC portable, la grille complète de la
+  fiche papier — 11 lignes × 7 jours visibles d'un coup, saisie au clavier en
+  tabulant de case en case, comme sur le papier. La bascule est automatique selon
+  la taille de l'écran, et reste permutable d'un bouton.
+- Si la connexion tombe en pleine saisie, le travail est conservé sur l'appareil
+  et transmis dès son rétablissement.
 - Chaque salarié signe du doigt sur l'écran ; la signature est archivée.
 - Avant de transmettre, l'application liste ce qui manque. Une fiche incomplète
   ne part pas.
@@ -149,8 +155,9 @@ J'ai écarté deux alternatives, pour des raisons précises :
 
 | Solution | Pourquoi elle ne convient pas ici |
 |---|---|
-| **Microsoft Forms / Google Forms** | Un formulaire est linéaire. Ici il faut saisir une grille de 11 personnes × 7 jours, revenir en arrière, corriger. Sur un formulaire, cela représente 77 questions à la suite — inutilisable sur un chantier. Aucun fonctionnement hors réseau, aucune signature. |
-| **Power Apps / AppSheet** | Techniquement faisables, mais ils imposent une licence par utilisateur, dépendent de votre tenant, et le mode hors ligne y est limité et fragile. Le coût récurrent dépasse rapidement celui d'un hébergement simple, et vous ne maîtrisez ni le code ni les données. |
+| **Microsoft Forms / Google Forms** | Un formulaire est linéaire. Ici il faut saisir une grille de 11 personnes × 7 jours, revenir en arrière, corriger. Sur un formulaire, cela représente 77 questions à la suite — inutilisable sur un chantier. Ni signature, ni grille. |
+| **Power Apps / AppSheet** | Techniquement faisables, mais ils imposent une licence par utilisateur et dépendent de votre tenant. Le coût récurrent dépasse rapidement celui d'un hébergement simple, et vous ne maîtrisez ni le code ni les données. |
+| **Vercel** | Le plan gratuit interdit explicitement l'usage commercial, et la plateforme n'a pas de stockage persistant — le fichier de la base y serait effacé entre deux requêtes. |
 
 L'application dédiée n'impose aucune licence par utilisateur, fonctionne hors
 réseau, et les données restent chez vous dans un fichier que vous pouvez
@@ -206,10 +213,10 @@ totaux de la paie sont rigoureusement identiques avant d'abandonner le papier.
 
 ## 7. Ce qui est livré aujourd'hui
 
-Une application complète et fonctionnelle : saisie mobile hors ligne, signatures,
-contrôles automatiques, tableau de bord directeur, grille de correction, circuit
-de validation et de renvoi, exports Excel et CSV, réplique conforme de la fiche,
-gestion des comptes et des équipes, journal des actions.
+Une application complète et fonctionnelle : saisie sur téléphone **et** sur PC
+portable, signatures, contrôles automatiques, tableau de bord directeur, grille de
+correction, circuit de validation et de renvoi, exports Excel et CSV, réplique
+conforme de la fiche, gestion des comptes et des équipes, journal des actions.
 
 Voir le [README](../README.md) pour l'installation et le
 [guide de déploiement](DEPLOIEMENT.md) pour la mise en production.

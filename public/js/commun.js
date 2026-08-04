@@ -41,47 +41,11 @@ function message(texte, type = 'info', duree = 4000) {
 
 /* ------------------------------ Heures / dates ---------------------------- */
 
-function versMinutes(saisie) {
-  if (saisie === null || saisie === undefined) return 0;
-  const t = String(saisie).trim().toLowerCase().replace(',', '.');
-  if (t === '') return 0;
-  const hm = t.match(/^(\d{1,2})\s*[h:]\s*(\d{1,2})?$/);
-  if (hm) return Number(hm[1]) * 60 + Number(hm[2] || 0);
-  const dec = Number(t);
-  if (!Number.isFinite(dec) || dec < 0) return 0;
-  return Math.round(dec * 60);
-}
+// Reprises telles quelles de js/regles.js, partage avec le serveur : les totaux
+// affiches a l'ecran sont calcules par le meme code que ceux de la paie.
+const { versMinutes, versTexte, versSaisie, jourMois, controlerFiche } = Regles;
 
-function versTexte(minutes) {
-  const m = Math.max(0, Math.round(Number(minutes) || 0));
-  if (!m) return '';
-  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`;
-}
-
-function versTexteTotal(minutes) {
-  const m = Math.max(0, Math.round(Number(minutes) || 0));
-  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`;
-}
-
-function jourMois(iso) {
-  if (!iso) return '';
-  const [, m, j] = iso.split('-');
-  return `${j}/${m}`;
-}
-
-/** Semaine ISO courante : c'est le jeudi de la semaine qui porte l'annee ISO. */
-function semaineISOCourante() {
-  const jeudiDeLaSemaine = (d) => {
-    const copie = new Date(d);
-    copie.setUTCDate(copie.getUTCDate() + 3 - ((copie.getUTCDay() + 6) % 7));
-    return copie;
-  };
-  const date = new Date();
-  const jeudi = jeudiDeLaSemaine(new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())));
-  const annee = jeudi.getUTCFullYear();
-  const premierJeudi = jeudiDeLaSemaine(new Date(Date.UTC(annee, 0, 4)));
-  return { annee, semaine: 1 + Math.round((jeudi - premierJeudi) / (7 * 86400000)) };
-}
+const semaineISOCourante = () => Regles.semaineISO(new Date());
 
 const etiquetteStatut = (statut) =>
   ({

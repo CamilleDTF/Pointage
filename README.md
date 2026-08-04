@@ -13,9 +13,9 @@ coûts et plan de mise en service — est dans [docs/PROPOSITION.md](docs/PROPOS
 
 ## En deux phrases
 
-Le chef d'équipe remplit sa fiche sur son téléphone, **même sans réseau**, fait
-signer ses opérateurs à l'écran, et la transmet. Le directeur la reçoit dans une
-grille qu'il **corrige directement**, la valide, et exporte le tout vers son
+Le chef d'équipe remplit sa fiche sur chantier, au téléphone ou au PC portable,
+fait signer ses opérateurs à l'écran, et la transmet. Le directeur la reçoit dans
+une grille qu'il **corrige directement**, la valide, et exporte le tout vers son
 tableau Excel interne — sans jamais retaper une heure.
 
 **Hébergement : 0 €.** L'application tourne sur une machine que vous possédez
@@ -70,8 +70,14 @@ corriger, la valider, ou la lui renvoyer pour correction avec un motif.
 - Un code absence par jour, repris de la fiche papier (`ACH`, `F`, `NJ`, `VM`,
   `AT`, `EV`, `FOR`, `CSS`, `AA`).
 - Signature tactile par salarié, plus celle du responsable de chantier.
-- **Hors ligne :** chaque saisie est écrite localement et rejouée dès le retour du
-  réseau. Une bannière indique l'état de la synchronisation.
+- **Deux présentations de la même fiche**, choisies automatiquement selon la
+  taille de l'écran et permutables d'un bouton :
+  - *cartes* — une carte dépliante par salarié, pour le pouce sur un téléphone ;
+  - *tableau* — la grille complète de la fiche papier, 11 lignes × 7 jours
+    visibles d'un coup, saisie au clavier en tabulant. C'est la vue par défaut
+    dès 1024 px de large.
+- Filet de sécurité réseau : si la connexion tombe en pleine saisie, le travail est
+  conservé sur l'appareil et transmis dès son rétablissement.
 - Le bouton *Contrôler et transmettre* refuse une fiche incomplète et affiche
   précisément ce qui manque.
 
@@ -116,17 +122,19 @@ public/
   index.html    Connexion
   chef.html     Saisie mobile           + js/chef.js
   directeur.html Tableau de bord        + js/directeur.js
-  js/commun.js  API, format des heures, signature tactile, file d'attente hors ligne
-  sw.js         Service worker : l'application s'ouvre sans réseau
+  js/regles.js  Règles métier partagées avec le serveur (heures, semaines, contrôles)
+  js/commun.js  API, signature tactile, file d'attente en cas de coupure réseau
+  sw.js         Service worker : mise en cache de la coquille de l'application
 test/
   domaine.test.js       Conversion des heures, semaines ISO, contrôles de cohérence
   cloisonnement.test.js Cloisonnement des accès par code, bout en bout sur l'API
 Dockerfile, docker-compose.yml   Installation en une commande sur votre machine
 ```
 
-`server/domaine.js` et `public/js/commun.js` partagent volontairement les mêmes
-règles de conversion des heures, pour que l'affichage au chef et le calcul de la
-paie ne divergent jamais.
+Les règles métier sont écrites **une seule fois**, dans `public/js/regles.js` :
+le navigateur le charge tel quel et `server/domaine.js` l'importe. Les totaux et
+les contrôles affichés au chef d'équipe sont donc rigoureusement ceux appliqués à
+la réception de la fiche — aucune divergence possible entre l'écran et la paie.
 
 ## Cycle de vie d'une fiche
 
