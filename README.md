@@ -40,23 +40,43 @@ Elle est reconstruite depuis le code de l'application : `scripts/construire-demo
 échoue si un motif qu'il adapte a disparu, pour qu'elle ne dérive jamais
 silencieusement de l'original.
 
-## Démarrage
+## Essayer sur son poste, avant tout hébergement
+
+Il suffit d'avoir [Node.js](https://nodejs.org) 20 ou plus. Aucun droit
+particulier, aucune installation serveur.
 
 ```bash
-npm install
-npm run seed -- --demo     # crée le directeur, 8 chefs, leurs équipes et une fiche d'exemple
-npm start                  # http://localhost:3000
+./scripts/demarrer.sh      # macOS, Linux
+.\scripts\demarrer.ps1     # Windows (clic droit > Exécuter avec PowerShell)
 ```
 
-Comptes créés par `npm run seed` (**à changer à la première connexion**) :
+Le script installe les dépendances au premier lancement, crée un compte directeur
+(`directeur` / `246810`) et sert l'application sur `http://localhost:3000`. Il est
+relançable sans risque : les données déjà saisies sont conservées.
 
-| Rôle | Identifiant | Code |
-|---|---|---|
-| Directeur | `directeur` | `246810` |
-| Chefs d'équipe | `kbenali`, `mduarte`, `jfontaine`, `pgranjon`, `slemoine`, `ymarchand`, `tnguyen`, `frossi` | `1001` à `1008` |
+Pour travailler sur l'effectif réel plutôt que sur des données fictives :
 
-Chacun change son code depuis le bouton **Code** de l'en-tête ; le directeur peut
-réinitialiser n'importe quel code depuis l'écran **Équipes**.
+```bash
+node scripts/importer-effectif.js votre-fichier.xlsx --appliquer
+```
+
+Les chefs se connectent alors avec les identifiants et les codes de ce fichier.
+
+### Comptes
+
+Sur une installation neuve, le premier compte se crée en ligne de commande — les
+écrans d'administration supposent d'être déjà connecté en directeur :
+
+```bash
+node scripts/creer-compte.js --nom "Direction travaux" \
+     --identifiant directeur --code 246810 --role directeur
+```
+
+Chacun change ensuite son code depuis le bouton **Code** de l'en-tête ; le
+directeur peut réinitialiser n'importe quel code depuis l'écran **Équipes**.
+
+`npm run seed -- --demo` reste disponible pour peupler une base d'essai avec
+8 chefs fictifs, leurs équipes et une fiche d'exemple.
 
 ```bash
 npm test                   # contrôles métier, semaines ISO, paie, cloisonnement des accès
