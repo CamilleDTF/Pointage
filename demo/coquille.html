@@ -1,0 +1,190 @@
+<!--
+  Gabarit de la page de demonstration. Les marqueurs /*{...}*/ sont remplaces
+  par scripts/construire-demo.js avec le code reel de l'application.
+-->
+<style>/*{STYLE}*/</style>
+
+<style>
+  /*
+   * L'application est un outil de gestion a identite claire unique : la
+   * demonstration s'y tient, quel que soit le theme du lecteur. On le declare
+   * explicitement pour que les champs de saisie ne soient pas repeints en
+   * sombre par le navigateur, ce qui casserait la lisibilite de la grille.
+   */
+  :root, :root[data-theme="dark"], :root[data-theme="light"] {
+    color-scheme: light;
+    background: #eef1f5;
+  }
+  body { background: #eef1f5; color: #1d2530; }
+
+  /* Habillage propre a la demonstration, construit avec les jetons de l'application. */
+  .bandeau-demo {
+    background: var(--orange);
+    color: #fff;
+    padding: 9px 16px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .bandeau-demo span.libre { font-weight: 400; opacity: 0.92; }
+  .bandeau-demo button {
+    margin-left: auto;
+    background: rgba(255, 255, 255, 0.18);
+    border-color: transparent;
+    color: #fff;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+  }
+  .bandeau-demo button:hover { background: rgba(255, 255, 255, 0.3); }
+
+  .roles { display: grid; gap: 10px; margin: 18px 0 6px; }
+  .role {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+    padding: 12px 14px;
+    border: 1px solid var(--gris-bord);
+    border-radius: var(--rayon);
+    background: #fff;
+  }
+  .role:hover { border-color: var(--bleu-clair); background: #f4f8fc; }
+  .role .puce {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: grid; place-items: center; flex: none;
+    font-size: 0.95rem; color: #fff; background: var(--bleu);
+  }
+  .role .puce.dir { background: var(--vert); }
+  .role .intitule { font-weight: 700; display: block; }
+  .role .detail { font-size: 0.78rem; color: var(--gris-texte); font-weight: 400; }
+
+  .separateur {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--gris-texte); font-size: 0.76rem; margin: 18px 0 12px;
+  }
+  .separateur::before, .separateur::after {
+    content: ''; flex: 1; height: 1px; background: var(--gris-bord);
+  }
+</style>
+
+<div class="bandeau-demo">
+  Démonstration
+  <span class="libre">— données fictives, rien n'est enregistré. Rechargez la page pour repartir de zéro.</span>
+  <button type="button" id="demo-reinitialiser">Recommencer</button>
+</div>
+
+<div id="demo-connexion">
+  <main>
+    <div class="carte connexion">
+      <h1>Pointage hebdomadaire</h1>
+      <p class="sous">Fiches de pointage par chantier</p>
+
+      <div class="roles">
+        <button class="role" type="button" data-identifiant="kbenali" data-pin="1001">
+          <span class="puce">CE</span>
+          <span>
+            <span class="intitule">Entrer comme chef d'équipe</span>
+            <span class="detail">BENALI Karim — sa fiche de la semaine, son équipe</span>
+          </span>
+        </button>
+        <button class="role" type="button" data-identifiant="directeur" data-pin="246810">
+          <span class="puce dir">D</span>
+          <span>
+            <span class="intitule">Entrer comme directeur</span>
+            <span class="detail">Les 8 chefs, la vérification, la validation</span>
+          </span>
+        </button>
+      </div>
+
+      <div class="separateur">ou saisissez un code</div>
+
+      <form id="demo-formulaire" autocomplete="off">
+        <div style="margin-bottom:12px">
+          <label for="demo-identifiant">Identifiant</label>
+          <input id="demo-identifiant" autocapitalize="none" autocorrect="off" required>
+        </div>
+        <div style="margin-bottom:16px">
+          <label for="demo-pin">Code personnel</label>
+          <input id="demo-pin" type="password" inputmode="numeric" required>
+        </div>
+        <button class="principal" type="submit" style="width:100%">Se connecter</button>
+      </form>
+
+      <p class="aide" id="demo-aide">
+        Chefs d'équipe : <code>kbenali</code> à <code>frossi</code>, codes <code>1001</code> à <code>1008</code>.
+        Directeur : <code>directeur</code>, code <code>246810</code>.
+      </p>
+    </div>
+  </main>
+</div>
+
+<div id="demo-application"></div>
+
+<script>/*{REGLES}*/</script>
+<script>/*{FAUX_SERVEUR}*/</script>
+<script>/*{COMMUN}*/</script>
+
+<script>
+  /*
+   * Aiguillage de la demonstration. Les deux ecrans de l'application utilisent
+   * les memes identifiants d'elements (annee, semaine, periode...) : on n'en
+   * insere donc qu'un seul a la fois, puis on execute son script.
+   */
+  const GABARITS = {
+    chef: /*{GABARIT_CHEF}*/,
+    directeur: /*{GABARIT_DIRECTEUR}*/,
+  };
+
+  const SCRIPTS = {
+    chef: /*{SCRIPT_CHEF}*/,
+    directeur: /*{SCRIPT_DIRECTEUR}*/,
+  };
+
+  const Demo = {
+    aller(role) {
+      document.getElementById('demo-connexion').style.display = 'none';
+      const zone = document.getElementById('demo-application');
+      zone.innerHTML = GABARITS[role];
+      window.scrollTo(0, 0);
+      // Chaque script est isole dans sa propre fonction : pas de collision de noms.
+      new Function(SCRIPTS[role])();
+    },
+
+    deconnecter() {
+      document.getElementById('demo-application').innerHTML = '';
+      document.getElementById('demo-connexion').style.display = '';
+      document.getElementById('demo-pin').value = '';
+      window.scrollTo(0, 0);
+    },
+
+    indisponible(quoi) {
+      message(`${quoi} : disponible dans l'application installée, pas dans cette démonstration.`, 'info', 5000);
+    },
+  };
+
+  async function connecter(identifiant, pin) {
+    try {
+      const { utilisateur } = await API.post('/api/connexion', { identifiant, pin });
+      Demo.aller(utilisateur.role === 'directeur' ? 'directeur' : 'chef');
+    } catch (e) {
+      const aide = document.getElementById('demo-aide');
+      aide.textContent = e.message;
+      aide.style.color = 'var(--rouge)';
+    }
+  }
+
+  document.querySelectorAll('.role').forEach((bouton) => {
+    bouton.addEventListener('click', () => connecter(bouton.dataset.identifiant, bouton.dataset.pin));
+  });
+
+  document.getElementById('demo-formulaire').addEventListener('submit', (e) => {
+    e.preventDefault();
+    connecter(document.getElementById('demo-identifiant').value, document.getElementById('demo-pin').value);
+  });
+
+  document.getElementById('demo-reinitialiser').addEventListener('click', () => location.reload());
+</script>

@@ -23,6 +23,21 @@ déjà et reste accessible depuis les chantiers via Tailscale (gratuit, HTTPS
 compris). Aucun abonnement, aucun nom de domaine — voir
 [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
+## Voir la démonstration
+
+```bash
+npm run demo     # produit demo/demonstration.html
+```
+
+Une page autonome, à ouvrir dans n'importe quel navigateur : elle contient les
+deux écrans réels (même HTML, même CSS, même JavaScript), un jeu de données
+fictives et un faux serveur en mémoire. Aucune installation, aucun réseau, rien
+n'est enregistré — un rechargement remet tout à zéro.
+
+Elle est reconstruite depuis le code de l'application : `scripts/construire-demo.js`
+échoue si un motif qu'il adapte a disparu, pour qu'elle ne dérive jamais
+silencieusement de l'original.
+
 ## Démarrage
 
 ```bash

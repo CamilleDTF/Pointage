@@ -8,9 +8,12 @@
   "scripts": {
     "start": "node server/index.js",
     "seed": "node server/seed.js",
-    "test": "node --test 'test/*.test.js'"
+    "test": "node --test 'test/*.test.js'",
+    "demo": "node scripts/construire-demo.js"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.5.0",
