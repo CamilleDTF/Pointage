@@ -22,9 +22,17 @@ if [ "$version" -lt 22 ]; then
   exit 1
 fi
 
-if [ ! -d node_modules ]; then
-  echo "Installation des dépendances (une seule fois, comptez une minute)…"
+# Un téléchargement interrompu laisse un dossier node_modules vide : sa seule
+# présence ne prouve rien, on vérifie les modules eux-mêmes.
+if [ ! -f node_modules/express/package.json ] || [ ! -f node_modules/better-sqlite3/package.json ]; then
+  echo "Installation des dépendances (comptez une minute)…"
+  rm -rf node_modules
   npm install --no-audit --no-fund
+fi
+
+if [ ! -f node_modules/express/package.json ]; then
+  echo "L'installation des dépendances a échoué."
+  exit 1
 fi
 
 if [ ! -f data/pointage.db ]; then

@@ -46,18 +46,30 @@ if errorlevel 1 (
 call node --version
 echo.
 
-if not exist node_modules (
+rem  Un telechargement interrompu laisse un dossier node_modules vide : sa seule
+rem  presence ne prouve rien. On verifie donc les modules eux-memes.
+set COMPLET=1
+if not exist node_modules\express\package.json set COMPLET=0
+if not exist node_modules\better-sqlite3\package.json set COMPLET=0
+if not exist node_modules\exceljs\package.json set COMPLET=0
+
+if "%COMPLET%"=="0" (
   echo   Installation des composants.
   echo   Comptez une a deux minutes, une connexion Internet est necessaire.
   echo   N INTERROMPEZ PAS cette etape.
   echo.
+  if exist node_modules rmdir /s /q node_modules
   call npm install --no-audit --no-fund
   echo.
 )
 
-if not exist node_modules (
-  echo   L'installation des composants a echoue.
-  echo   Lancez DIAGNOSTIC.bat et transmettez le fichier diagnostic.txt produit.
+if not exist node_modules\express\package.json (
+  echo   ============================================================
+  echo     L installation des composants a echoue.
+  echo.
+  echo     Lancez REINSTALLER.bat : il repart de zero et enregistre
+  echo     la reponse exacte de npm dans installation.txt
+  echo   ============================================================
   echo.
   pause
   exit /b 1
