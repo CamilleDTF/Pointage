@@ -179,19 +179,20 @@ sauvegarder et emporter.
 
 ### Coût d'hébergement : 0 €
 
-L'application tourne sur une machine que vous possédez déjà — un PC de bureau,
-un NAS ou un Raspberry Pi qui reste allumé. L'accès depuis les chantiers passe
-par **Tailscale**, gratuit jusqu'à 100 appareils, qui fournit une adresse HTTPS
-définitive et son certificat sans nom de domaine à acheter et sans ouvrir le
-moindre port sur Internet.
+L'application tourne sur une machine virtuelle **Oracle Cloud Always Free**,
+gratuite à vie, que vous créez vous-même sans dépendre d'un administrateur
+système. L'accès depuis les chantiers passe par **Tailscale**, gratuit jusqu'à
+100 appareils, qui fournit une adresse HTTPS définitive et son certificat sans
+nom de domaine à acheter et sans ouvrir le moindre port sur Internet.
 
-Le résultat : **aucun abonnement, aucune carte bancaire, aucun nom de domaine**.
-Et vos données de paie ne quittent jamais vos locaux — ce qui est aussi le
-meilleur argument côté RGPD.
+Le résultat : **aucun abonnement, aucun nom de domaine, aucun matériel**. Une
+carte bancaire est demandée par Oracle à l'inscription pour vérifier l'identité,
+mais n'est jamais débitée. En choisissant une région française, vos données
+restent dans l'Union européenne.
 
-Si aucune machine ne peut rester allumée, l'offre **Oracle Cloud Always Free**
-fournit une machine virtuelle gratuite à vie (une carte est demandée à
-l'inscription pour vérifier l'identité, mais n'est jamais débitée).
+La même installation fonctionne à l'identique sur un NAS ou un PC de l'entreprise
+si l'accès administrateur est disponible — le déménagement se résume alors à
+copier un fichier.
 
 Le détail des trois options est dans le [guide de déploiement](DEPLOIEMENT.md).
 

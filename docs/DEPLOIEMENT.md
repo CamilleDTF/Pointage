@@ -9,49 +9,92 @@ sans abonnement.
 
 | Option | Coût | Ce qu'il vous faut | Pour qui |
 |---|---|---|---|
-| **A. Votre NAS + Tailscale** ← retenue | **0 €** | Le NAS de l'entreprise, avec Docker | Votre cas |
-| B. Oracle Cloud Always Free | 0 € (carte demandée à l'inscription, jamais débitée) | Un compte Oracle Cloud | Si aucune machine ne peut rester allumée |
+| **A. Oracle Cloud Always Free + Tailscale** ← retenue | **0 €** (carte demandée à l'inscription, jamais débitée) | Un compte Oracle Cloud, créé par vous | Votre cas : aucune machine à administrer chez vous |
+| B. Un NAS ou un PC de l'entreprise | 0 € | Un accès administrateur à la machine | Si vous obtenez cet accès plus tard |
 | C. Réseau local seul | 0 € | Une machine au dépôt | **Seulement si** la saisie a toujours lieu au dépôt |
+
+Les options A et B installent exactement la même chose : seule la machine change.
+Passer de l'une à l'autre plus tard ne demande aucune modification du code, juste
+une copie du fichier de base de données.
 
 ---
 
-## Option A — votre NAS + Tailscale (retenue)
+## Option A — Oracle Cloud Always Free + Tailscale (retenue)
 
-Le principe : l'application tourne sur le NAS de l'entreprise, et **Tailscale**
-(gratuit jusqu'à 100 appareils) crée un réseau privé entre le NAS et les
-téléphones des chefs d'équipe. Aucun port ouvert sur Internet, aucun nom de
-domaine à acheter, un vrai certificat HTTPS fourni gratuitement.
+Une machine virtuelle dans le cloud, **gratuite à vie**, que vous créez vous-même :
+aucun droit administrateur à demander à quiconque, aucun matériel dans vos locaux.
+Tailscale lui donne ensuite une adresse HTTPS joignable depuis n'importe quel
+chantier, sans ouvrir le moindre port.
 
-Les avantages vont au-delà du prix : vos données de paie ne quittent jamais vos
-locaux, et l'application n'est pas exposée publiquement.
+### 1. Créer le compte Oracle Cloud
 
-### 1. Installer l'application sur le NAS
+Sur [oracle.com/cloud/free](https://www.oracle.com/cloud/free/). Une carte bancaire
+est demandée pour vérifier votre identité ; le compte reste en mode gratuit tant
+que vous ne le passez pas manuellement en payant.
 
-Activez **Docker** (Synology : *Centre de paquets → Container Manager* ;
-QNAP : *Container Station*), puis en SSH sur le NAS :
+**Choisissez une région européenne** (Paris ou Marseille) au moment de
+l'inscription : elle n'est plus modifiable ensuite, et c'est ce qui garde vos
+données de paie dans l'Union européenne.
+
+### 2. Créer la machine
+
+*Compute → Instances → Create instance* :
+
+- **Image** : Ubuntu 24.04
+- **Shape** : `VM.Standard.A1.Flex`, **1 OCPU et 6 Go de mémoire**
+- **Clé SSH** : téléchargez la clé privée proposée, vous en aurez besoin
+
+Deux points à connaître :
+
+- Depuis juin 2026, l'offre gratuite plafonne à **2 OCPU et 12 Go** au total. En
+  restant à 1 OCPU / 6 Go vous êtes largement dedans — et largement au-dessus des
+  besoins de l'application.
+- Si Oracle répond *« Out of host capacity »*, la région manque temporairement de
+  machines ARM. Réessayez plus tard ou changez de domaine de disponibilité. À
+  défaut, le shape `VM.Standard.E2.1.Micro` (1 Go) est toujours disponible et
+  suffit ici, la base ne pesant que quelques mégaoctets.
+
+### 3. Installer l'application
+
+Connectez-vous en SSH à l'adresse IP publique de la machine, puis :
 
 ```bash
+sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
+sudo usermod -aG docker $USER && exec su -l $USER
+
 git clone -b claude/timesheet-digitalization-gpuajx \
-  https://github.com/CamilleDTF/Pointage.git /volume1/docker/pointage
-cd /volume1/docker/pointage
+  https://github.com/CamilleDTF/Pointage.git ~/pointage
+cd ~/pointage
 echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
 docker compose up -d
 ```
 
-Adaptez le chemin si votre volume principal ne s'appelle pas `volume1`. Si `git`
-n'est pas disponible sur le NAS, téléchargez l'archive ZIP du dépôt depuis GitHub
-et décompressez-la au même endroit. Les données vivent ensuite dans un volume
-Docker, sauvegardé avec le NAS.
+Le premier démarrage compile une dépendance native : comptez deux à trois minutes.
 
-Le premier démarrage compile une dépendance native : comptez deux à trois minutes,
-davantage sur un NAS d'entrée de gamme.
+Vérifier, depuis la machine elle-même :
+`curl -s localhost:3000 | head -5` doit renvoyer du HTML.
 
-Vérifier : `http://<ip-du-nas>:3000` doit afficher l'écran de connexion.
+### 4. Rendre l'application joignable depuis les chantiers
 
-### 2. Charger l'effectif
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+sudo tailscale serve --bg 3000
+```
 
-Plutôt que de saisir les 40 personnes à la main, importez le tableau
-d'affectation des opérateurs :
+La dernière commande affiche une adresse du type
+`https://pointage.votre-reseau.ts.net`. C'est **l'adresse HTTPS définitive**, avec
+son certificat, renouvelé automatiquement.
+
+> Tailscale vous évite au passage toute la configuration réseau d'Oracle : aucune
+> règle de sécurité à ouvrir, aucun port exposé sur Internet. C'est le piège
+> classique d'une première installation sur Oracle, et vous le contournez
+> entièrement.
+
+Sur chaque téléphone : installer Tailscale (App Store / Play Store), se connecter
+au même compte, ouvrir l'adresse, puis **Ajouter à l'écran d'accueil**.
+
+### 5. Charger l'effectif
 
 ```bash
 docker compose cp Tableau_affectation_operateurs.xlsx pointage:/data/effectif.xlsx
@@ -60,38 +103,41 @@ docker compose exec pointage node scripts/importer-effectif.js /data/effectif.xl
 ```
 
 Le premier passage ne fait que simuler : il liste les chefs et les opérateurs
-reconnus, et signale ceux dont la colonne « chef d'équipe » ne désigne personne
-de connu. Le second écrit réellement. La commande est rejouable : elle met à jour
+reconnus, et signale ceux dont la colonne « chef d'équipe » ne désigne personne de
+connu. Le second écrit réellement. La commande est rejouable : elle met à jour
 l'existant au lieu de créer des doublons, ce qui permet de la relancer à chaque
 mouvement de personnel.
 
-### 3. Rendre l'application accessible depuis les chantiers
+### 6. Redémarrage et pérennité
 
-Installez Tailscale sur le NAS (Synology : paquet **Tailscale** dans le Centre de
-paquets ; sinon en ligne de commande), puis :
+Docker relance l'application au redémarrage de la machine (`restart:
+unless-stopped`) : rien à configurer.
 
-```bash
-sudo tailscale up
-sudo tailscale serve --bg 3000
-```
+Oracle se réserve le droit de récupérer une machine gratuite **restée totalement
+inactive**. L'application et Tailscale entretiennent en permanence un peu de
+trafic, ce qui suffit à l'écarter. Connectez-vous malgré tout à la console Oracle
+de temps en temps, et surveillez les courriels qu'ils envoient.
 
-La dernière commande affiche une adresse du type
-`https://bureau.votre-reseau.ts.net`. C'est **l'adresse HTTPS définitive** de
-l'application. Le certificat est gratuit et renouvelé automatiquement.
+---
 
-Sur chaque téléphone : installer Tailscale (App Store / Play Store), se connecter
-au même compte, ouvrir l'adresse, puis **Ajouter à l'écran d'accueil**.
+## Option B — un NAS ou un PC de l'entreprise
 
-> HTTPS n'est pas un luxe ici : les codes des chefs d'équipe circulent sur le
-> réseau, et l'installation sur l'écran d'accueil du téléphone en dépend. C'est la
-> raison pour laquelle on passe par Tailscale plutôt que par une simple adresse IP
-> locale.
+Si vous obtenez un jour l'accès administrateur au NAS, ou si un PC du bureau peut
+rester allumé, l'installation est la même qu'à l'option A à partir de l'étape 3.
+Sur un NAS, activez d'abord Docker (Synology : *Centre de paquets → Container
+Manager* ; QNAP : *Container Station*) et installez dans un dossier du volume
+principal, par exemple `/volume1/docker/pointage`.
 
-### 4. Démarrage automatique
+L'intérêt : vos données de paie ne sortent pas de l'entreprise, ce qui est
+l'argument RGPD le plus simple à défendre. Vérifiez alors que la machine redémarre
+seule après une coupure de courant (Synology : *Panneau de configuration →
+Alimentation → Redémarrage automatique* ; PC : réglage « Restore on AC power
+loss » du BIOS).
 
-Docker s'en charge (`restart: unless-stopped`) : au redémarrage du NAS,
-l'application repart seule. Sur une machine sans Docker, créer
-`/etc/systemd/system/pointage.service` :
+Pour déménager depuis Oracle, il suffit de recopier le fichier
+`/data/pointage.db` : tout y est.
+
+Sur une machine sans Docker, un service systemd fait l'affaire :
 
 ```ini
 [Unit]
@@ -113,45 +159,13 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
-`/etc/pointage.env`, en `chmod 600` :
-
-```
-SESSION_SECRET=<64 caractères aléatoires>
-```
+`/etc/pointage.env`, en `chmod 600`, contient `SESSION_SECRET=<64 caractères
+aléatoires>`. Puis :
 
 ```bash
 install -d -o pointage -g pointage /var/lib/pointage
 systemctl enable --now pointage
 ```
-
-Vérifiez enfin que le NAS lui-même redémarre après une coupure de courant
-(Synology : *Panneau de configuration → Alimentation → Redémarrage automatique*).
-
----
-
-## Option B — Oracle Cloud Always Free
-
-Si aucune machine ne peut rester allumée. L'offre « Always Free » d'Oracle Cloud
-inclut une machine virtuelle ARM gratuite **à vie** (jusqu'à 4 cœurs et 24 Go de
-RAM), largement surdimensionnée pour cet usage. Une carte bancaire est demandée à
-l'inscription pour vérifier l'identité, mais le compte reste en mode gratuit tant
-que vous ne le passez pas manuellement en payant.
-
-1. Créer une instance **Ampere A1** (Ubuntu), en choisissant une région
-   européenne — vos données restent alors dans l'UE.
-2. Installer l'application comme à l'option A.
-3. Pour l'accès : soit Tailscale à nouveau (le plus simple et le plus sûr), soit
-   une exposition publique avec Caddy si vous possédez un nom de domaine :
-
-```
-pointage.mondomaine.fr {
-    reverse_proxy localhost:3000
-}
-```
-
-Caddy obtient et renouvelle le certificat Let's Encrypt tout seul, gratuitement.
-Seul le nom de domaine reste payant (environ 10 € par an) — d'où la préférence
-pour Tailscale, qui n'en demande aucun.
 
 ---
 
@@ -195,26 +209,26 @@ Toute la base tient dans un seul fichier. `sqlite3 .backup` en produit une copie
 cohérente même serveur allumé.
 
 ```bash
-cat > /usr/local/bin/sauvegarde-pointage <<'EOF'
+cat > ~/sauvegarde-pointage <<'EOF'
 #!/bin/sh
 set -e
 horodatage=$(date +%Y%m%d-%H%M)
-destination=/var/backups/pointage
+destination=$HOME/sauvegardes
 mkdir -p "$destination"
-sqlite3 /var/lib/pointage/pointage.db ".backup '$destination/pointage-$horodatage.db'"
+cd "$HOME/pointage"
+docker compose exec -T pointage sqlite3 /data/pointage.db ".backup '/data/copie.db'"
+docker compose cp pointage:/data/copie.db "$destination/pointage-$horodatage.db"
+docker compose exec -T pointage rm -f /data/copie.db
 gzip -f "$destination/pointage-$horodatage.db"
 find "$destination" -name 'pointage-*.db.gz' -mtime +90 -delete
 EOF
-chmod +x /usr/local/bin/sauvegarde-pointage
+chmod +x ~/sauvegarde-pointage
 ```
-
-Avec Docker, la base est dans le volume : remplacer le chemin par
-`docker compose exec -T pointage sqlite3 /data/pointage.db ".backup '/data/sauvegarde.db'"`.
 
 Tâche quotidienne (`crontab -e`) :
 
 ```
-15 2 * * * /usr/local/bin/sauvegarde-pointage
+15 2 * * * $HOME/sauvegarde-pointage
 ```
 
 **Copiez ces archives hors de la machine** — un disque externe, un autre poste, un
@@ -224,9 +238,13 @@ protège de rien.
 Testez une restauration au moins une fois avant d'abandonner le papier :
 
 ```bash
-gunzip -c /var/backups/pointage/pointage-<horodatage>.db.gz > /tmp/verif.db
+gunzip -c ~/sauvegardes/pointage-<horodatage>.db.gz > /tmp/verif.db
 sqlite3 /tmp/verif.db "SELECT COUNT(*) FROM fiches;"
 ```
+
+**La machine étant chez Oracle, cette copie hors site compte double** : c'est votre
+seul recours si le compte gratuit venait à être suspendu. Rapatriez-la
+régulièrement sur un poste du bureau (`scp`).
 
 ---
 

@@ -18,10 +18,12 @@ fait signer ses opérateurs à l'écran, et la transmet. Le directeur la reçoit
 une grille qu'il **corrige directement**, la valide, et exporte le tout vers son
 tableau Excel interne — sans jamais retaper une heure.
 
-**Hébergement : 0 €.** L'application tourne sur une machine que vous possédez
-déjà et reste accessible depuis les chantiers via Tailscale (gratuit, HTTPS
-compris). Aucun abonnement, aucun nom de domaine — voir
-[docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
+**Hébergement : 0 €.** L'application tourne sur une machine virtuelle Oracle Cloud
+Always Free — gratuite à vie, créée sans dépendre d'un administrateur — et reste
+accessible depuis les chantiers via Tailscale (gratuit, HTTPS compris). Aucun
+abonnement, aucun nom de domaine, aucun matériel. Elle s'installe à l'identique
+sur un NAS ou un PC d'entreprise si l'accès est disponible :
+voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
 ## Voir la démonstration
 
