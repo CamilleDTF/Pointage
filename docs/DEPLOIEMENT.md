@@ -31,13 +31,20 @@ Activez **Docker** (Synology : *Centre de paquets → Container Manager* ;
 QNAP : *Container Station*), puis en SSH sur le NAS :
 
 ```bash
-git clone <dépôt> /volume1/docker/pointage && cd /volume1/docker/pointage
-node -e "console.log('SESSION_SECRET=' + require('crypto').randomBytes(32).toString('hex'))" > .env
+git clone -b claude/timesheet-digitalization-gpuajx \
+  https://github.com/CamilleDTF/Pointage.git /volume1/docker/pointage
+cd /volume1/docker/pointage
+echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
 docker compose up -d
 ```
 
-Adaptez le chemin si votre volume principal ne s'appelle pas `volume1`. Les
-données vivent ensuite dans un volume Docker, sauvegardé avec le NAS.
+Adaptez le chemin si votre volume principal ne s'appelle pas `volume1`. Si `git`
+n'est pas disponible sur le NAS, téléchargez l'archive ZIP du dépôt depuis GitHub
+et décompressez-la au même endroit. Les données vivent ensuite dans un volume
+Docker, sauvegardé avec le NAS.
+
+Le premier démarrage compile une dépendance native : comptez deux à trois minutes,
+davantage sur un NAS d'entrée de gamme.
 
 Vérifier : `http://<ip-du-nas>:3000` doit afficher l'écran de connexion.
 
@@ -47,8 +54,9 @@ Plutôt que de saisir les 40 personnes à la main, importez le tableau
 d'affectation des opérateurs :
 
 ```bash
-docker compose exec pointage node scripts/importer-effectif.js /data/affectation.xlsx
-docker compose exec pointage node scripts/importer-effectif.js /data/affectation.xlsx --appliquer
+docker compose cp Tableau_affectation_operateurs.xlsx pointage:/data/effectif.xlsx
+docker compose exec pointage node scripts/importer-effectif.js /data/effectif.xlsx
+docker compose exec pointage node scripts/importer-effectif.js /data/effectif.xlsx --appliquer
 ```
 
 Le premier passage ne fait que simuler : il liste les chefs et les opérateurs
