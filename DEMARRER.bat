@@ -22,6 +22,16 @@ echo.
 echo   Demarrage de l'application de pointage...
 echo.
 
+echo "%CD%" | findstr /C:"(" >nul
+if not errorlevel 1 (
+  echo   ATTENTION : le dossier contient une parenthese dans son chemin :
+  echo   %CD%
+  echo.
+  echo   Certains outils Windows s y cassent les dents. Si le demarrage
+  echo   echoue, deplacez le dossier vers C:\Pointage et reessayez.
+  echo.
+)
+
 where node >nul 2>nul
 if errorlevel 1 (
   echo   Node.js est introuvable sur ce poste.
@@ -37,7 +47,9 @@ call node --version
 echo.
 
 if not exist node_modules (
-  echo   Installation des composants. Comptez une a deux minutes...
+  echo   Installation des composants.
+  echo   Comptez une a deux minutes, une connexion Internet est necessaire.
+  echo   N INTERROMPEZ PAS cette etape.
   echo.
   call npm install --no-audit --no-fund
   echo.
