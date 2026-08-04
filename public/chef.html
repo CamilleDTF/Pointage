@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#10416b">
+  <title>Ma fiche de pointage</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="appbar">
+    <div class="titre">
+      Fiche de pointage
+      <small id="entete-chef">…</small>
+    </div>
+    <button class="petit" id="btn-code" type="button">Code</button>
+    <button class="petit" id="btn-quitter" type="button">Quitter</button>
+  </header>
+
+  <div class="hors-ligne masque" id="banniere-reseau"></div>
+
+  <main>
+    <section class="carte">
+      <h2>Semaine</h2>
+      <div class="rangee">
+        <div style="width:110px">
+          <label for="annee">Année</label>
+          <input id="annee" type="number" min="2020" max="2100" step="1">
+        </div>
+        <div style="width:110px">
+          <label for="semaine">Semaine n°</label>
+          <input id="semaine" type="number" min="1" max="53" step="1">
+        </div>
+        <button class="principal" id="btn-ouvrir" type="button">Ouvrir la fiche</button>
+        <span class="pousse" id="badge-statut"></span>
+      </div>
+      <p class="aide" id="periode"></p>
+      <p class="aide masque" id="motif-rejet" style="color:var(--rouge);font-weight:600"></p>
+    </section>
+
+    <div id="contenu" class="masque">
+      <section class="carte">
+        <h2>Chantier et véhicule</h2>
+        <div class="grille deux">
+          <div>
+            <label for="chantier">Nom du chantier *</label>
+            <input id="chantier" data-entete="chantier">
+          </div>
+          <div>
+            <label for="ville">Ville *</label>
+            <input id="ville" data-entete="ville">
+          </div>
+          <div>
+            <label for="conducteur_vehicule">Nom conducteur du véhicule</label>
+            <input id="conducteur_vehicule" data-entete="conducteur_vehicule">
+          </div>
+          <div>
+            <label for="type_vehicule">Type de véhicule utilisé</label>
+            <input id="type_vehicule" data-entete="type_vehicule">
+          </div>
+          <div>
+            <label for="immatriculation">N° d'immatriculation</label>
+            <input id="immatriculation" data-entete="immatriculation">
+          </div>
+        </div>
+      </section>
+
+      <section class="carte">
+        <h2>Heures par salarié</h2>
+        <p class="aide" style="margin-bottom:12px">
+          Saisissez les heures en <strong>7h30</strong>, <strong>7:30</strong> ou <strong>7,5</strong>.
+          Hors temps de repas et de trajet. En cas d'absence, choisissez un code — il est obligatoire
+          du lundi au vendredi.
+        </p>
+        <div id="salaries"></div>
+      </section>
+
+      <section class="carte">
+        <h2>Observations et signatures</h2>
+        <div class="grille deux">
+          <div>
+            <label for="observations_pointage">Observations éventuelles sur le pointage</label>
+            <textarea id="observations_pointage" data-entete="observations_pointage"></textarea>
+          </div>
+          <div>
+            <label for="commentaire_responsable">Commentaires du responsable de chantier</label>
+            <textarea id="commentaire_responsable" data-entete="commentaire_responsable"></textarea>
+          </div>
+        </div>
+        <div class="grille deux" style="margin-top:12px">
+          <div>
+            <label for="nom_responsable">Nom du responsable de chantier</label>
+            <input id="nom_responsable" data-entete="nom_responsable">
+          </div>
+          <div>
+            <label>Signature du responsable de chantier</label>
+            <div class="signature">
+              <canvas id="signature-responsable"></canvas>
+              <button class="petit" type="button" id="effacer-responsable" style="margin-top:6px">Effacer</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="carte" id="bloc-controles">
+        <h2>Contrôles avant transmission</h2>
+        <ul class="anomalies" id="anomalies"></ul>
+      </section>
+
+      <section class="carte">
+        <div class="rangee">
+          <span id="etat-sauvegarde" class="aide" style="margin:0"></span>
+          <span class="pousse"></span>
+          <button id="btn-excel" type="button">Télécharger en Excel</button>
+          <button class="principal" id="btn-transmettre" type="button">Contrôler et transmettre au directeur</button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="/js/commun.js"></script>
+  <script src="/js/chef.js"></script>
+</body>
+</html>

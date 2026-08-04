@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10416b">
+  <title>Pointage — Tableau de bord</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="appbar">
+    <div class="titre">
+      Pointage hebdomadaire — Direction
+      <small id="entete-nom">…</small>
+    </div>
+    <button class="petit" id="btn-admin" type="button">Équipes</button>
+    <button class="petit" id="btn-quitter" type="button">Quitter</button>
+  </header>
+
+  <main>
+    <section class="carte">
+      <div class="rangee">
+        <div style="width:110px">
+          <label for="annee">Année</label>
+          <input id="annee" type="number" min="2020" max="2100" step="1">
+        </div>
+        <div style="width:120px">
+          <label for="semaine">Semaine n°</label>
+          <input id="semaine" type="number" min="1" max="53" step="1">
+        </div>
+        <button class="principal" id="btn-charger" type="button">Afficher</button>
+        <button class="petit" id="btn-precedente" type="button">◀ Précédente</button>
+        <button class="petit" id="btn-suivante" type="button">Suivante ▶</button>
+        <span class="pousse"></span>
+        <div style="width:170px">
+          <label for="portee-export">Contenu de l'export</label>
+          <select id="portee-export">
+            <option value="validee">Fiches validées</option>
+            <option value="">Toutes les fiches</option>
+            <option value="soumise">Fiches à vérifier</option>
+          </select>
+        </div>
+        <button class="valide" id="btn-export-xlsx" type="button">Export Excel</button>
+        <button id="btn-export-csv" type="button">Export CSV</button>
+      </div>
+      <p class="aide" id="periode"></p>
+    </section>
+
+    <section class="indicateurs" id="indicateurs"></section>
+
+    <section class="carte" style="margin-top:16px">
+      <h2>Suivi des chefs d'équipe</h2>
+      <div class="enveloppe-table">
+        <table id="suivi">
+          <thead>
+            <tr>
+              <th>Chef d'équipe</th><th>Chantier</th><th>Ville</th>
+              <th class="num">Salariés</th><th class="num">Total heures</th>
+              <th>État</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div id="fiches"></div>
+
+    <section class="carte masque" id="bloc-admin">
+      <h2>Chefs d'équipe et salariés</h2>
+      <div class="grille deux">
+        <div>
+          <h3 style="font-size:0.85rem;color:var(--gris-texte)">Comptes</h3>
+          <div class="enveloppe-table"><table id="table-utilisateurs">
+            <thead><tr><th>Nom</th><th>Identifiant</th><th>Rôle</th><th>Actions</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+          <div class="rangee" style="margin-top:10px">
+            <input id="u-nom" placeholder="NOM Prénom" style="flex:2;min-width:140px">
+            <input id="u-identifiant" placeholder="identifiant" style="flex:1;min-width:110px">
+            <input id="u-pin" placeholder="code" inputmode="numeric" style="width:90px">
+            <button class="petit principal" id="btn-ajout-chef" type="button">Ajouter un chef</button>
+          </div>
+        </div>
+        <div>
+          <h3 style="font-size:0.85rem;color:var(--gris-texte)">Salariés</h3>
+          <div class="enveloppe-table"><table id="table-salaries">
+            <thead><tr><th>Matricule</th><th>Nom</th><th>Prénom</th><th>Chef d'équipe</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+          <div class="rangee" style="margin-top:10px">
+            <input id="s-matricule" placeholder="matricule" style="width:100px">
+            <input id="s-nom" placeholder="NOM" style="flex:1;min-width:110px">
+            <input id="s-prenom" placeholder="Prénom" style="flex:1;min-width:110px">
+            <select id="s-chef" style="flex:1;min-width:130px"></select>
+            <button class="petit principal" id="btn-ajout-salarie" type="button">Ajouter</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/commun.js"></script>
+  <script src="/js/directeur.js"></script>
+</body>
+</html>

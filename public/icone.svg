@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Pointage">
+  <rect width="512" height="512" rx="96" fill="#10416b"/>
+  <rect x="118" y="96" width="276" height="330" rx="20" fill="#ffffff"/>
+  <rect x="158" y="150" width="196" height="20" rx="10" fill="#c3d0dd"/>
+  <rect x="158" y="204" width="196" height="20" rx="10" fill="#c3d0dd"/>
+  <rect x="158" y="258" width="120" height="20" rx="10" fill="#c3d0dd"/>
+  <path d="M175 330 l52 54 l112 -128" fill="none" stroke="#e07b16" stroke-width="34"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,20 @@
+{
+  "name": "pointage-dtf",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Digitalisation des fiches de pointage hebdomadaires (desamiantage)",
+  "type": "commonjs",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "seed": "node server/seed.js",
+    "test": "node --test 'test/*.test.js'"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.5.0",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.1"
+  }
+}

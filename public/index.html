@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#10416b">
+  <title>Pointage — Connexion</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main>
+    <form class="carte connexion" id="formulaire" autocomplete="off">
+      <h1>Pointage hebdomadaire</h1>
+      <p class="sous">Fiches de pointage par chantier</p>
+
+      <div style="margin-bottom:12px">
+        <label for="identifiant">Identifiant</label>
+        <input id="identifiant" name="identifiant" autocapitalize="none" autocorrect="off" required>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <label for="pin">Code personnel</label>
+        <input id="pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]*" required>
+      </div>
+
+      <button class="principal" type="submit" style="width:100%">Se connecter</button>
+      <p class="aide" id="aide">Votre identifiant et votre code vous sont remis par la direction.</p>
+    </form>
+  </main>
+
+  <script src="/js/commun.js"></script>
+  <script>
+    const formulaire = document.getElementById('formulaire');
+    const aide = document.getElementById('aide');
+
+    // Session encore valide : on renvoie directement vers le bon espace.
+    API.get('/api/moi')
+      .then(({ utilisateur }) => {
+        location.href = utilisateur.role === 'directeur' ? '/directeur.html' : '/chef.html';
+      })
+      .catch(() => {});
+
+    formulaire.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const bouton = formulaire.querySelector('button');
+      bouton.disabled = true;
+      try {
+        const { utilisateur } = await API.post('/api/connexion', {
+          identifiant: document.getElementById('identifiant').value,
+          pin: document.getElementById('pin').value,
+        });
+        location.href = utilisateur.role === 'directeur' ? '/directeur.html' : '/chef.html';
+      } catch (erreur) {
+        aide.textContent = erreur.message;
+        aide.style.color = 'var(--rouge)';
+        document.getElementById('pin').value = '';
+      } finally {
+        bouton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

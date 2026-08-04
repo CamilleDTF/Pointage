@@ -1,0 +1,15 @@
+{
+  "name": "Pointage hebdomadaire",
+  "short_name": "Pointage",
+  "description": "Fiches de pointage hebdomadaires par chantier",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#eef1f5",
+  "theme_color": "#10416b",
+  "lang": "fr",
+  "icons": [
+    { "src": "/icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
