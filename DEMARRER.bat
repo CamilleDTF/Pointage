@@ -46,24 +46,33 @@ if errorlevel 1 (
 call node --version
 echo.
 
-rem  Un telechargement interrompu laisse un dossier node_modules vide : sa seule
-rem  presence ne prouve rien. On verifie donc les modules eux-memes.
-set COMPLET=1
-if not exist node_modules\express\package.json set COMPLET=0
-if not exist node_modules\better-sqlite3\package.json set COMPLET=0
-if not exist node_modules\exceljs\package.json set COMPLET=0
-
-if "%COMPLET%"=="0" (
+rem  Un telechargement interrompu laisse un dossier node_modules vide, et une
+rem  mise a jour peut ajouter un composant : la seule presence du dossier ne
+rem  prouve rien. On compare donc l installe a ce que package.json demande.
+call node scripts\verifier-composants.js >nul 2>&1
+if errorlevel 1 (
   echo   Installation des composants.
   echo   Comptez une a deux minutes, une connexion Internet est necessaire.
   echo   N INTERROMPEZ PAS cette etape.
+  echo.
+  call npm install --no-audit --no-fund
+  echo.
+)
+
+rem  Toujours incomplet : l installation precedente est peut-etre abimee.
+rem  On repart alors de zero, ce qui est plus long mais plus sur.
+call node scripts\verifier-composants.js >nul 2>&1
+if errorlevel 1 (
+  echo   Reprise de l installation depuis zero...
   echo.
   if exist node_modules rmdir /s /q node_modules
   call npm install --no-audit --no-fund
   echo.
 )
 
-if not exist node_modules\express\package.json (
+call node scripts\verifier-composants.js
+if errorlevel 1 (
+  echo.
   echo   ============================================================
   echo     L installation des composants a echoue.
   echo.

@@ -23,9 +23,19 @@ if ($version -lt 22) {
     exit 1
 }
 
-if (-not (Test-Path node_modules)) {
-    Write-Host "Installation des dépendances (une seule fois, comptez une minute)…"
+# On compare l'installé à ce que package.json demande : la seule présence du
+# dossier node_modules ne dit pas si une mise à jour a ajouté un composant.
+node scripts/verifier-composants.js *> $null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Installation des dépendances (comptez une minute)…"
     npm install --no-audit --no-fund
+}
+
+node scripts/verifier-composants.js
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "L'installation des dépendances a échoué. Lancez REINSTALLER.bat."
+    Read-Host "Appuyez sur Entrée pour fermer"
+    exit 1
 }
 
 if (-not (Test-Path data\pointage.db)) {

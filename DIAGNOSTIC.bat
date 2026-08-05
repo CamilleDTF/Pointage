@@ -40,11 +40,13 @@ call npm --version >>"%RAPPORT%" 2>&1
 
 >>"%RAPPORT%" echo.
 >>"%RAPPORT%" echo --- 2. Composants installes ---
-if exist node_modules >>"%RAPPORT%" echo node_modules : present
-if not exist node_modules >>"%RAPPORT%" echo node_modules : ABSENT, tentative d installation ci-dessous
-if not exist node_modules call npm install --no-audit --no-fund >>"%RAPPORT%" 2>&1
-if not exist node_modules >>"%RAPPORT%" echo RESULTAT : l installation a echoue, voir le message ci-dessus
-if exist node_modules >>"%RAPPORT%" echo Installation reussie
+call node scripts\verifier-composants.js >>"%RAPPORT%" 2>&1
+call node scripts\verifier-composants.js >nul 2>&1
+if errorlevel 1 (
+  >>"%RAPPORT%" echo Tentative d installation ci-dessous
+  call npm install --no-audit --no-fund >>"%RAPPORT%" 2>&1
+  call node scripts\verifier-composants.js >>"%RAPPORT%" 2>&1
+)
 if exist package.json >>"%RAPPORT%" echo Version de base attendue :
 if exist package.json call node -p "require('./package.json').dependencies['better-sqlite3']" >>"%RAPPORT%" 2>&1
 

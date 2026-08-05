@@ -21,9 +21,30 @@
 
 const fs = require('fs');
 const path = require('path');
-const nodemailer = require('nodemailer');
 const { DATA_DIR } = require('./db');
 const D = require('./domaine');
+
+/*
+ * nodemailer est facultatif, et son absence ne doit jamais empecher
+ * l'application de demarrer.
+ *
+ * Une mise a jour posee sur une installation dont les composants datent d'avant
+ * l'ajout de cette bibliotheque tombait sinon sur un ecran noir, pour une
+ * fonction — l'envoi de courriels — dont le reste du logiciel n'a pas besoin.
+ * Sans elle, les messages sont deposes sur disque, exactement comme lorsque
+ * aucun serveur d'envoi n'est configure.
+ */
+let nodemailer = null;
+try {
+  // eslint-disable-next-line global-require
+  nodemailer = require('nodemailer');
+} catch {
+  console.warn(
+    "Composant d'envoi de courriels absent (nodemailer) : les messages destines aux " +
+      'conducteurs de travaux seront conserves sur le serveur. Relancez REINSTALLER.bat ' +
+      'ou "npm install" pour activer l envoi.'
+  );
+}
 
 const CONFIG = {
   hote: process.env.SMTP_HOTE || process.env.SMTP_HOST || '',
@@ -33,7 +54,7 @@ const CONFIG = {
   expediteur: process.env.COURRIEL_EXPEDITEUR || process.env.SMTP_FROM || '',
 };
 
-const ACTIF = Boolean(CONFIG.hote && CONFIG.expediteur);
+const ACTIF = Boolean(nodemailer && CONFIG.hote && CONFIG.expediteur);
 
 let transport = null;
 if (ACTIF) {
@@ -61,8 +82,9 @@ async function envoyer({ destinataire, sujet, html, texte }) {
 
   if (!ACTIF) {
     const fichier = deposer(destinataire, sujet, html);
-    console.warn(`Courriel non expedie (SMTP non configure) : deposse dans ${fichier}`);
-    return { envoye: false, raison: 'smtp_absent', fichier };
+    const raison = nodemailer ? 'smtp_absent' : 'composant_absent';
+    console.warn(`Courriel non expedie (${raison}) : depose dans ${fichier}`);
+    return { envoye: false, raison, fichier };
   }
 
   try {

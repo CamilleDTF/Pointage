@@ -22,15 +22,22 @@ if [ "$version" -lt 22 ]; then
   exit 1
 fi
 
-# Un téléchargement interrompu laisse un dossier node_modules vide : sa seule
-# présence ne prouve rien, on vérifie les modules eux-mêmes.
-if [ ! -f node_modules/express/package.json ] || [ ! -f node_modules/better-sqlite3/package.json ]; then
+# La seule présence de node_modules ne prouve rien : un téléchargement
+# interrompu le laisse vide, et une mise à jour peut ajouter un composant. On
+# compare donc l'installé à ce que package.json demande.
+if ! node scripts/verifier-composants.js >/dev/null 2>&1; then
   echo "Installation des dépendances (comptez une minute)…"
+  npm install --no-audit --no-fund
+fi
+
+# Toujours incomplet : l'installation précédente est peut-être abîmée.
+if ! node scripts/verifier-composants.js >/dev/null 2>&1; then
+  echo "Reprise de l'installation depuis zéro…"
   rm -rf node_modules
   npm install --no-audit --no-fund
 fi
 
-if [ ! -f node_modules/express/package.json ]; then
+if ! node scripts/verifier-composants.js; then
   echo "L'installation des dépendances a échoué."
   exit 1
 fi

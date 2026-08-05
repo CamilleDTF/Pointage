@@ -53,20 +53,14 @@ call npm install --no-audit --no-fund >>"%RAPPORT%" 2>&1
 
 >>"%RAPPORT%" echo.
 >>"%RAPPORT%" echo --- Resultat, module par module ---
-if exist node_modules\express\package.json >>"%RAPPORT%" echo express : present
-if not exist node_modules\express\package.json >>"%RAPPORT%" echo express : MANQUANT
-if exist node_modules\better-sqlite3\package.json >>"%RAPPORT%" echo better-sqlite3 : present
-if not exist node_modules\better-sqlite3\package.json >>"%RAPPORT%" echo better-sqlite3 : MANQUANT
-if exist node_modules\exceljs\package.json >>"%RAPPORT%" echo exceljs : present
-if not exist node_modules\exceljs\package.json >>"%RAPPORT%" echo exceljs : MANQUANT
-if exist node_modules\bcryptjs\package.json >>"%RAPPORT%" echo bcryptjs : present
-if not exist node_modules\bcryptjs\package.json >>"%RAPPORT%" echo bcryptjs : MANQUANT
+call node scripts\verifier-composants.js >>"%RAPPORT%" 2>&1
 
 >>"%RAPPORT%" echo.
 >>"%RAPPORT%" echo === FIN ===
 
 echo.
-if exist node_modules\express\package.json goto :reussi
+call node scripts\verifier-composants.js >nul 2>&1
+if not errorlevel 1 goto :reussi
 
 echo   ============================================================
 echo     L INSTALLATION A ECHOUE.

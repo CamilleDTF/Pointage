@@ -86,7 +86,12 @@ directeur peut réinitialiser n'importe quel code depuis l'écran **Paramètres*
 
 ```bash
 npm test                   # contrôles métier, semaines ISO, paie, cloisonnement des accès
+node scripts/verifier-composants.js   # les composants installés sont-ils à jour ?
 ```
+
+`verifier-composants.js` compare ce qui est installé à ce que `package.json` demande.
+Les lanceurs l'appellent avant de démarrer : ajouter une dépendance ne peut plus
+laisser une installation existante s'arrêter sur un module manquant.
 
 ## Charger l'effectif depuis le tableau d'affectation
 
@@ -156,6 +161,11 @@ visa** quand le conducteur n'est pas joignable ; le bouton le dit alors explicit
 | `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE` | Identifiants, si le serveur en demande |
 | `COURRIEL_EXPEDITEUR` | Adresse d'expédition |
 | `URL_PUBLIQUE` | L'adresse à laquelle les conducteurs joignent l'application |
+
+L'envoi repose sur `nodemailer`, **chargé de façon facultative** : une installation
+dont les composants datent d'avant son ajout démarre quand même, et se contente de
+déposer les messages sur disque. Une bibliothèque d'envoi absente ne doit pas coûter
+l'application entière.
 
 **Sans SMTP configuré, rien ne casse** : le message est écrit dans
 `DATA_DIR/courriels/`, et le directeur récupère le lien depuis son tableau de bord
@@ -375,6 +385,7 @@ test/
   paie.test.js          Majorations 25 / 50 %, grand déplacement, découpage des mois
   mensuel.test.js       Agrégation d'un mois depuis les fiches
   cloisonnement.test.js Cloisonnement des accès par code, bout en bout sur l'API
+  composants.test.js    Les lanceurs vérifient bien toutes les dépendances
 Dockerfile, docker-compose.yml   Installation en une commande sur votre machine
 ```
 
