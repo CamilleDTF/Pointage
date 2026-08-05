@@ -163,6 +163,32 @@
       .toUpperCase();
   }
 
+  /**
+   * "BENALI Karim" -> { nom: 'BENALI', prenom: 'Karim' }.
+   *
+   * Les comptes des chefs d'equipe portent un nom complet en un seul champ,
+   * alors que les salaries ont un nom et un prenom separes. La convention du
+   * tableau d'affectation tranche : le nom de famille est la suite de mots en
+   * capitales qui commence la chaine. A defaut de capitales — ou si tout est en
+   * capitales — on s'en tient au premier mot.
+   */
+  function separerNomPrenom(complet) {
+    const mots = String(complet || '').trim().split(/\s+/).filter(Boolean);
+    if (!mots.length) return { nom: '', prenom: '' };
+    let coupe = 0;
+    while (coupe < mots.length && mots[coupe] === mots[coupe].toUpperCase() && /[A-Z]/.test(sansAccents(mots[coupe]))) {
+      coupe += 1;
+    }
+    if (coupe === 0 || coupe === mots.length) coupe = 1;
+    return { nom: mots.slice(0, coupe).join(' '), prenom: mots.slice(coupe).join(' ') };
+  }
+
+  /** Comparaison de deux noms de personne, accents, casse et espaces ignores. */
+  function memePersonne(a, b) {
+    const normaliser = (t) => sansAccents(t).replace(/\s+/g, ' ').trim();
+    return normaliser(a) !== '' && normaliser(a) === normaliser(b);
+  }
+
   /** Le chantier se situe-t-il dans une ville au taux 80 ? */
   function estGrandDeplacement80(ville) {
     const normalisee = sansAccents(ville);
@@ -371,6 +397,8 @@
     estGrandDeplacement80,
     semainesDuMois,
     sansAccents,
+    separerNomPrenom,
+    memePersonne,
     MOIS,
     nombreSemainesISO,
     DEBUT_SERVICE_PAR_DEFAUT,

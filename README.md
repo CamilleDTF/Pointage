@@ -122,7 +122,19 @@ corriger, la valider, ou la lui renvoyer pour correction avec un motif.
 
 ### Chef d'équipe — `/chef.html`
 
-- La fiche de la semaine courante s'ouvre pré-remplie avec les salariés affectés.
+- La fiche de la semaine courante s'ouvre pré-remplie avec l'équipe, **le chef
+  d'équipe en première ligne** : il travaille sur le chantier comme ses
+  opérateurs, ses heures doivent partir en paie comme les leurs. Son compte de
+  connexion vit dans `utilisateurs`, sa fiche de paie dans `salaries` ; les deux
+  sont rapprochés par le nom, et la fiche salarié est créée si elle manque
+  (`salarieDuChef`, idempotent — jamais de doublon).
+- **Tout l'effectif est proposé à la saisie**, pas seulement l'équipe rattachée :
+  un chantier réunit souvent des renforts venus d'autres équipes, et le chef doit
+  pouvoir les pointer sans attendre une réaffectation. L'autocomplétion place son
+  équipe en tête et étiquette chaque proposition (*mon équipe* / *autre équipe*).
+  Contrepartie assumée : un chef d'équipe voit désormais les noms de tout
+  l'effectif. Il ne voit toujours ni les fiches, ni les heures, ni les comptes
+  des autres chefs.
 - Heures acceptées en `7h30`, `7:30`, `7,5` ou `7.5` ; le total se recalcule à la volée.
 - Un code absence par jour, repris de la fiche papier (`ACH`, `F`, `NJ`, `VM`,
   `AT`, `EV`, `FOR`, `CSS`, `AA`).
@@ -131,6 +143,12 @@ corriger, la valider, ou la lui renvoyer pour correction avec un motif.
   d'un seul opérateur avec un seul jour travaillé est complète dès lors que les
   autres jours portent un `0` ou un code absence. C'est la colonne `saisi` de
   `fiche_jours` qui porte cette distinction.
+- Le bouton **Mettre à 0 les jours non travaillés** fait le geste d'un coup sur
+  toute la fiche : il remplit d'un `0h00` chaque jour ouvré resté vide des lignes
+  nommées, sans jamais toucher à ce qui est déjà renseigné.
+- Le bandeau affiche la **version** exécutée (`version` de `package.json`), à
+  côté du nom de l'utilisateur : quand un comportement surprend, elle répond sans
+  détour à la question « quel code tourne réellement ? ».
 - Signature tactile par salarié, plus celle du responsable de chantier.
 - **Deux présentations de la même fiche**, choisies automatiquement selon la
   taille de l'écran et permutables d'un bouton :

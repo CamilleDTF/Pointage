@@ -14,6 +14,13 @@ const M = require('./mensuel');
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
+/*
+ * Affichee dans le bandeau de chaque ecran. Quand quelque chose ne se comporte
+ * pas comme attendu, la premiere question est toujours « quelle version tourne
+ * reellement ? » : elle se lit desormais a l'ecran, sans avoir a fouiller.
+ */
+const VERSION = require('../package.json').version;
+
 app.disable('x-powered-by');
 app.use(express.json({ limit: '8mb' })); // les signatures manuscrites sont transmises en PNG base64.
 app.use(A.session);
@@ -86,17 +93,22 @@ app.get('/api/reference', A.exigerConnexion, (req, res) => {
     typesMasque: D.TYPES_MASQUE,
     semaineCourante: { annee, semaine },
     nbLignes: F.NB_LIGNES_FICHE,
-    // Un chef d equipe n a pas a connaitre la liste de ses collegues.
+    version: VERSION,
+    // Un chef d equipe n a pas a connaitre la liste de ses collegues chefs.
     chefs:
       req.utilisateur.role === 'directeur'
         ? db.prepare("SELECT id, nom FROM utilisateurs WHERE role = 'chef' AND actif = 1 ORDER BY nom").all()
         : [],
+    // L equipe rattachee, chef compris : c'est elle qui pre-remplit la fiche.
     equipe:
       req.utilisateur.role === 'chef'
-        ? db
-            .prepare('SELECT id, nom, prenom, matricule FROM salaries WHERE chef_id = ? AND actif = 1 ORDER BY nom')
-            .all(req.utilisateur.id)
+        ? F.equipeDuChef(req.utilisateur.id)
         : db.prepare('SELECT id, nom, prenom, matricule, chef_id FROM salaries WHERE actif = 1 ORDER BY nom').all(),
+    // Tout l effectif : un chantier reunit souvent des operateurs venus d autres
+    // equipes, et le chef doit pouvoir les pointer sans passer par le directeur.
+    effectif: db
+      .prepare('SELECT id, nom, prenom, matricule FROM salaries WHERE actif = 1 ORDER BY nom, prenom')
+      .all(),
   });
 });
 

@@ -81,6 +81,58 @@ function obtenirFiche(id) {
   return fiche;
 }
 
+/**
+ * La fiche salarie du chef d'equipe. Le chef travaille sur le chantier comme
+ * ses operateurs : il doit figurer sur sa propre fiche, sans quoi ses heures
+ * n'arrivent jamais dans le tableau mensuel.
+ *
+ * Son compte de connexion vit dans `utilisateurs`, sa paie dans `salaries` :
+ * on rapproche les deux par le nom, et on cree la fiche salarie si elle manque.
+ * L'appel est idempotent — il ne cree jamais de doublon.
+ */
+function salarieDuChef(chefId) {
+  const chef = db.prepare("SELECT id, nom FROM utilisateurs WHERE id = ? AND role = 'chef'").get(chefId);
+  if (!chef) return null;
+
+  const existant = db
+    .prepare('SELECT id, nom, prenom, chef_id FROM salaries')
+    .all()
+    .find((s) => D.memePersonne(`${s.nom} ${s.prenom}`, chef.nom));
+
+  if (existant) {
+    // Un chef d equipe se rattache a lui-meme : c'est ce qui le fait
+    // apparaitre dans sa propre equipe. On ne le retire pas d'une equipe ou le
+    // directeur l'aurait volontairement place.
+    if (existant.chef_id === null) {
+      db.prepare('UPDATE salaries SET chef_id = ?, actif = 1 WHERE id = ?').run(chefId, existant.id);
+    }
+    return existant.id;
+  }
+
+  const { nom, prenom } = D.separerNomPrenom(chef.nom);
+  return db
+    .prepare('INSERT INTO salaries (nom, prenom, chef_id) VALUES (?, ?, ?)')
+    .run(nom, prenom, chefId).lastInsertRowid;
+}
+
+/**
+ * L'equipe telle qu'elle se presente sur la fiche : le chef d'equipe d'abord,
+ * puis ses operateurs par ordre alphabetique.
+ */
+function equipeDuChef(chefId) {
+  const idChef = salarieDuChef(chefId);
+  const operateurs = db
+    .prepare('SELECT id, nom, prenom, matricule FROM salaries WHERE chef_id = ? AND actif = 1 ORDER BY nom, prenom')
+    .all(chefId);
+
+  const lui = idChef
+    ? operateurs.find((s) => s.id === idChef)
+      || db.prepare('SELECT id, nom, prenom, matricule FROM salaries WHERE id = ? AND actif = 1').get(idChef)
+    : null;
+
+  return lui ? [lui, ...operateurs.filter((s) => s.id !== lui.id)] : operateurs;
+}
+
 /** Recupere le brouillon de la semaine pour ce chef, ou le cree pre-rempli avec son equipe. */
 function obtenirOuCreerFicheSemaine(chefId, annee, semaine) {
   const existante = db
@@ -93,9 +145,7 @@ function obtenirOuCreerFicheSemaine(chefId, annee, semaine) {
     .get(chefId, annee, semaine);
   if (existante) return obtenirFiche(existante.id);
 
-  const equipe = db
-    .prepare('SELECT id, nom, prenom FROM salaries WHERE chef_id = ? AND actif = 1 ORDER BY nom, prenom')
-    .all(chefId);
+  const equipe = equipeDuChef(chefId);
 
   const creer = db.transaction(() => {
     const res = db
@@ -322,6 +372,8 @@ function lignesPourExport({ annee, semaine, statut }) {
 
 module.exports = {
   NB_LIGNES_FICHE,
+  salarieDuChef,
+  equipeDuChef,
   obtenirFiche,
   obtenirOuCreerFicheSemaine,
   enregistrerFiche,

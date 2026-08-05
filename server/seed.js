@@ -12,6 +12,7 @@
 const { db, journaliser } = require('./db');
 const { hacherPin } = require('./auth');
 const D = require('./domaine');
+const F = require('./fiches');
 
 const DIRECTEUR = { nom: 'Direction travaux', identifiant: 'directeur', pin: '246810' };
 
@@ -48,8 +49,10 @@ function amorcer() {
   let curseur = 0;
   CHEFS.forEach((chef, index) => {
     const chefId = creerUtilisateur({ ...chef, role: 'chef' });
+    // Le chef pointe ses propres heures : il lui faut une fiche salarie.
+    F.salarieDuChef(chefId);
     const dejaAffectes = db.prepare('SELECT COUNT(*) AS n FROM salaries WHERE chef_id = ?').get(chefId).n;
-    if (dejaAffectes > 0) return;
+    if (dejaAffectes > 1) return; // lui-meme mis a part
 
     const taille = 3 + (index % 3); // equipes de 3 a 5 operateurs
     for (let i = 0; i < taille; i += 1) {
@@ -77,7 +80,8 @@ function ficheDemo() {
     return;
   }
 
-  const equipe = db.prepare('SELECT id, nom, prenom FROM salaries WHERE chef_id = ? ORDER BY nom').all(chef.id);
+  // Meme composition que sur une vraie fiche : le chef d equipe en tete.
+  const equipe = F.equipeDuChef(chef.id);
   const res = db
     .prepare(
       `INSERT INTO fiches (chef_id, annee, semaine, chantier, ville, conducteur_vehicule,

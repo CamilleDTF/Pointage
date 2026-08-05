@@ -16,6 +16,7 @@ async function demarrer() {
   $('entete-nom').textContent = utilisateur.nom;
 
   reference = await API.get('/api/reference');
+  $('entete-nom').textContent = `${utilisateur.nom} · version ${reference.version}`;
   $('annee').value = reference.semaineCourante.annee;
   $('semaine').value = reference.semaineCourante.semaine;
   preparerSelecteurMois();

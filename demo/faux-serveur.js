@@ -36,6 +36,18 @@
   utilisateurs
     .filter((u) => u.role === 'chef')
     .forEach((chef, index) => {
+      // Le chef d equipe travaille lui aussi sur le chantier : il a sa fiche
+      // salarie, rattachee a lui-meme, et ouvre sa propre equipe.
+      const { nom, prenom } = R.separerNomPrenom(chef.nom);
+      salaries.push({
+        id: salaries.length + 1,
+        matricule: `M${String(900 + index).padStart(4, '0')}`,
+        nom,
+        prenom,
+        chef_id: chef.id,
+        actif: 1,
+      });
+
       const taille = 3 + (index % 3);
       for (let i = 0; i < taille; i += 1) {
         salaries.push({
@@ -57,8 +69,16 @@
   const maintenant = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
   const copie = (v) => JSON.parse(JSON.stringify(v));
 
+  /** Le chef d equipe d abord, puis ses operateurs : l ordre de sa fiche. */
+  function equipeDuChef(chefId) {
+    const chef = utilisateurs.find((u) => u.id === chefId);
+    const membres = salaries.filter((s) => s.chef_id === chefId && s.actif);
+    const lui = membres.find((s) => R.memePersonne(`${s.nom} ${s.prenom}`, chef ? chef.nom : ''));
+    return lui ? [lui, ...membres.filter((s) => s.id !== lui.id)] : membres;
+  }
+
   function nouvelleFiche(chefId, annee, semaine) {
-    const equipe = salaries.filter((s) => s.chef_id === chefId && s.actif);
+    const equipe = equipeDuChef(chefId);
     const fiche = {
       id: prochainId++,
       chef_id: chefId,
@@ -275,12 +295,12 @@
         typesMasque: R.TYPES_MASQUE,
         semaineCourante: R.semaineISO(new Date()),
         nbLignes: R.NB_LIGNES_FICHE,
+        version: 'démonstration',
         chefs: u.role === 'directeur'
           ? utilisateurs.filter((x) => x.role === 'chef').map((x) => ({ id: x.id, nom: x.nom }))
           : [],
-        equipe: u.role === 'chef'
-          ? salaries.filter((s) => s.chef_id === u.id && s.actif)
-          : salaries.filter((s) => s.actif),
+        equipe: u.role === 'chef' ? equipeDuChef(u.id) : salaries.filter((s) => s.actif),
+        effectif: salaries.filter((s) => s.actif),
       };
     }],
 

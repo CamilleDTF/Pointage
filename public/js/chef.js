@@ -25,6 +25,8 @@ async function demarrer() {
   $('entete-chef').textContent = utilisateur.nom;
 
   reference = await API.get('/api/reference');
+  // La version a l'ecran : elle dit sans ambiguite quel code tourne vraiment.
+  $('entete-chef').textContent = `${utilisateur.nom} · version ${reference.version}`;
   $('annee').value = reference.semaineCourante.annee;
   $('semaine').value = reference.semaineCourante.semaine;
 
@@ -129,6 +131,37 @@ $('btn-presentation').addEventListener('click', () => {
 $('btn-excel').addEventListener('click', () => {
   if (fiche) window.location.href = `/api/export/fiche/${fiche.id}.xlsx`;
 });
+$('btn-jours-vides').addEventListener('click', marquerJoursNonTravailles);
+
+/**
+ * Declare non travaillees toutes les journees ouvrables restees vides. Saisir
+ * "0" case par case revient a taper cinq fois par salarie absent une semaine :
+ * ce bouton fait le meme geste d'un coup, sans jamais toucher a ce qui est
+ * deja renseigne.
+ */
+function marquerJoursNonTravailles() {
+  if (!modifiable) return;
+  let remplies = 0;
+
+  document.querySelectorAll('[data-ligne]').forEach((conteneur) => {
+    if (!conteneur.querySelector('.nom-libre').value.trim()) return;
+    for (let j = 0; j <= 4; j += 1) {
+      const heures = conteneur.querySelector(`input.heures[data-jour="${j}"]`);
+      const code = conteneur.querySelector(`select.code[data-jour="${j}"]`);
+      if (heures.value.trim() !== '' || code.value) continue;
+      heures.value = versTexte(0);
+      remplies += 1;
+    }
+    recalculerLigne(conteneur);
+  });
+
+  if (!remplies) {
+    message('Aucune journée vide : tout est déjà renseigné.', 'info', 3000);
+    return;
+  }
+  message(`${remplies} journée(s) déclarée(s) non travaillée(s).`, 'succes', 3000);
+  enregistrer();
+}
 
 function majBoutonPresentation() {
   $('btn-presentation').textContent = presentation === 'tableau' ? 'Vue téléphone' : 'Vue tableau';
@@ -198,13 +231,30 @@ function afficher() {
 /* --------------------------- Fragments de formulaire ---------------------- */
 
 /**
- * Un seul champ pour le nom, avec l'equipe du chef en autocompletion : il choisit
- * dans sa liste en deux frappes, et reste libre de saisir un renfort ponctuel.
+ * Un seul champ pour le nom, avec tout l'effectif en autocompletion.
+ *
+ * Son equipe vient en tete — c'est elle qu'il saisit tous les jours — mais un
+ * chantier reunit souvent des operateurs venus d'ailleurs : ils doivent pouvoir
+ * etre pointes sans attendre une reaffectation par le directeur. L'etiquette
+ * de chaque proposition dit d'ou vient la personne.
  */
 function listeEquipe() {
-  return `<datalist id="liste-equipe">${reference.equipe
-    .map((s) => `<option value="${echapper(`${s.nom} ${s.prenom}`)}"></option>`)
+  const siens = new Set(reference.equipe.map((s) => s.id));
+  const propositions = [...(reference.effectif || reference.equipe)].sort((a, b) => {
+    const rang = (s) => (siens.has(s.id) ? 0 : 1);
+    return rang(a) - rang(b) || `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`, 'fr');
+  });
+
+  return `<datalist id="liste-equipe">${propositions
+    .map((s) => `<option value="${echapper(`${s.nom} ${s.prenom}`)}"
+                         label="${siens.has(s.id) ? 'mon équipe' : 'autre équipe'}"></option>`)
     .join('')}</datalist>`;
+}
+
+/** La personne designee par un nom saisi, cherchee dans tout l'effectif. */
+function salarieParNom(nom) {
+  const liste = reference.effectif || reference.equipe;
+  return liste.find((s) => Regles.memePersonne(`${s.nom} ${s.prenom}`, nom)) || null;
 }
 
 function champNom(ligne) {
@@ -531,7 +581,7 @@ function collecter() {
       });
     }
     const nom = conteneur.querySelector('.nom-libre').value.trim();
-    const choisi = reference.equipe.find((s) => `${s.nom} ${s.prenom}` === nom);
+    const choisi = salarieParNom(nom);
     corps.lignes.push({
       salarie_id: choisi ? choisi.id : null,
       nom_affiche: nom,

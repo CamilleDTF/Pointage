@@ -88,17 +88,30 @@ test('sans connexion, aucune donnee n est servie', async () => {
   }
 });
 
-test('chaque chef ne recoit que sa propre equipe', async () => {
+test('chaque chef recoit son equipe, lui-meme en tete', async () => {
   const a = await connexion('chefa', '1111');
   const b = await connexion('chefb', '2222');
 
   const refA = await a('GET', '/api/reference');
   const refB = await b('GET', '/api/reference');
 
-  assert.deepEqual(refA.corps.equipe.map((s) => s.nom), ['ANDRE']);
-  assert.deepEqual(refB.corps.equipe.map((s) => s.nom), ['BERTIN']);
-  // Un chef ne voit pas la liste de ses collegues.
+  // Le chef d equipe travaille sur le chantier : il ouvre sa propre equipe,
+  // donc sa propre fiche.
+  assert.deepEqual(refA.corps.equipe.map((s) => s.nom), ['CHEF', 'ANDRE']);
+  assert.deepEqual(refB.corps.equipe.map((s) => s.nom), ['CHEF', 'BERTIN']);
+  assert.equal(refA.corps.equipe[0].prenom, 'A');
+
+  // Un chef ne voit toujours pas la liste de ses collegues chefs.
   assert.deepEqual(refA.corps.chefs, []);
+});
+
+test('tout l effectif est proposable a la saisie, pas seulement son equipe', async () => {
+  // Un chantier reunit des operateurs venus d autres equipes : le chef doit
+  // pouvoir les pointer sans reaffectation prealable.
+  const a = await connexion('chefa', '1111');
+  const noms = (await a('GET', '/api/reference')).corps.effectif.map((s) => s.nom);
+  assert.ok(noms.includes('ANDRE'), 'son operateur');
+  assert.ok(noms.includes('BERTIN'), "l operateur d un autre chef");
 });
 
 test('un chef ne voit pas la fiche d un autre chef', async () => {
@@ -339,4 +352,43 @@ test('une journee laissee vide bloque toujours la transmission', async () => {
   const bloquantes = refus.corps.anomalies.filter((x) => x.niveau === 'bloquant');
   assert.equal(bloquantes.length, 1); // le seul vendredi non renseigne
   assert.deepEqual(bloquantes[0].cible, { ligne: 0, jour: 4 });
+});
+
+test('un operateur d une autre equipe se pointe et se rattache correctement', async () => {
+  // Un chantier reunit souvent des renforts venus d'ailleurs : la ligne doit
+  // pointer sur le vrai salarie, sinon la paie ne le reconnait pas.
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+
+  const bertin = db.prepare("SELECT id FROM salaries WHERE nom = 'BERTIN'").get();
+  const fiche = (await a('POST', '/api/fiches/semaine', { annee: 2026, semaine: 39 })).corps.fiche;
+  const lignes = fiche.lignes.map((ligne, i) => ({
+    ...ligne,
+    nom_affiche: i === 0 ? 'BERTIN Bruno' : '',
+    salarie_id: i === 0 ? bertin.id : null,
+    jours: ligne.jours.map((j) => ({ ...j, minutes: i === 0 && j.jour <= 4 ? 450 : 0 })),
+  }));
+  const reponse = await a('PUT', `/api/fiches/${fiche.id}`, {
+    chantier: 'Chantier partage', ville: 'Toulouse', lignes,
+  });
+
+  assert.equal(reponse.statut, 200);
+  assert.equal(reponse.corps.fiche.lignes[0].salarie_id, bertin.id);
+  assert.equal(reponse.corps.fiche.total_minutes, 2250);
+});
+
+test('la fiche s ouvre pre-remplie avec le chef d equipe en premiere ligne', async () => {
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+
+  const fiche = (await a('POST', '/api/fiches/semaine', { annee: 2026, semaine: 41 })).corps.fiche;
+  assert.deepEqual(fiche.lignes.slice(0, 2).map((l) => l.nom_affiche), ['CHEF A', 'ANDRE Alain']);
+
+  // La ligne du chef designe bien un salarie : ses heures rejoindront la paie.
+  assert.ok(fiche.lignes[0].salarie_id, 'le chef doit etre rattache a une fiche salarie');
+
+  // Et ouvrir une deuxieme semaine ne cree pas un second enregistrement pour lui.
+  await a('POST', '/api/fiches/semaine', { annee: 2026, semaine: 42 });
+  const doublons = db.prepare("SELECT COUNT(*) AS n FROM salaries WHERE nom = 'CHEF' AND prenom = 'A'").get().n;
+  assert.equal(doublons, 1);
 });

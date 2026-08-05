@@ -23,6 +23,7 @@ const ExcelJS = require('exceljs');
 const { db } = require('../server/db');
 const { hacherPin } = require('../server/auth');
 const D = require('../server/domaine');
+const { salarieDuChef } = require('../server/fiches');
 
 const fichier = process.argv[2];
 const appliquer = process.argv.includes('--appliquer');
@@ -106,7 +107,7 @@ async function importer() {
 
   /* -------------------------------- Ecriture ------------------------------- */
 
-  const resume = { chefsCrees: 0, chefsMisAJour: 0, salariesCrees: 0, salariesMisAJour: 0 };
+  const resume = { chefsCrees: 0, chefsMisAJour: 0, salariesCrees: 0, salariesMisAJour: 0, chefsAjoutesAuxSalaries: 0 };
 
   db.transaction(() => {
     for (const chef of chefs) {
@@ -140,11 +141,22 @@ async function importer() {
         resume.salariesCrees += 1;
       }
     }
+
+    // Un chef d'equipe pointe ses heures comme ses operateurs : il lui faut une
+    // fiche salarie. On le fait apres les operateurs, pour rattacher la sienne
+    // s'il figure deja dans le tableau d'affectation plutot qu'en creer une
+    // seconde.
+    for (const chef of chefs) {
+      const avant = db.prepare('SELECT COUNT(*) AS n FROM salaries').get().n;
+      salarieDuChef(chef.id);
+      if (db.prepare('SELECT COUNT(*) AS n FROM salaries').get().n > avant) resume.chefsAjoutesAuxSalaries += 1;
+    }
   })();
 
   console.log('\nImport terminé :');
   console.log(`  chefs d'équipe : ${resume.chefsCrees} créé(s), ${resume.chefsMisAJour} mis à jour`);
   console.log(`  salariés       : ${resume.salariesCrees} créé(s), ${resume.salariesMisAJour} mis à jour`);
+  console.log(`  dont chefs ajoutés à l'effectif : ${resume.chefsAjoutesAuxSalaries}`);
   console.log('\nLes codes du fichier sont les codes de première connexion.');
   console.log('Demandez à chaque chef de le changer via le bouton « Code ».');
 }
