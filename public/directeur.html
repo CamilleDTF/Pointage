@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#10416b">
   <title>Pointage — Tableau de bord</title>
+  <link rel="icon" href="/icone.svg" type="image/svg+xml">
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="/css/style.css">
 </head>
@@ -106,96 +107,6 @@
 
     <div id="fiches"></div>
 
-    <div class="masque" id="bloc-admin">
-      <section class="carte">
-        <h2>Paramètres</h2>
-        <div class="onglets" id="onglets-parametres">
-          <button class="onglet actif" type="button" data-onglet="effectif">Personnel et équipes</button>
-          <button class="onglet" type="button" data-onglet="comptes">Comptes des chefs</button>
-          <button class="onglet" type="button" data-onglet="vehicules">Véhicules</button>
-          <button class="onglet" type="button" data-onglet="indicateurs">Indicateurs de suivi</button>
-        </div>
-      </section>
-
-      <section class="carte panneau" id="panneau-effectif">
-        <h2>Personnel, équipes et taux horaires</h2>
-        <p class="aide">
-          Le taux horaire brut sert au calcul de la paie. Tant qu'il n'est pas renseigné,
-          aucun montant n'est calculé pour la personne — une case vide vaut mieux qu'un salaire faux.
-        </p>
-        <div class="enveloppe-table"><table id="table-salaries">
-          <thead><tr>
-            <th>Matricule</th><th>Nom</th><th>Prénom</th><th>Chef d'équipe</th>
-            <th class="num">Taux horaire</th><th></th>
-          </tr></thead>
-          <tbody></tbody>
-        </table></div>
-        <div class="rangee" style="margin-top:10px">
-          <input id="s-matricule" placeholder="matricule" style="width:100px">
-          <input id="s-nom" placeholder="NOM" style="flex:1;min-width:110px">
-          <input id="s-prenom" placeholder="Prénom" style="flex:1;min-width:110px">
-          <select id="s-chef" style="flex:1;min-width:130px"></select>
-          <button class="petit principal" id="btn-ajout-salarie" type="button">Ajouter</button>
-        </div>
-      </section>
-
-      <section class="carte panneau masque" id="panneau-comptes">
-        <h2>Comptes des chefs d'équipe</h2>
-        <div class="enveloppe-table"><table id="table-utilisateurs">
-          <thead><tr><th>Nom</th><th>Identifiant</th><th>Rôle</th><th>Actions</th></tr></thead>
-          <tbody></tbody>
-        </table></div>
-        <div class="rangee" style="margin-top:10px">
-          <input id="u-nom" placeholder="NOM Prénom" style="flex:2;min-width:140px">
-          <input id="u-identifiant" placeholder="identifiant" style="flex:1;min-width:110px">
-          <input id="u-pin" placeholder="code" inputmode="numeric" style="width:90px">
-          <button class="petit principal" id="btn-ajout-chef" type="button">Ajouter un chef</button>
-        </div>
-      </section>
-
-      <section class="carte panneau masque" id="panneau-vehicules">
-        <h2>Parc de véhicules</h2>
-        <p class="aide">
-          Les chefs choisissent une immatriculation dans cette liste ; le type de véhicule
-          se remplit alors tout seul sur la fiche.
-        </p>
-        <div class="enveloppe-table"><table id="table-vehicules">
-          <thead><tr>
-            <th>Immatriculation</th><th>Marque</th><th>Modèle</th><th>Motorisation</th><th></th>
-          </tr></thead>
-          <tbody></tbody>
-        </table></div>
-        <div class="rangee" style="margin-top:10px">
-          <input id="v-immat" placeholder="AA-123-BB" style="width:130px">
-          <input id="v-marque" placeholder="Marque" style="flex:1;min-width:110px">
-          <input id="v-modele" placeholder="Modèle" style="flex:1;min-width:110px">
-          <input id="v-motorisation" placeholder="Motorisation" style="flex:1;min-width:110px">
-          <button class="petit principal" id="btn-ajout-vehicule" type="button">Ajouter</button>
-        </div>
-      </section>
-
-      <section class="carte panneau masque" id="panneau-indicateurs">
-        <h2>Indicateurs de suivi</h2>
-        <p class="aide" id="aide-indicateurs"></p>
-        <div class="enveloppe-table"><table id="table-indicateurs">
-          <thead><tr>
-            <th>Chef d'équipe</th>
-            <th class="num">Assiduité</th>
-            <th class="num">Transmises</th>
-            <th class="num">Manquantes</th>
-            <th class="num">Retard moyen</th>
-            <th class="num">Retard max</th>
-            <th class="num">Hors délai</th>
-            <th class="num">Renvoyées</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table></div>
-        <p class="aide" style="margin-top:10px">
-          Ces chiffres décrivent un circuit administratif, pas des personnes : un chantier isolé
-          rend naturellement plus tard qu'un autre. Ils servent à savoir qui relancer.
-        </p>
-      </section>
-    </div>
   </main>
 
   <script src="/js/regles.js"></script>

@@ -466,3 +466,15 @@ test('les indicateurs ne reclament rien avant la mise en service', async () => {
     assert.ok(chef.retardMoyen === null || chef.retardMoyen >= 0);
   }
 });
+
+test('la page Parametres est servie, mais ses donnees restent reservees au directeur', async () => {
+  // La page elle-meme est un fichier statique : c'est l'API qu'elle appelle qui
+  // decide, pas l'adresse. Un chef qui l'ouvrirait n'en tirerait rien.
+  const page = await fetch(`${base}/parametres.html`);
+  assert.equal(page.status, 200);
+
+  const a = await connexion('chefa', '1111');
+  for (const chemin of ['/api/admin/utilisateurs', '/api/admin/vehicules', '/api/admin/indicateurs']) {
+    assert.equal((await a('GET', chemin)).statut, 403, chemin);
+  }
+});

@@ -32,7 +32,7 @@ npm run demo     # produit demo/demonstration.html
 ```
 
 Une page autonome, à ouvrir dans n'importe quel navigateur : elle contient les
-deux écrans réels (même HTML, même CSS, même JavaScript), un jeu de données
+trois écrans réels (même HTML, même CSS, même JavaScript), un jeu de données
 fictives et un faux serveur en mémoire. Aucune installation, aucun réseau, rien
 n'est enregistré — un rechargement remet tout à zéro.
 
@@ -118,7 +118,7 @@ qui ouvrirait directement l'adresse de la fiche d'un collègue reçoit un refus.
 Une fiche transmise n'est plus modifiable par son chef ; seul le directeur peut la
 corriger, la valider, ou la lui renvoyer pour correction avec un motif.
 
-## Les deux écrans
+## Les trois écrans
 
 ### Chef d'équipe — `/chef.html`
 
@@ -203,11 +203,20 @@ le directeur qui doit s'en occuper. Les libellés suivent le rôle
 - Exports de la semaine : **Excel** et **CSV**, au choix sur les fiches validées,
   les fiches à vérifier, ou toutes.
 - **Tableau mensuel consultable à l'écran**, en deux versions (voir ci-dessous).
-- Écran **Paramètres**, en quatre volets :
+
+### Paramètres — `/parametres.html`
+
+Une page à part entière, atteinte par le bouton **Paramètres** du tableau de bord :
+on ne règle pas des taux horaires en faisant défiler les fiches de la semaine, et
+une adresse propre se met en favori. Quatre volets :
   - *Personnel et équipes* — affectations et **taux horaire** de chacun ;
   - *Comptes des chefs* — création, codes, désactivation ;
   - *Véhicules* — le parc proposé aux chefs à la saisie ;
   - *Indicateurs de suivi* — voir plus bas.
+
+Comme les deux autres écrans, elle est fermée aux chefs d'équipe côté serveur : un
+chef qui ouvrirait l'adresse directement est renvoyé vers sa fiche, et les routes
+`/api/admin/*` lui répondent un refus.
 
 ## Le tableau mensuel pour la paie
 
@@ -294,12 +303,16 @@ server/
   auth.js       Sessions signées, codes PIN, limitation des tentatives
   fiches.js     Cycle de vie d'une fiche : création, saisie, transmission, validation
   export.js     Génération des classeurs Excel et du CSV
+  mensuel.js    Agrégation d'un mois et valorisation de la paie
+  export-mensuel.js  Le classeur mensuel, versions publique et direction
+  indicateurs.js Suivi des chefs : assiduité, retards, fiches renvoyées
   index.js      API HTTP et service des fichiers statiques
   seed.js       Jeu de données initial
 public/
-  index.html    Connexion
-  chef.html     Saisie mobile           + js/chef.js
-  directeur.html Tableau de bord        + js/directeur.js
+  index.html      Connexion
+  chef.html       Saisie mobile        + js/chef.js
+  directeur.html  Tableau de bord      + js/directeur.js
+  parametres.html Paramètres direction + js/parametres.js
   js/regles.js  Règles métier partagées avec le serveur (heures, semaines, contrôles)
   js/commun.js  API, signature tactile, file d'attente en cas de coupure réseau
 test/

@@ -137,21 +137,23 @@
   const GABARITS = {
     chef: /*{GABARIT_CHEF}*/,
     directeur: /*{GABARIT_DIRECTEUR}*/,
+    parametres: /*{GABARIT_PARAMETRES}*/,
   };
 
   const SCRIPTS = {
     chef: /*{SCRIPT_CHEF}*/,
     directeur: /*{SCRIPT_DIRECTEUR}*/,
+    parametres: /*{SCRIPT_PARAMETRES}*/,
   };
 
   const Demo = {
-    aller(role) {
+    aller(ecran) {
       document.getElementById('demo-connexion').style.display = 'none';
       const zone = document.getElementById('demo-application');
-      zone.innerHTML = GABARITS[role];
+      zone.innerHTML = GABARITS[ecran];
       window.scrollTo(0, 0);
       // Chaque script est isole dans sa propre fonction : pas de collision de noms.
-      new Function(SCRIPTS[role])();
+      new Function(SCRIPTS[ecran])();
     },
 
     deconnecter() {
