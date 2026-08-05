@@ -36,7 +36,7 @@
       </div>
 
       <div id="calendrier" style="margin-top:16px"></div>
-      <p class="aide">Cliquez sur une semaine pour ouvrir sa fiche.</p>
+      <p class="aide">Cliquez sur une semaine pour ouvrir sa fiche.<span id="note-mise-en-service"></span></p>
     </details>
 
     <section class="carte">
@@ -88,8 +88,9 @@
         <h2>Heures par salarié</h2>
         <p class="aide" style="margin-bottom:12px">
           Saisissez les heures en <strong>7h30</strong>, <strong>7:30</strong> ou <strong>7,5</strong>.
-          Hors temps de repas et de trajet. En cas d'absence, choisissez un code — il est obligatoire
-          du lundi au vendredi.
+          Hors temps de repas et de trajet. Pour un jour non travaillé, saisissez <strong>0</strong>
+          ou choisissez un code d'absence : chaque jour du lundi au vendredi doit être renseigné.
+          Ce qu'il reste à compléter apparaît <span style="color:var(--rouge);font-weight:600">encadré en rouge</span>.
         </p>
         <div id="salaries"></div>
       </section>

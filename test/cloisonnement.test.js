@@ -269,3 +269,74 @@ test('le calendrier ne montre que les semaines du chef connecte', async () => {
   assert.equal(calendrierA.corps.semaines[0].mois, 1);
   assert.equal(calendrierA.corps.semaines[0].debut.slice(5, 7), '12');
 });
+
+test('les semaines anterieures a la mise en service ne sont pas reclamees', async () => {
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+
+  const calendrier = (await a('GET', '/api/calendrier?annee=2026')).corps;
+  assert.equal(calendrier.debutService, '2026-09-01');
+
+  // Fevrier : pointe sur papier, la semaine ne doit rien reclamer.
+  const fevrier = calendrier.semaines.find((s) => s.semaine === 7);
+  assert.equal(fevrier.etat, 'horsPerimetre');
+
+  // La semaine du 1er septembre (lundi 31 aout) est deja du ressort de l outil.
+  const bascule = calendrier.semaines.find((s) => s.debut === '2026-08-31');
+  assert.notEqual(bascule.etat, 'horsPerimetre');
+
+  // Et rien de tout cela ne compte comme du retard.
+  const horsPerimetre = calendrier.semaines.filter((s) => s.etat === 'horsPerimetre');
+  assert.ok(horsPerimetre.length > 30, 'les 8 premiers mois de 2026 sortent du perimetre');
+  assert.equal(calendrier.totaux.manquante + calendrier.totaux.brouillon, 0);
+});
+
+test('une journee mise a zero par le chef est conservee comme telle', async () => {
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+
+  const fiche = (await a('POST', '/api/fiches/semaine', { annee: 2026, semaine: 37 })).corps.fiche;
+  // Un seul salarie, un seul jour travaille, les autres declares a zero : le
+  // cas que le client signalait comme refuse a tort.
+  const lignes = fiche.lignes.map((ligne, i) => ({
+    ...ligne,
+    nom_affiche: i === 0 ? 'ANDRE Alain' : '',
+    signature: i === 0 ? 'data:image/png;base64,xxx' : null,
+    jours: ligne.jours.map((j) => ({
+      ...j,
+      minutes: i === 0 && j.jour === 0 ? 450 : 0,
+      saisi: i === 0 && j.jour <= 4 ? 1 : 0,
+    })),
+  }));
+  const enregistree = await a('PUT', `/api/fiches/${fiche.id}`, {
+    chantier: 'Chantier test', ville: 'Toulouse', lignes,
+  });
+  assert.equal(enregistree.statut, 200);
+
+  const jours = enregistree.corps.fiche.lignes[0].jours;
+  assert.equal(jours[0].minutes, 450);
+  assert.deepEqual(jours.map((j) => j.saisi), [1, 1, 1, 1, 1, 0, 0]);
+  assert.deepEqual(enregistree.corps.anomalies, []);
+
+  // Et la fiche part sans blocage.
+  assert.equal((await a('POST', `/api/fiches/${fiche.id}/soumettre`)).statut, 200);
+});
+
+test('une journee laissee vide bloque toujours la transmission', async () => {
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+
+  const fiche = (await a('POST', '/api/fiches/semaine', { annee: 2026, semaine: 38 })).corps.fiche;
+  const lignes = fiche.lignes.map((ligne, i) => ({
+    ...ligne,
+    nom_affiche: i === 0 ? 'ANDRE Alain' : '',
+    jours: ligne.jours.map((j) => ({ ...j, minutes: 0, saisi: i === 0 && j.jour <= 3 ? 1 : 0 })),
+  }));
+  await a('PUT', `/api/fiches/${fiche.id}`, { chantier: 'Chantier test', ville: 'Toulouse', lignes });
+
+  const refus = await a('POST', `/api/fiches/${fiche.id}/soumettre`);
+  assert.equal(refus.statut, 422);
+  const bloquantes = refus.corps.anomalies.filter((x) => x.niveau === 'bloquant');
+  assert.equal(bloquantes.length, 1); // le seul vendredi non renseigne
+  assert.deepEqual(bloquantes[0].cible, { ligne: 0, jour: 4 });
+});

@@ -54,6 +54,15 @@ const definirRole = (role) => { roleCourant = role; };
 
 const etiquetteStatut = (statut, role) => Regles.etiquetteStatut(statut, role || roleCourant);
 
+/** "2026-09-01" -> "1er septembre 2026" */
+function dateFrancaise(iso) {
+  const [annee, mois, jour] = String(iso || '').split('-').map(Number);
+  if (!annee || !mois || !jour) return '';
+  const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+    'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  return `${jour === 1 ? '1er' : jour} ${MOIS[mois - 1]} ${annee}`;
+}
+
 function badgeStatut(statut, role) {
   return `<span class="etat ${statut}">${echapper(etiquetteStatut(statut, role))}</span>`;
 }

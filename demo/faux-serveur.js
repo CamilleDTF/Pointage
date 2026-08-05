@@ -93,7 +93,7 @@
           nb_deplacement: 0,
           observation: '',
           signature: null,
-          jours: Array.from({ length: 7 }, (_, j) => ({ jour: j, minutes: 0, code_absence: '' })),
+          jours: Array.from({ length: 7 }, (_, j) => ({ jour: j, minutes: 0, code_absence: '', saisi: 0 })),
         };
       }),
     };
@@ -284,6 +284,48 @@
       };
     }],
 
+    ['GET', /^\/api\/calendrier$/, (m, corps, params) => {
+      const u = exigerConnexion();
+      const courante = R.semaineISO(new Date());
+      const annee = Number(params.get('annee')) || courante.annee;
+      const chefId = u.role === 'chef' ? u.id : Number(params.get('chef'));
+      const parSemaine = new Map(
+        fiches.filter((f) => f.chef_id === chefId && f.annee === annee).map((f) => [f.semaine, resumer(f)])
+      );
+
+      const semaines = [];
+      for (let s = 1; s <= R.nombreSemainesISO(annee); s += 1) {
+        const fiche = parSemaine.get(s) || null;
+        const dates = R.datesDeLaSemaine(annee, s);
+        const future = annee > courante.annee || (annee === courante.annee && s > courante.semaine);
+        const avantService = R.semaineAvantService(dates[6], R.DEBUT_SERVICE_PAR_DEFAUT);
+        semaines.push({
+          semaine: s,
+          debut: dates[0],
+          fin: dates[6],
+          mois: Number(dates[3].slice(5, 7)),
+          courante: annee === courante.annee && s === courante.semaine,
+          etat: fiche ? fiche.statut : avantService ? 'horsPerimetre' : future ? 'avenir' : 'manquante',
+          fiche,
+        });
+      }
+
+      const compter = (etat) => semaines.filter((x) => x.etat === etat).length;
+      return {
+        annee,
+        semaineCourante: courante,
+        debutService: R.DEBUT_SERVICE_PAR_DEFAUT,
+        semaines,
+        totaux: {
+          manquante: compter('manquante'),
+          brouillon: compter('brouillon'),
+          soumise: compter('soumise'),
+          rejetee: compter('rejetee'),
+          validee: compter('validee'),
+        },
+      };
+    }],
+
     ['GET', /^\/api\/fiches$/, (m, corps, params) => {
       const u = exigerConnexion();
       let liste = fiches;
@@ -345,10 +387,12 @@
           signature: ligne.signature === undefined ? (fiche.lignes[i] || {}).signature || null : ligne.signature,
           jours: Array.from({ length: 7 }, (_, j) => {
             const source = (ligne.jours || []).find((x) => Number(x.jour) === j) || {};
+            const minutes = Number(source.minutes) || 0;
             return {
               jour: j,
-              minutes: Number(source.minutes) || 0,
+              minutes,
               code_absence: String(source.code_absence || '').toUpperCase(),
+              saisi: source.saisi || minutes > 0 ? 1 : 0,
             };
           }),
         }));

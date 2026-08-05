@@ -89,6 +89,63 @@ test('un jour ouvre sans heures ni code absence bloque la transmission', () => {
   assert.match(anomalies[0].message, /Mercredi/);
 });
 
+test('un zero explicitement saisi declare un jour non travaille', () => {
+  // Le cas signale par le client : un seul operateur, un seul jour travaille.
+  // Les autres jours mis a zero par le chef d equipe rendent la fiche complete.
+  const ligne = ligneType({
+    jours: Array.from({ length: 7 }, (_, j) => ({
+      jour: j,
+      minutes: j === 0 ? 450 : 0,
+      code_absence: '',
+      saisi: j <= 4 ? 1 : 0,
+    })),
+  });
+  assert.deepEqual(D.controlerFiche(ficheType(), [ligne]), []);
+});
+
+test('un zero non saisi reste un jour oublie', () => {
+  const ligne = ligneType();
+  ligne.jours[2] = { jour: 2, minutes: 0, code_absence: '', saisi: 0 };
+  const anomalies = D.controlerFiche(ficheType(), [ligne]);
+  assert.equal(anomalies.length, 1);
+  assert.equal(anomalies[0].niveau, 'bloquant');
+  assert.match(anomalies[0].message, /Mercredi/);
+});
+
+test('la case a completer est designee par la cible de l anomalie', () => {
+  const ligne = ligneType();
+  ligne.jours[3].minutes = 0;
+  const anomalies = D.controlerFiche(ficheType({ ville: '' }), [ligneType(), ligne]);
+
+  const ville = anomalies.find((a) => /ville/.test(a.message));
+  assert.deepEqual(ville.cible, { entete: 'ville' });
+
+  const jeudi = anomalies.find((a) => /Jeudi/.test(a.message));
+  assert.deepEqual(jeudi.cible, { ligne: 1, jour: 3 }); // seconde ligne, jeudi
+});
+
+test('la cible pointe la ligne d origine, meme derriere des lignes vides', () => {
+  const lignes = [ligneType({ nom_affiche: '' }), ligneType({ nom_affiche: '' }), ligneType({ signature: null })];
+  const anomalies = D.controlerFiche(ficheType(), lignes);
+  assert.equal(anomalies.length, 1);
+  assert.deepEqual(anomalies[0].cible, { ligne: 2, champ: 'signature' });
+});
+
+test('les semaines anterieures a la mise en service sortent du perimetre', () => {
+  // Le 1er septembre 2026 tombe un mardi : la semaine qui le contient (lundi
+  // 31 aout au dimanche 6 septembre) est deja du ressort de l application.
+  assert.equal(D.semaineAvantService('2026-08-30', '2026-09-01'), true);
+  assert.equal(D.semaineAvantService('2026-09-06', '2026-09-01'), false);
+  assert.equal(D.semaineAvantService('2026-09-13', '2026-09-01'), false);
+  assert.equal(D.semaineAvantService('2026-08-30', ''), false); // sans date, tout est dans le perimetre
+});
+
+test('une journee mise a zero se reaffiche 0h00, une journee vide reste vide', () => {
+  assert.equal(D.versSaisieJour({ minutes: 0, saisi: 1 }), '0h00');
+  assert.equal(D.versSaisieJour({ minutes: 0, saisi: 0 }), '');
+  assert.equal(D.versSaisieJour({ minutes: 450, saisi: 0 }), '7h30');
+});
+
 test('un code absence dispense de saisir des heures', () => {
   const ligne = ligneType();
   ligne.jours[2] = { jour: 2, minutes: 0, code_absence: 'AT' };

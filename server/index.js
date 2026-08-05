@@ -102,11 +102,19 @@ app.get('/api/reference', A.exigerConnexion, (req, res) => {
 
 /* -------------------------- Calendrier d'un chef --------------------------- */
 
+/*
+ * Avant cette date le pointage se faisait sur papier : le calendrier ne reclame
+ * pas ces semaines-la. Se regle par DEBUT_SERVICE=AAAA-MM-JJ si la mise en
+ * service glisse.
+ */
+const DEBUT_SERVICE = process.env.DEBUT_SERVICE || D.DEBUT_SERVICE_PAR_DEFAUT;
+
 /**
  * Toutes les semaines de l'annee avec l'etat de la fiche correspondante, pour
  * que le chef d'equipe voie d'un coup ce qui lui reste a faire. Les semaines
  * sans fiche ressortent "manquante" — ou "avenir" si elles ne sont pas encore
- * arrivees, une semaine future n'etant pas un retard.
+ * arrivees, une semaine future n'etant pas un retard, ou "horsPerimetre" si
+ * elles precedent la mise en service.
  */
 app.get('/api/calendrier', A.exigerConnexion, (req, res) => {
   const courante = D.semaineISO(new Date());
@@ -126,6 +134,7 @@ app.get('/api/calendrier', A.exigerConnexion, (req, res) => {
     const fiche = parSemaine.get(s) || null;
     const dates = D.datesDeLaSemaine(annee, s);
     const future = annee > courante.annee || (annee === courante.annee && s > courante.semaine);
+    const avantService = D.semaineAvantService(dates[6], DEBUT_SERVICE);
     semaines.push({
       semaine: s,
       debut: dates[0],
@@ -134,7 +143,9 @@ app.get('/api/calendrier', A.exigerConnexion, (req, res) => {
       // range ainsi en janvier meme quand son lundi tombe en decembre.
       mois: Number(dates[3].slice(5, 7)),
       courante: annee === courante.annee && s === courante.semaine,
-      etat: fiche ? fiche.statut : future ? 'avenir' : 'manquante',
+      // Une fiche existante prime : si quelqu un a saisi une semaine anterieure
+      // a la mise en service, son travail reste visible.
+      etat: fiche ? fiche.statut : avantService ? 'horsPerimetre' : future ? 'avenir' : 'manquante',
       fiche,
     });
   }
@@ -143,6 +154,7 @@ app.get('/api/calendrier', A.exigerConnexion, (req, res) => {
   res.json({
     annee,
     semaineCourante: courante,
+    debutService: DEBUT_SERVICE,
     semaines,
     totaux: {
       manquante: compter('manquante'),

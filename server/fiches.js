@@ -9,10 +9,14 @@ function normaliserLigne(brut, ordre) {
   const jours = [];
   for (let j = 0; j < 7; j += 1) {
     const source = (brut.jours || []).find((x) => Number(x.jour) === j) || {};
+    const minutes = Math.max(0, Math.round(Number(source.minutes) || 0));
     jours.push({
       jour: j,
-      minutes: Math.max(0, Math.round(Number(source.minutes) || 0)),
+      minutes,
       code_absence: String(source.code_absence || '').trim().toUpperCase().slice(0, 4),
+      // Des heures saisies valent declaration, meme si le client n a pas envoye
+      // le drapeau : seul le zero explicite a besoin d etre marque.
+      saisi: source.saisi || minutes > 0 ? 1 : 0,
     });
   }
   return {
@@ -62,10 +66,10 @@ function obtenirFiche(id) {
     ligne.jours = jours
       .filter((j) => j.ligne_id === ligne.id)
       .sort((a, b) => a.jour - b.jour)
-      .map((j) => ({ jour: j.jour, minutes: j.minutes, code_absence: j.code_absence }));
+      .map((j) => ({ jour: j.jour, minutes: j.minutes, code_absence: j.code_absence, saisi: j.saisi ? 1 : 0 }));
     for (let j = 0; j < 7; j += 1) {
       if (!ligne.jours.some((x) => x.jour === j)) {
-        ligne.jours.splice(j, 0, { jour: j, minutes: 0, code_absence: '' });
+        ligne.jours.splice(j, 0, { jour: j, minutes: 0, code_absence: '', saisi: 0 });
       }
     }
     ligne.total_minutes = D.totalMinutesLigne(ligne);
@@ -181,7 +185,7 @@ function enregistrerFiche(ficheId, corps, utilisateur) {
                  @jours_zone, @type_masque, @nb_deplacement, @observation, @signature)`
       );
       const insJour = db.prepare(
-        'INSERT INTO fiche_jours (ligne_id, jour, minutes, code_absence) VALUES (?, ?, ?, ?)'
+        'INSERT INTO fiche_jours (ligne_id, jour, minutes, code_absence, saisi) VALUES (?, ?, ?, ?, ?)'
       );
 
       lignes.forEach((ligne, i) => {
@@ -189,7 +193,7 @@ function enregistrerFiche(ficheId, corps, utilisateur) {
         const signature = ligne.signature === undefined ? (anciennes[i] || {}).signature ?? null : ligne.signature;
         const r = insLigne.run({ ...ligne, fiche_id: ficheId, signature });
         for (const jour of ligne.jours) {
-          insJour.run(r.lastInsertRowid, jour.jour, jour.minutes, jour.code_absence);
+          insJour.run(r.lastInsertRowid, jour.jour, jour.minutes, jour.code_absence, jour.saisi);
         }
       });
     }

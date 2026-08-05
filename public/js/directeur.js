@@ -170,7 +170,7 @@ function construireFiche(fiche) {
             .map((c) => `<option value="${c.code}"${c.code === jour.code_absence ? ' selected' : ''}>${c.code}</option>`)
             .join('');
           return `<td class="num ${j >= 5 ? 'weekend' : ''}">
-            <input class="cellule heures" data-jour="${j}" value="${versSaisie(jour.minutes)}"
+            <input class="cellule heures" data-jour="${j}" value="${Regles.versSaisieJour(jour)}"
                    style="padding:5px;text-align:center;min-width:56px">
             <select class="cellule code" data-jour="${j}" style="padding:2px;font-size:0.72rem;margin-top:3px">
               <option value="">—</option>${codes}
@@ -259,8 +259,10 @@ function cablerFiche(bloc, fiche) {
   });
 
   bloc.querySelectorAll('input.heures').forEach((champ) => {
+    // Un zero saisi reste "0h00" : c'est la declaration d'un jour non travaille,
+    // a ne pas confondre avec une case que personne n'a remplie.
     champ.addEventListener('blur', () => {
-      champ.value = versSaisie(versMinutes(champ.value));
+      champ.value = champ.value.trim() === '' ? '' : versTexte(versMinutes(champ.value));
       recalculerTotal(champ.closest('tr'));
     });
     champ.addEventListener('input', () => recalculerTotal(champ.closest('tr')));
@@ -326,10 +328,12 @@ function collecter(bloc, fiche) {
     const origine = fiche.lignes.filter((l) => l.nom_affiche.trim())[index];
     const jours = [];
     for (let j = 0; j < 7; j += 1) {
+      const saisie = rang.querySelector(`input.heures[data-jour="${j}"]`).value;
       jours.push({
         jour: j,
-        minutes: versMinutes(rang.querySelector(`input.heures[data-jour="${j}"]`).value),
+        minutes: versMinutes(saisie),
         code_absence: rang.querySelector(`select.code[data-jour="${j}"]`).value,
+        saisi: saisie.trim() === '' ? 0 : 1,
       });
     }
     return {

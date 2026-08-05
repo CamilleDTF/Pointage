@@ -80,6 +80,13 @@ async function chargerCalendrier() {
       </div>`)
     .join('');
 
+  // Les semaines grisees d'avant la mise en service ne sont pas un oubli : on
+  // le dit, plutot que de laisser deviner pourquoi elles sont eteintes.
+  const grisees = donnees.semaines.some((s) => s.etat === 'horsPerimetre');
+  $('note-mise-en-service').textContent = grisees && donnees.debutService
+    ? ` Les semaines antérieures au ${dateFrancaise(donnees.debutService)} ont été pointées sur papier : elles n'ont rien à recevoir ici.`
+    : '';
+
   $('calendrier').querySelectorAll('.case-semaine').forEach((bouton) => {
     bouton.addEventListener('click', () => {
       $('annee').value = donnees.annee;
@@ -96,7 +103,7 @@ function caseSemaine(semaine) {
   // seule ne suffit pas a qui la distingue mal.
   const detail = fiche && fiche.chantier
     ? echapper(fiche.chantier)
-    : semaine.etat === 'avenir' ? '' : echapper(etiquetteStatut(semaine.etat));
+    : ['avenir', 'horsPerimetre'].includes(semaine.etat) ? '' : echapper(etiquetteStatut(semaine.etat));
   return `
     <button type="button" class="case-semaine ${semaine.etat}${semaine.courante ? ' courante' : ''}"
             data-semaine="${semaine.semaine}"
@@ -116,6 +123,8 @@ $('btn-presentation').addEventListener('click', () => {
   presentation = presentation === 'tableau' ? 'cartes' : 'tableau';
   majBoutonPresentation();
   construireSalaries();
+  // La grille vient d etre reconstruite : les champs en rouge sont a reposer.
+  if (fiche) afficherAnomalies(fiche.anomalies || []);
 });
 $('btn-excel').addEventListener('click', () => {
   if (fiche) window.location.href = `/api/export/fiche/${fiche.id}.xlsx`;
@@ -247,7 +256,7 @@ function carteSalarie(ligne, index) {
           <div class="entete">${reference.joursCourts[j]}</div>
           <div class="date">${jourMois(fiche.dates[j])}</div>
           <input class="heures ${jour.code_absence ? 'absent' : ''}" data-jour="${j}"
-                 inputmode="text" placeholder="—" value="${versSaisie(jour.minutes)}">
+                 inputmode="text" placeholder="—" value="${Regles.versSaisieJour(jour)}">
           <select class="code" data-jour="${j}">
             <option value="">—</option>${optionsCodes(jour.code_absence)}
           </select>
@@ -311,7 +320,7 @@ function gabaritTableau() {
           (jour, j) => `
             <td class="num ${j >= 5 ? 'weekend' : ''}">
               <input class="cellule heures ${jour.code_absence ? 'absent' : ''}" data-jour="${j}"
-                     value="${versSaisie(jour.minutes)}" placeholder="—">
+                     value="${Regles.versSaisieJour(jour)}" placeholder="—">
               <select class="cellule code" data-jour="${j}"><option value="">—</option>${optionsCodes(jour.code_absence)}</select>
             </td>`
         )
@@ -375,9 +384,12 @@ function cablerLigne(conteneur, index) {
     });
   });
 
+  // A la sortie de la case, la saisie est remise au format "7h30" — et un zero
+  // saisi devient "0h00" au lieu de disparaitre : c'est la facon de declarer un
+  // jour non travaille.
   conteneur.querySelectorAll('input.heures').forEach((champ) => {
     champ.addEventListener('blur', () => {
-      champ.value = versSaisie(versMinutes(champ.value));
+      champ.value = champ.value.trim() === '' ? '' : versTexte(versMinutes(champ.value));
       recalculerLigne(conteneur);
     });
   });
@@ -509,10 +521,13 @@ function collecter() {
     const index = Number(conteneur.dataset.ligne);
     const jours = [];
     for (let j = 0; j < 7; j += 1) {
+      const saisie = conteneur.querySelector(`input.heures[data-jour="${j}"]`).value;
       jours.push({
         jour: j,
-        minutes: versMinutes(conteneur.querySelector(`input.heures[data-jour="${j}"]`).value),
+        minutes: versMinutes(saisie),
         code_absence: conteneur.querySelector(`select.code[data-jour="${j}"]`).value,
+        // Case non vide = journee declaree, y compris a zero.
+        saisi: saisie.trim() === '' ? 0 : 1,
       });
     }
     const nom = conteneur.querySelector('.nom-libre').value.trim();
@@ -557,19 +572,84 @@ const enregistrerPlusTard = antiRebond(enregistrer, 1200);
 
 /* -------------------------------- Contrôles ------------------------------- */
 
-function afficherAnomalies(anomalies) {
+function afficherAnomalies(anomalies, { deplier = false } = {}) {
   const liste = $('anomalies');
   liste.innerHTML = '';
+  designerChamps(anomalies, deplier);
+
   if (!anomalies.length) {
     liste.innerHTML =
       '<li class="conforme">Aucune anomalie détectée : la fiche peut être transmise.</li>';
     return;
   }
+
+  const bloquantes = anomalies.filter((a) => a.niveau === 'bloquant').length;
+  if (bloquantes) {
+    const entete = document.createElement('li');
+    entete.className = 'bloquant recapitulatif';
+    entete.textContent = bloquantes === 1
+      ? '1 point à compléter avant de transmettre — il est encadré en rouge dans la fiche.'
+      : `${bloquantes} points à compléter avant de transmettre — ils sont encadrés en rouge dans la fiche.`;
+    liste.appendChild(entete);
+  }
+
   for (const anomalie of anomalies) {
     const li = document.createElement('li');
     li.className = anomalie.niveau;
     li.textContent = `${anomalie.niveau === 'bloquant' ? 'À corriger' : 'À vérifier'} — ${anomalie.message}`;
     liste.appendChild(li);
+  }
+}
+
+/*
+ * Les champs vises par la classe CSS de leur anomalie. Sur onze lignes et sept
+ * jours, lire un message ne suffit pas a retrouver la case : c'est la case
+ * elle-meme qui doit se signaler.
+ */
+const CLASSES_CHAMP = {
+  nom: '.nom-libre',
+  zone: '.zone',
+  masque: '.masque-type',
+  signature: '.toile-signature, button.signer',
+};
+
+function elementsVises(cible) {
+  if (!cible) return [];
+  if (cible.entete) return [...document.querySelectorAll(`[data-entete="${cible.entete}"]`)];
+
+  const conteneur = document.querySelector(`[data-ligne="${cible.ligne}"]`);
+  if (!conteneur) return [];
+  if (typeof cible.jour === 'number') {
+    return [conteneur.querySelector(`input.heures[data-jour="${cible.jour}"]`)].filter(Boolean);
+  }
+  if (cible.champ) return [...conteneur.querySelectorAll(CLASSES_CHAMP[cible.champ] || `.${cible.champ}`)];
+  return [conteneur];
+}
+
+function designerChamps(anomalies, deplier) {
+  document.querySelectorAll('.champ-bloquant, .champ-alerte').forEach((el) => {
+    el.classList.remove('champ-bloquant', 'champ-alerte');
+  });
+  document.querySelectorAll('.salarie.contient-bloquant').forEach((el) => {
+    el.classList.remove('contient-bloquant');
+  });
+
+  for (const anomalie of anomalies) {
+    const classe = anomalie.niveau === 'bloquant' ? 'champ-bloquant' : 'champ-alerte';
+    for (const element of elementsVises(anomalie.cible)) {
+      // Une alerte ne doit pas effacer le rouge d'un blocage sur le meme champ.
+      if (classe === 'champ-alerte' && element.classList.contains('champ-bloquant')) continue;
+      element.classList.add(classe);
+
+      // En vue cartes, la carte du salarie peut etre repliee : elle porte alors
+      // une pastille rouge. On ne la deplie qu'a la demande — apres un envoi
+      // refuse — pour ne pas tout ouvrir des l'arrivee sur une fiche vierge.
+      const carte = element.closest('.salarie');
+      if (carte && anomalie.niveau === 'bloquant') {
+        carte.classList.add('contient-bloquant');
+        if (deplier) carte.open = true;
+      }
+    }
   }
 }
 
@@ -582,7 +662,17 @@ async function transmettre() {
     await chargerCalendrier();
     message('Fiche transmise au directeur.', 'succes');
   } catch (e) {
-    if (e.anomalies) afficherAnomalies(e.anomalies);
+    if (e.anomalies) {
+      afficherAnomalies(e.anomalies, { deplier: true });
+      // Amener le chef au premier champ fautif plutot qu'a la liste des
+      // messages : c'est la case qu'il doit remplir.
+      const premier = document.querySelector('.champ-bloquant');
+      if (premier) {
+        premier.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (typeof premier.focus === 'function') premier.focus({ preventScroll: true });
+        return message(e.message, 'erreur');
+      }
+    }
     message(e.message, 'erreur');
     $('bloc-controles').scrollIntoView({ behavior: 'smooth' });
   }

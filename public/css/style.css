@@ -88,6 +88,23 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--bleu-clair);
 }
 
+/*
+ * Champs a completer. Le message dans la liste des controles dit quoi corriger,
+ * ces bordures disent ou : sur onze lignes et sept jours, la seconde question
+ * est la plus couteuse. Le fond teinte double le contour, pour rester lisible
+ * la ou la couleur seule ne passe pas (plein soleil, daltonisme).
+ */
+.champ-bloquant, .champ-bloquant:focus {
+  border-color: var(--rouge);
+  background: #fdf1ef;
+  box-shadow: 0 0 0 2px rgba(192, 57, 43, 0.18);
+}
+.champ-alerte, .champ-alerte:focus {
+  border-color: var(--orange);
+  background: #fdf7ee;
+}
+canvas.champ-bloquant, button.champ-bloquant { background: #fdf1ef; }
+
 input:disabled, select:disabled, textarea:disabled { background: #f4f6f9; color: #78828f; }
 textarea { min-height: 80px; resize: vertical; }
 
@@ -121,6 +138,7 @@ button.petit { padding: 6px 10px; font-size: 0.82rem; }
   letter-spacing: 0.03em;
   white-space: nowrap;
 }
+.etat.horsPerimetre { background: #f0f2f5; color: #8a93a0; }
 .etat.manquante { background: #f0f2f5; color: #6b7684; border: 1px dashed #b7c0cc; }
 .etat.brouillon { background: #fdf3e2; color: #96590a; }
 .etat.soumise   { background: #e3effa; color: #10416b; }
@@ -170,6 +188,20 @@ td.weekend { background: #f5f7fa; }
 }
 .salarie > summary::-webkit-details-marker { display: none; }
 .salarie > summary .total { margin-left: auto; color: var(--bleu); font-variant-numeric: tabular-nums; }
+
+/* Carte repliee dont une case reste a completer : le rouge doit se voir sans
+   avoir a la deplier. */
+.salarie.contient-bloquant { border-color: var(--rouge); }
+.salarie.contient-bloquant > summary { background: #fdf1ef; }
+.salarie.contient-bloquant > summary .rang { background: var(--rouge); }
+.salarie.contient-bloquant > summary .nom::after {
+  content: ' à compléter';
+  color: var(--rouge);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
 .salarie > summary .rang {
   width: 26px; height: 26px; border-radius: 50%;
   background: var(--bleu); color: #fff;
@@ -265,6 +297,10 @@ td.weekend { background: #f5f7fa; }
 
 .case-semaine.avenir { opacity: 0.5; background: #fbfcfd; }
 .case-semaine.avenir .numero { color: var(--gris-texte); }
+/* Semaines anterieures a la mise en service : pointees sur papier, elles ne
+   sont pas en retard. Volontairement effacees, mais toujours cliquables. */
+.case-semaine.horsPerimetre { opacity: 0.38; background: #fbfcfd; border-left-color: var(--gris-bord); }
+.case-semaine.horsPerimetre .numero { color: var(--gris-texte); }
 .case-semaine.manquante { border-left-color: #b7c0cc; border-left-style: dashed; }
 .case-semaine.brouillon { border-left-color: var(--orange); background: #fdf9f2; }
 .case-semaine.soumise   { border-left-color: var(--bleu-clair); background: #f3f8fc; }
@@ -331,6 +367,7 @@ td.weekend { background: #f5f7fa; }
   font-size: 0.86rem;
 }
 .anomalies li.bloquant { background: #fbe6e3; border-color: var(--rouge); }
+.anomalies li.recapitulatif { font-weight: 700; }
 .anomalies li.alerte { background: #fdf3e2; border-color: var(--orange); }
 .anomalies li.conforme { background: #e2f4ea; border-color: var(--vert); }
 

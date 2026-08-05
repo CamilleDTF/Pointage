@@ -125,6 +125,24 @@ CREATE INDEX IF NOT EXISTS idx_jours_ligne    ON fiche_jours(ligne_id);
 CREATE INDEX IF NOT EXISTS idx_journal_fiche  ON journal(fiche_id);
 `);
 
+/*
+ * Ajouts de colonnes sur une base deja en service. `ALTER TABLE ADD COLUMN`
+ * n'accepte pas de "IF NOT EXISTS" : on interroge d'abord la table.
+ */
+function ajouterColonne(table, colonne, definition) {
+  const existe = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === colonne);
+  if (!existe) db.exec(`ALTER TABLE ${table} ADD COLUMN ${colonne} ${definition}`);
+}
+
+/*
+ * `saisi` distingue une journee mise a zero par le chef d'equipe — le salarie
+ * n'a pas travaille ce jour-la — d'une journee qu'il n'a pas encore remplie.
+ * Les deux valent zero minute, mais la premiere est complete et la seconde non.
+ * Les fiches anterieures a cette colonne restent lisibles : une journee y ayant
+ * des heures ou un code absence est de toute facon consideree comme renseignee.
+ */
+ajouterColonne('fiche_jours', 'saisi', 'INTEGER NOT NULL DEFAULT 0');
+
 function journaliser(ficheId, userId, action, detail = '') {
   db.prepare(
     'INSERT INTO journal (fiche_id, user_id, action, detail) VALUES (?, ?, ?, ?)'

@@ -54,6 +54,23 @@
     return m ? versTexte(m) : '';
   }
 
+  /**
+   * Valeur affichee dans la case d'une journee. Une journee explicitement mise a
+   * zero par le chef d'equipe s'affiche "0h00" : c'est ce qui la distingue d'une
+   * journee qu'il a simplement oublie de remplir.
+   */
+  function versSaisieJour(jour) {
+    const minutes = Math.max(0, Math.round(Number((jour || {}).minutes) || 0));
+    if (minutes) return versTexte(minutes);
+    return (jour || {}).saisi ? versTexte(0) : '';
+  }
+
+  /** Le chef a-t-il renseigne cette journee, fut-ce a zero ? */
+  function jourRenseigne(jour) {
+    const j = jour || {};
+    return Boolean(j.saisi) || (Number(j.minutes) || 0) > 0 || Boolean(String(j.code_absence || '').trim());
+  }
+
   /** 450 -> 7.5 (colonnes numeriques des exports Excel) */
   function versDecimal(minutes) {
     return Math.round(((Number(minutes) || 0) / 60) * 100) / 100;
@@ -202,12 +219,31 @@
   }
 
   /*
+   * Date de mise en service : avant elle, le pointage se faisait sur papier. Les
+   * semaines anterieures ne sont donc pas des fiches en retard, et le calendrier
+   * ne doit pas les reclamer. Le serveur peut la redefinir (variable
+   * d'environnement DEBUT_SERVICE) si le deploiement glisse.
+   */
+  const DEBUT_SERVICE_PAR_DEFAUT = '2026-09-01';
+
+  /**
+   * Une semaine precede-t-elle la mise en service ? On regarde son dimanche : la
+   * semaine qui contient le jour de bascule est deja du ressort de
+   * l'application, meme si elle a commence la veille.
+   */
+  function semaineAvantService(finSemaine, debutService) {
+    const debut = String(debutService || '').trim();
+    return Boolean(debut) && String(finSemaine || '') < debut;
+  }
+
+  /*
    * Un meme statut ne se dit pas pareil selon qui le lit : une fiche transmise
    * est "en attente de validation" pour le chef qui l'a envoyee, et "a verifier"
    * pour le directeur qui doit s'en occuper.
    */
   const ETIQUETTES_STATUT = {
     chef: {
+      horsPerimetre: 'Avant la mise en service',
       avenir: 'À venir',
       manquante: 'À faire',
       brouillon: 'À compléter',
@@ -216,6 +252,7 @@
       validee: 'Validé',
     },
     directeur: {
+      horsPerimetre: 'Avant la mise en service',
       avenir: 'À venir',
       manquante: 'Non commencée',
       brouillon: 'En cours',
@@ -234,19 +271,31 @@
    * Controles de coherence appliques avant transmission, puis rappeles au
    * directeur. Une anomalie "bloquant" empeche la transmission ; une "alerte"
    * est signalee mais laisse la main.
+   *
+   * Chaque anomalie porte une "cible" : le champ exact qu'elle concerne, pour
+   * que l'interface le souligne au lieu de laisser le chef chercher dans une
+   * liste de messages quelle case, sur onze lignes et sept jours, lui manque.
    */
   function controlerFiche(fiche, lignes) {
     const anomalies = [];
-    const bloquant = (m) => anomalies.push({ niveau: 'bloquant', message: m });
-    const alerte = (m) => anomalies.push({ niveau: 'alerte', message: m });
+    const bloquant = (m, cible) => anomalies.push({ niveau: 'bloquant', message: m, cible: cible || null });
+    const alerte = (m, cible) => anomalies.push({ niveau: 'alerte', message: m, cible: cible || null });
 
-    if (!String(fiche.chantier || '').trim()) bloquant('Le nom du chantier est obligatoire.');
-    if (!String(fiche.ville || '').trim()) bloquant('La ville est obligatoire.');
+    if (!String(fiche.chantier || '').trim()) {
+      bloquant('Le nom du chantier est obligatoire.', { entete: 'chantier' });
+    }
+    if (!String(fiche.ville || '').trim()) {
+      bloquant('La ville est obligatoire.', { entete: 'ville' });
+    }
 
-    const lignesRemplies = lignes.filter((l) => String(l.nom_affiche || '').trim());
-    if (lignesRemplies.length === 0) bloquant('Aucun salarie renseigne sur la fiche.');
+    const remplies = lignes
+      .map((ligne, index) => ({ ligne, index }))
+      .filter(({ ligne }) => String(ligne.nom_affiche || '').trim());
+    if (remplies.length === 0) {
+      bloquant('Aucun salarie renseigne sur la fiche.', { ligne: 0, champ: 'nom' });
+    }
 
-    for (const ligne of lignesRemplies) {
+    for (const { ligne, index } of remplies) {
       const nom = ligne.nom_affiche.trim();
       let totalSemaine = 0;
 
@@ -257,33 +306,38 @@
         totalSemaine += minutes;
 
         if (code && !CODES_VALIDES.includes(code)) {
-          bloquant(`${nom} - ${JOURS[j]} : code absence "${code}" inconnu.`);
+          bloquant(`${nom} - ${JOURS[j]} : code absence "${code}" inconnu.`, { ligne: index, jour: j });
         }
-        if (minutes === 0 && !code && j <= 4) {
-          bloquant(`${nom} - ${JOURS[j]} : ni heures ni code absence (obligatoire du lundi au vendredi).`);
+        // Une journee non travaillee se declare en saisissant 0 : c'est ce qui
+        // permet de distinguer "il n'a pas travaille" de "j'ai oublie ce jour".
+        if (!jourRenseigne(jour) && j <= 4) {
+          bloquant(
+            `${nom} - ${JOURS[j]} : journee non renseignee. Saisissez les heures, 0 si le jour n'est pas travaille, ou un code absence.`,
+            { ligne: index, jour: j }
+          );
         }
         if (minutes > 0 && code) {
-          alerte(`${nom} - ${JOURS[j]} : heures ET code absence "${code}" saisis simultanement.`);
+          alerte(`${nom} - ${JOURS[j]} : heures ET code absence "${code}" saisis simultanement.`, { ligne: index, jour: j });
         }
         if (minutes > 12 * 60) {
-          alerte(`${nom} - ${JOURS[j]} : ${versTexte(minutes)} sur la journee, a confirmer.`);
+          alerte(`${nom} - ${JOURS[j]} : ${versTexte(minutes)} sur la journee, a confirmer.`, { ligne: index, jour: j });
         }
       }
 
       if (totalSemaine > 48 * 60) {
-        alerte(`${nom} : ${versTexte(totalSemaine)} sur la semaine, au-dela du plafond de 48h.`);
+        alerte(`${nom} : ${versTexte(totalSemaine)} sur la semaine, au-dela du plafond de 48h.`, { ligne: index });
       }
       if (ligne.jours_zone > 7) {
-        bloquant(`${nom} : ${ligne.jours_zone} jours en zone declares pour une semaine de 7 jours.`);
+        bloquant(`${nom} : ${ligne.jours_zone} jours en zone declares pour une semaine de 7 jours.`, { ligne: index, champ: 'zone' });
       }
       if (ligne.jours_zone > 0 && !ligne.type_masque) {
-        bloquant(`${nom} : jours en zone declares sans type de masque (VA ou AA).`);
+        bloquant(`${nom} : jours en zone declares sans type de masque (VA ou AA).`, { ligne: index, champ: 'masque' });
       }
       if (ligne.type_masque && !TYPES_MASQUE.includes(ligne.type_masque)) {
-        bloquant(`${nom} : type de masque "${ligne.type_masque}" invalide (VA ou AA).`);
+        bloquant(`${nom} : type de masque "${ligne.type_masque}" invalide (VA ou AA).`, { ligne: index, champ: 'masque' });
       }
       if (!ligne.signature) {
-        alerte(`${nom} : signature du salarie manquante.`);
+        alerte(`${nom} : signature du salarie manquante.`, { ligne: index, champ: 'signature' });
       }
     }
 
@@ -300,6 +354,8 @@
     versMinutes,
     versTexte,
     versSaisie,
+    versSaisieJour,
+    jourRenseigne,
     versDecimal,
     lundiDeLaSemaine,
     datesDeLaSemaine,
@@ -317,6 +373,8 @@
     sansAccents,
     MOIS,
     nombreSemainesISO,
+    DEBUT_SERVICE_PAR_DEFAUT,
+    semaineAvantService,
     ETIQUETTES_STATUT,
     etiquetteStatut,
   };

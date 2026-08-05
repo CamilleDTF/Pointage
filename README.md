@@ -126,6 +126,11 @@ corriger, la valider, ou la lui renvoyer pour correction avec un motif.
 - Heures acceptées en `7h30`, `7:30`, `7,5` ou `7.5` ; le total se recalcule à la volée.
 - Un code absence par jour, repris de la fiche papier (`ACH`, `F`, `NJ`, `VM`,
   `AT`, `EV`, `FOR`, `CSS`, `AA`).
+- **Un jour non travaillé se déclare en saisissant `0`.** La case affiche alors
+  `0h00`, ce qui la distingue d'une case que personne n'a remplie : une fiche
+  d'un seul opérateur avec un seul jour travaillé est complète dès lors que les
+  autres jours portent un `0` ou un code absence. C'est la colonne `saisi` de
+  `fiche_jours` qui porte cette distinction.
 - Signature tactile par salarié, plus celle du responsable de chantier.
 - **Deux présentations de la même fiche**, choisies automatiquement selon la
   taille de l'écran et permutables d'un bouton :
@@ -135,13 +140,24 @@ corriger, la valider, ou la lui renvoyer pour correction avec un motif.
     dès 1024 px de large.
 - Filet de sécurité réseau : si la connexion tombe en pleine saisie, le travail est
   conservé sur l'appareil et transmis dès son rétablissement.
-- Le bouton *Contrôler et transmettre* refuse une fiche incomplète et affiche
-  précisément ce qui manque.
+- Le bouton *Contrôler et transmettre* refuse une fiche incomplète et **encadre
+  en rouge les cases à compléter**, dans la grille comme dans les cartes : le
+  message dit quoi corriger, la bordure dit où. Chaque anomalie porte la
+  référence du champ qu'elle vise (`cible` dans `controlerFiche`), et l'envoi
+  refusé amène directement à la première case fautive. En vue cartes, une carte
+  repliée qui contient une case à compléter se signale d'un liseré rouge et de
+  la mention *à compléter*.
 - **Calendrier de l'année** — toutes les semaines avec l'état de leur fiche, en
   un écran : *à faire*, *à compléter*, *en attente de validation*, *à corriger*,
   *validé*. Les semaines non encore arrivées sont marquées *à venir* plutôt
   qu'en retard. Un clic sur une semaine ouvre sa fiche. Déplié sur grand écran,
   replié sur téléphone — le résumé chiffré reste visible dans les deux cas.
+- **Mise en service au 1er septembre 2026** — avant cette date le pointage se
+  faisait sur papier. Ces semaines-là apparaissent en gris et ne sont jamais
+  comptées comme des fiches en retard. La date se règle par la variable
+  d'environnement `DEBUT_SERVICE` (`AAAA-MM-JJ`) si le déploiement glisse ; une
+  semaine à cheval appartient à l'application dès lors que son dimanche tombe
+  après la bascule.
 
 Un même statut ne se dit pas pareil selon qui le lit : une fiche transmise est
 « en attente de validation » pour le chef qui l'a envoyée, et « à vérifier » pour
@@ -274,6 +290,7 @@ chaque correction est tracée dans le journal.
 | `SESSION_SECRET` | Clé de signature des sessions | générée dans `DATA_DIR/session.key` |
 | `NODE_ENV` | `production` : messages d'erreur non détaillés | — |
 | `COOKIE_SECURE` | `true` force le cookie `Secure`, même joint en HTTP | déduit du protocole utilisé |
+| `DEBUT_SERVICE` | Première semaine attendue dans l'application (`AAAA-MM-JJ`) | `2026-09-01` |
 
 Mise en production sans abonnement : voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 
