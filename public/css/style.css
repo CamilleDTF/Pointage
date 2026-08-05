@@ -165,6 +165,45 @@ tbody tr:hover { background: #f8fafc; }
 td.num, th.num { text-align: center; }
 td.weekend { background: #f5f7fa; }
 
+/* ------------------- Visa du conducteur de travaux ------------------------ */
+
+.etat.attenteVisa { background: #efe6fa; color: #5b3a91; }
+.etat.visee       { background: #e3effa; color: #10416b; }
+.case-semaine.attenteVisa { border-left-color: #7d5bbe; background: #faf7fe; }
+.case-semaine.visee       { border-left-color: var(--bleu-clair); background: #f3f8fc; }
+
+.bandeau-visa {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border-left: 4px solid;
+  font-size: 0.86rem;
+}
+.bandeau-visa.vise    { background: #e2f4ea; border-color: var(--vert); color: #14653a; }
+.bandeau-visa.attente { background: #efe6fa; border-color: #7d5bbe; color: #4c2f7c; }
+.bandeau-visa.aucun   { background: #f0f2f5; border-color: #b7c0cc; color: var(--gris-texte); }
+
+/* Valeur en lecture seule sur l'ecran du conducteur : ni champ, ni bordure. */
+.valeur-lecture {
+  padding: 9px 0;
+  font-weight: 600;
+  border-bottom: 1px solid var(--gris-bord);
+}
+
+/* Correction d'identite depuis la fiche du chef d'equipe. */
+.champ-nom { display: flex; gap: 4px; align-items: center; }
+.champ-nom .nom-libre { flex: 1; min-width: 0; }
+.corriger-nom {
+  width: auto;
+  padding: 6px 9px;
+  border: 1px solid var(--orange);
+  background: #fdf3e2;
+  color: #96590a;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
 /* ------------------- Parametres : onglets et indicateurs ------------------ */
 
 .onglets { display: flex; gap: 6px; flex-wrap: wrap; }

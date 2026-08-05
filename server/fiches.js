@@ -326,7 +326,8 @@ function listerFiches({ annee, semaine, statut, chefId } = {}) {
   return db
     .prepare(
       `SELECT f.id, f.annee, f.semaine, f.chantier, f.ville, f.statut, f.soumise_le,
-              f.validee_le, f.motif_rejet, f.chef_id, u.nom AS chef_nom,
+              f.validee_le, f.motif_rejet, f.chef_id, f.visa_statut, f.visa_le,
+              f.visa_courriel, f.visa_commentaire, f.visa_envoye_le, u.nom AS chef_nom,
               (SELECT COUNT(*) FROM fiche_lignes l
                 WHERE l.fiche_id = f.id AND TRIM(l.nom_affiche) <> '') AS nb_salaries,
               (SELECT COALESCE(SUM(j.minutes), 0) FROM fiche_jours j

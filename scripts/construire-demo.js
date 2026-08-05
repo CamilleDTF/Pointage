@@ -102,18 +102,36 @@ function preparerDirecteur() {
     "        Demo.indisponible('Fiche Excel');",
     'export Excel d’une fiche'
   );
-  source = adapter(
-    source,
-    "  window.location.href = `/api/export/mois.xlsx?annee=${$('annee-mois').value}&mois=${$('mois').value}&version=${version}`;",
-    "  Demo.indisponible(`Tableau mensuel (version ${version})`);",
-    'téléchargement du tableau mensuel'
-  );
   // La demonstration n'a pas d'adresses : la navigation passe par l'aiguillage.
   source = adapter(
     source,
     "surClic('btn-admin', () => { location.href = '/parametres.html'; });",
     "surClic('btn-admin', () => Demo.aller('parametres'));",
     'accès aux paramètres'
+  );
+  source = adapter(
+    source,
+    "  surClic(bouton, () => { location.href = '/mensuel.html'; });",
+    "  surClic(bouton, () => Demo.aller('mensuel'));",
+    'accès au tableau mensuel'
+  );
+  return source;
+}
+
+function preparerMensuel() {
+  let source = lire('public', 'js', 'mensuel.js');
+  source = adapter(source, "location.href = '/chef.html';", "Demo.aller('chef');", 'redirection chef');
+  source = adapter(
+    source,
+    "surClic('btn-retour', () => { location.href = '/directeur.html'; });",
+    "surClic('btn-retour', () => Demo.aller('directeur'));",
+    'retour au tableau de bord'
+  );
+  source = adapter(
+    source,
+    '  window.location.href = `/api/export/mois.xlsx?${parametres}`;',
+    "  Demo.indisponible(`Tableau mensuel (version ${version})`);",
+    'téléchargement du tableau mensuel'
   );
   return source;
 }
@@ -148,9 +166,11 @@ const remplacements = {
   GABARIT_CHEF: JSON.stringify(corpsDePage('chef.html')),
   GABARIT_DIRECTEUR: JSON.stringify(corpsDePage('directeur.html')),
   GABARIT_PARAMETRES: JSON.stringify(corpsDePage('parametres.html')),
+  GABARIT_MENSUEL: JSON.stringify(corpsDePage('mensuel.html')),
   SCRIPT_CHEF: JSON.stringify(preparerChef()),
   SCRIPT_DIRECTEUR: JSON.stringify(preparerDirecteur()),
   SCRIPT_PARAMETRES: JSON.stringify(preparerParametres()),
+  SCRIPT_MENSUEL: JSON.stringify(preparerMensuel()),
 };
 
 let page = lire('demo', 'coquille.html');

@@ -109,6 +109,18 @@ CREATE TABLE IF NOT EXISTS fiche_jours (
   UNIQUE (ligne_id, jour)
 );
 
+/*
+ * Conducteurs de travaux. Ils visent les fiches avant le directeur, mais n'ont
+ * pas de compte : tout passe par un lien signe recu par courriel. Un compte de
+ * plus par personne, c'est un code de plus a retenir et a reinitialiser.
+ */
+CREATE TABLE IF NOT EXISTS conducteurs (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  nom     TEXT    NOT NULL,
+  courriel TEXT   NOT NULL,
+  actif   INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS vehicules (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   immatriculation TEXT   NOT NULL UNIQUE,
@@ -173,6 +185,29 @@ ajouterColonne('fiches', 'zone_deplacement', "TEXT NOT NULL DEFAULT ''");
  * liste initiale vient du parc communique par la direction ; elle se modifie
  * ensuite depuis l'ecran Parametres, sans toucher au code.
  */
+/*
+ * Visa du conducteur de travaux, etape intercalee entre la transmission par le
+ * chef et la validation par le directeur.
+ *
+ * Le visa vit dans ses propres colonnes plutot que dans `statut` : une fiche
+ * reste "soumise" pendant tout ce temps, et le visa est une seconde dimension —
+ * ce qui evite de reecrire la contrainte de statut, et laisse le directeur
+ * valider sans visa quand le conducteur est absent.
+ *
+ * `visa_jeton` est le secret du lien envoye par courriel. Il est regenere a
+ * chaque transmission : un lien d'une version anterieure de la fiche cesse
+ * aussitot de fonctionner.
+ */
+ajouterColonne('fiches', 'visa_statut', "TEXT NOT NULL DEFAULT ''"); // '', 'attente', 'vise'
+ajouterColonne('fiches', 'visa_jeton', 'TEXT');
+ajouterColonne('fiches', 'visa_le', 'TEXT');
+ajouterColonne('fiches', 'visa_courriel', "TEXT NOT NULL DEFAULT ''");
+ajouterColonne('fiches', 'visa_commentaire', "TEXT NOT NULL DEFAULT ''");
+ajouterColonne('fiches', 'visa_envoye_le', 'TEXT');
+
+/* Le conducteur de travaux dont depend un chef d'equipe. */
+ajouterColonne('utilisateurs', 'conducteur_id', 'INTEGER REFERENCES conducteurs(id) ON DELETE SET NULL');
+
 const PARC_INITIAL = [
   ['GR-686-YM', 'Renault', 'Trafic', 'Diesel'],
   ['GR-714-YM', 'Renault', 'Trafic', 'Diesel'],

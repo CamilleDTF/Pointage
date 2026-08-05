@@ -24,6 +24,7 @@
       <div class="onglets" id="onglets-parametres">
         <button class="onglet actif" type="button" data-onglet="effectif">Personnel et équipes</button>
         <button class="onglet" type="button" data-onglet="comptes">Comptes des chefs</button>
+        <button class="onglet" type="button" data-onglet="conducteurs">Conducteurs de travaux</button>
         <button class="onglet" type="button" data-onglet="vehicules">Véhicules</button>
         <button class="onglet" type="button" data-onglet="indicateurs">Indicateurs de suivi</button>
       </div>
@@ -65,11 +66,40 @@
       </div>
     </section>
 
+    <section class="carte panneau masque" id="panneau-conducteurs">
+      <h2>Conducteurs de travaux</h2>
+      <p class="aide" id="aide-envoi"></p>
+      <p class="aide">
+        Ils visent les fiches avant vous. Pas de compte à créer : chaque transmission leur
+        envoie un courriel contenant le pointage et deux boutons — viser, ou renvoyer au chef
+        avec un commentaire.
+      </p>
+      <div class="enveloppe-table"><table id="table-conducteurs">
+        <thead><tr><th>Nom</th><th>Adresse de courriel</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <div class="rangee" style="margin-top:10px">
+        <input id="c-nom" placeholder="NOM Prénom" style="flex:1;min-width:140px">
+        <input id="c-courriel" type="email" placeholder="prenom.nom@societe.fr" style="flex:2;min-width:200px">
+        <button class="petit principal" id="btn-ajout-conducteur" type="button">Ajouter</button>
+      </div>
+
+      <h3 style="margin-top:22px;font-size:0.9rem;color:var(--gris-texte)">Qui vise les fiches de qui</h3>
+      <p class="aide">
+        Un chef d'équipe sans conducteur rattaché transmet directement à la direction :
+        l'étape du visa est alors sautée, sans blocage.
+      </p>
+      <div class="enveloppe-table"><table id="table-rattachement">
+        <thead><tr><th>Chef d'équipe</th><th>Conducteur de travaux</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </section>
+
     <section class="carte panneau masque" id="panneau-vehicules">
       <h2>Parc de véhicules</h2>
       <p class="aide">
         Les chefs choisissent une immatriculation dans cette liste ; le type de véhicule
-        se remplit alors tout seul sur la fiche.
+        se remplit alors tout seul sur la fiche. Chaque case se corrige directement.
       </p>
       <div class="enveloppe-table"><table id="table-vehicules">
         <thead><tr>

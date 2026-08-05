@@ -37,9 +37,27 @@ async function demarrer() {
   $('entete-nom').textContent = `${utilisateur.nom} · version ${reference.version}`;
   $('annee').value = reference.semaineCourante.annee;
   $('semaine').value = reference.semaineCourante.semaine;
-  preparerSelecteurMois();
   await charger();
   await apercuMois();
+}
+
+/** Ce que contient le mois en cours, annonce sur le tableau de bord. */
+async function apercuMois() {
+  const zone = $('apercu-mois');
+  if (!zone) return;
+  const maintenant = new Date();
+  try {
+    const a = await API.get(
+      `/api/export/mois-apercu?annee=${maintenant.getFullYear()}&mois=${maintenant.getMonth() + 1}`
+    );
+    zone.textContent = a.nbSalaries
+      ? `${Regles.MOIS[a.mois - 1]} : ${a.nbSalaries} salarié(s), ${versTexte(a.minutes)} sur les fiches validées.`
+      : `${Regles.MOIS[a.mois - 1]} : aucune fiche validée pour l'instant.`;
+    zone.style.color = a.nbSalaries ? '' : 'var(--orange)';
+  } catch (e) {
+    zone.textContent = e.message;
+    zone.style.color = 'var(--rouge)';
+  }
 }
 
 surClic('btn-charger', charger);
@@ -49,196 +67,8 @@ surClic('btn-suivante', () => decalerSemaine(1));
 surClic('btn-admin', () => { location.href = '/parametres.html'; });
 surClic('btn-export-xlsx', () => exporter('xlsx'));
 surClic('btn-export-csv', () => exporter('csv'));
-surClic('btn-export-mois', telechargerMois);
-surClic('btn-voir-mois', () => afficherMois());
-surClic('btn-verrouiller', verrouillerMontants);
-surEvenement('version-mois', 'change', () => afficherMois());
-surEvenement('montant-panier', 'change', () => afficherMois());
-for (const champ of ['mois', 'annee-mois']) {
-  surEvenement(champ, 'change', () => { apercuMois(); if (moisAffiche) afficherMois(); });
-}
-
-/* -------------------- Tableau mensuel consultable a l'ecran --------------- */
-
-let moisAffiche = null;
-
-const versionDemandee = () => ($('version-mois') ? $('version-mois').value : 'public');
-const parametresMois = () => {
-  const p = new URLSearchParams({
-    annee: $('annee-mois').value,
-    mois: $('mois').value,
-    version: versionDemandee(),
-  });
-  if (versionDemandee() === 'direction') p.set('panier', $('montant-panier').value || 0);
-  return p;
-};
-
-/**
- * La version direction porte les salaires : elle demande le code du directeur,
- * meme si sa session est deja ouverte. Une session dure trente jours ; un
- * salaire affiche sur un ecran partage n'attend pas si longtemps.
- */
-async function afficherMois() {
-  const zone = $('tableau-mois');
-  if (!zone) return;
-  try {
-    moisAffiche = await API.get(`/api/mois?${parametresMois()}`);
-  } catch (erreur) {
-    if (!erreur.anomalies && erreur.statut === 403) {
-      const ouvert = await demanderCodeDirecteur();
-      if (ouvert) return afficherMois();
-      $('version-mois').value = 'public';
-      return afficherMois();
-    }
-    message(erreur.message, 'erreur');
-    return;
-  }
-  majBlocPanier();
-  zone.innerHTML = gabaritTableauMois(moisAffiche);
-}
-
-async function demanderCodeDirecteur() {
-  const pin = prompt('Les montants demandent votre code directeur :');
-  if (!pin) return false;
-  try {
-    const r = await API.post('/api/paie/deverrouiller', { pin });
-    message(`Montants visibles pendant ${r.dureeMinutes} minutes.`, 'succes');
-    return true;
-  } catch (e) {
-    message(e.message, 'erreur');
-    return false;
-  }
-}
-
-async function verrouillerMontants() {
-  await API.post('/api/paie/verrouiller').catch(() => {});
-  $('version-mois').value = 'public';
-  message('Montants masqués.', 'succes', 2500);
-  await afficherMois();
-}
-
-function majBlocPanier() {
-  const direction = moisAffiche && moisAffiche.version === 'direction';
-  const bloc = $('bloc-panier');
-  if (bloc) bloc.classList.toggle('masque', !direction);
-}
-
-async function telechargerMois() {
-  const version = versionDemandee();
-  if (version === 'direction') {
-    // On verifie l'acces avant de lancer le telechargement : un navigateur ne
-    // sait pas montrer un 403 recu sur un lien de fichier.
-    try {
-      await API.get(`/api/mois?annee=${$('annee-mois').value}&mois=${$('mois').value}&version=direction`);
-    } catch (e) {
-      if (e.statut === 403 && !(await demanderCodeDirecteur())) return;
-      else if (e.statut !== 403) return message(e.message, 'erreur');
-    }
-  }
-  window.location.href = `/api/export/mois.xlsx?annee=${$('annee-mois').value}&mois=${$('mois').value}&version=${version}`;
-}
-
-const euros = (v) => `${(Number(v) || 0).toFixed(2).replace('.', ',')} €`;
-const nombre = (v) => (Number(v) ? String(Math.round(Number(v) * 100) / 100).replace('.', ',') : '—');
-
-function gabaritTableauMois(mois) {
-  if (!mois.salaries.length) {
-    return '<p class="vide">Aucune fiche validée sur les six semaines de ce mois.</p>';
-  }
-  const direction = mois.version === 'direction';
-
-  const entetes = [
-    'Salarié', ...mois.semaines.map((s) => `S${s.semaine}`),
-    'Total', '25 %', '50 %', 'Route', 'Trajet', 'Amiante 1', 'Amiante 2',
-    'Panier', 'GD 72', 'GD 80', 'Fériés',
-    ...(direction ? ['Taux', 'S. brut', 'H. sup', 'Primes', 'Paniers €', 'GD €', 'Trajet €', 'Total brut', 'Total net'] : []),
-  ];
-
-  const lignes = mois.salaries
-    .map((s) => {
-      const base = [
-        `<td>${echapper(`${s.nom} ${s.prenom}`.trim())}</td>`,
-        ...s.semaines.map((m) => `<td class="num">${m ? versTexte(m) : '—'}</td>`),
-        `<td class="num total">${versTexte(s.minutesMois)}</td>`,
-        `<td class="num">${s.minutes25 ? versTexte(s.minutes25) : '—'}</td>`,
-        `<td class="num">${s.minutes50 ? versTexte(s.minutes50) : '—'}</td>`,
-        `<td class="num">${s.minutesRoute ? versTexte(s.minutesRoute) : '—'}</td>`,
-        `<td class="num">${s.minutesTrajet ? versTexte(s.minutesTrajet) : '—'}</td>`,
-        `<td class="num">${nombre(s.joursAmiante1)}</td>`,
-        `<td class="num">${nombre(s.joursAmiante2)}</td>`,
-        `<td class="num">${nombre(s.joursPanier)}</td>`,
-        `<td class="num">${nombre(s.joursGD72)}</td>`,
-        `<td class="num">${nombre(s.joursGD80)}</td>`,
-        `<td class="num">${nombre(s.joursFeries)}</td>`,
-      ];
-      if (!direction) return `<tr>${base.join('')}</tr>`;
-
-      // Sans taux horaire, rien n'est calcule : une case vide vaut mieux qu'un
-      // salaire faux, et le manque doit se voir.
-      if (s.tauxManquant) {
-        return `<tr>${base.join('')}<td class="num manque" colspan="9">Taux horaire à renseigner dans Paramètres</td></tr>`;
-      }
-      return `<tr>${base.join('')}
-        <td class="num">${euros(s.tauxHoraire)}</td>
-        <td class="num">${euros(s.salaireBrut)}</td>
-        <td class="num">${euros(s.heuresSupBrut)}</td>
-        <td class="num">${euros(s.primeAmiante)}</td>
-        <td class="num">${euros(s.paniers)}</td>
-        <td class="num">${euros(s.grandDeplacement)}</td>
-        <td class="num">${euros(s.trajet)}</td>
-        <td class="num total">${euros(s.totalBrut)}</td>
-        <td class="num total">${euros(s.totalNet)}</td>
-      </tr>`;
-    })
-    .join('');
-
-  const cumul = (champ) => mois.salaries.reduce((t, s) => t + (Number(s[champ]) || 0), 0);
-  const pied = direction
-    ? `<tr class="cumul"><th colspan="${entetes.length - 2}">Masse salariale</th>
-         <th class="num">${euros(cumul('totalBrut'))}</th>
-         <th class="num">${euros(cumul('totalNet'))}</th></tr>`
-    : `<tr class="cumul"><th>${mois.salaries.length} salarié(s)</th>
-         <th class="num" colspan="${mois.semaines.length}"></th>
-         <th class="num">${versTexte(cumul('minutesMois'))}</th>
-         <th colspan="${entetes.length - mois.semaines.length - 3}"></th></tr>`;
-
-  return `
-    <p class="aide">
-      ${direction
-        ? 'Version direction — montants visibles. Ils se masquent seuls au bout de 20 minutes.'
-        : 'Version publique — aucun montant, aucun taux horaire.'}
-    </p>
-    <div class="enveloppe-table">
-      <table class="grille-mois">
-        <thead><tr>${entetes.map((e) => `<th>${echapper(e)}</th>`).join('')}</tr></thead>
-        <tbody>${lignes}</tbody>
-        <tfoot>${pied}</tfoot>
-      </table>
-    </div>`;
-}
-
-/** Annonce ce que contiendra le tableau mensuel avant de le telecharger. */
-async function apercuMois() {
-  const zone = $('apercu-mois');
-  try {
-    const a = await API.get(`/api/export/mois-apercu?annee=${$('annee-mois').value}&mois=${$('mois').value}`);
-    const semaines = a.semaines.map((s) => `S${s.semaine}`).join(', ');
-    zone.textContent = a.nbSalaries
-      ? `${a.nbSalaries} salarié(s), ${versTexte(a.minutes)} au total — semaines ${semaines}.`
-      : `Aucune fiche validée sur les semaines ${semaines}.`;
-    zone.style.color = a.nbSalaries ? '' : 'var(--orange)';
-  } catch (e) {
-    zone.textContent = e.message;
-    zone.style.color = 'var(--rouge)';
-  }
-}
-
-function preparerSelecteurMois() {
-  const courant = new Date();
-  $('mois').innerHTML = Regles.MOIS
-    .map((nom, i) => `<option value="${i + 1}"${i === courant.getMonth() ? ' selected' : ''}>${nom}</option>`)
-    .join('');
-  $('annee-mois').value = courant.getFullYear();
+for (const bouton of ['btn-mensuel', 'btn-mensuel-haut']) {
+  surClic(bouton, () => { location.href = '/mensuel.html'; });
 }
 
 function decalerSemaine(pas) {
@@ -315,11 +145,58 @@ function afficherSuivi() {
         <td>${echapper(f ? f.ville : '—')}</td>
         <td class="num">${f ? f.nb_salaries : '—'}</td>
         <td class="num">${f ? versTexte(f.total_minutes) : '—'}</td>
-        <td>${badgeStatut(entree.statut)}</td>
+        <td>${badgeStatut(f ? Regles.etatAffiche(f) : entree.statut)}</td>
         <td>${f ? `<button class="petit" onclick="allerA(${f.id})">Ouvrir</button>` : '<span class="aide">à relancer</span>'}</td>
       </tr>`;
     })
     .join('');
+}
+
+/** Renvoie un lien de visa au conducteur, et affiche ce lien en cas d'echec d'envoi. */
+async function relancerVisa(ficheId) {
+  try {
+    const { visa } = await API.post(`/api/fiches/${ficheId}/relancer-visa`);
+    if (!visa.demande) {
+      message("Aucun conducteur de travaux n'est rattaché à ce chef d'équipe.", 'erreur', 7000);
+    } else if (visa.envoye) {
+      message(`Nouveau lien envoyé à ${visa.conducteur} (${visa.courriel}).`, 'succes', 6000);
+    } else {
+      // Sans serveur d'envoi, le lien reste utile : il se transmet a la main.
+      afficherLienVisa(visa);
+    }
+    await charger();
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
+}
+
+function afficherLienVisa(visa) {
+  const fenetre = document.createElement('div');
+  fenetre.className = 'fenetre';
+  fenetre.innerHTML = `
+    <div class="fenetre-corps">
+      <h2>Le courriel n'a pas pu partir</h2>
+      <p class="aide">
+        Aucun serveur d'envoi n'est configuré, ou il a refusé le message.
+        Transmettez ce lien à ${echapper(visa.conducteur)} (${echapper(visa.courriel)}) par vos propres moyens :
+        il ouvre la fiche et permet de la viser.
+      </p>
+      <textarea readonly style="min-height:90px;font-family:monospace;font-size:0.8rem">${echapper(visa.lien || '')}</textarea>
+      <div class="rangee" style="margin-top:12px">
+        <button class="petit" type="button" data-copier>Copier le lien</button>
+        <span class="pousse"></span>
+        <button class="petit principal" type="button" data-fermer>Fermer</button>
+      </div>
+    </div>`;
+  document.body.appendChild(fenetre);
+
+  fenetre.querySelector('[data-copier]').addEventListener('click', async () => {
+    await navigator.clipboard.writeText(visa.lien || '').catch(() => {});
+    message('Lien copié.', 'succes', 2500);
+  });
+  const fermer = () => fenetre.remove();
+  fenetre.querySelector('[data-fermer]').addEventListener('click', fermer);
+  fenetre.addEventListener('click', (e) => { if (e.target === fenetre) fermer(); });
 }
 
 function allerA(ficheId) {
@@ -384,12 +261,13 @@ function construireFiche(fiche) {
     <summary style="cursor:pointer;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
       <strong>${echapper(fiche.chef_nom)}</strong>
       <span>${echapper(fiche.chantier || 'chantier non renseigné')} — ${echapper(fiche.ville)}</span>
-      ${badgeStatut(fiche.statut)}
+      ${badgeStatut(Regles.etatAffiche(fiche))}
       <span class="pousse aide" style="margin:0">${lignes.length} salarié(s) · ${versTexte(fiche.total_minutes)}</span>
     </summary>
 
     <div style="margin-top:14px">
       ${fiche.motif_rejet ? `<p class="aide" style="color:var(--rouge);font-weight:600">Renvoyée : ${echapper(fiche.motif_rejet)}</p>` : ''}
+      ${bandeauVisa(fiche)}
       <div class="grille trois" style="margin-bottom:12px">
         <div><label>Chantier</label><input class="entete" data-champ="chantier" value="${echapper(fiche.chantier)}"></div>
         <div><label>Ville</label><input class="entete" data-champ="ville" value="${echapper(fiche.ville)}"></div>
@@ -422,14 +300,43 @@ function construireFiche(fiche) {
         <span class="aide etat-enregistrement" style="margin:0"></span>
         <span class="pousse"></span>
         <button class="petit" data-action="excel">Fiche Excel</button>
+        ${fiche.visa_statut === 'attente' ? '<button class="petit" data-action="relancer">Relancer le conducteur</button>' : ''}
         <button class="petit" data-action="rouvrir">Rouvrir pour le chef</button>
         <button class="petit danger" data-action="rejeter">Renvoyer au chef</button>
-        <button class="petit valide" data-action="valider">Valider</button>
+        <button class="petit valide" data-action="valider">${
+          fiche.visa_statut === 'attente' ? 'Valider sans le visa' : 'Valider'
+        }</button>
       </div>
     </div>`;
 
   cablerFiche(bloc, fiche);
   return bloc;
+}
+
+/**
+ * L'etat du visa du conducteur de travaux, en une ligne. Le directeur doit
+ * pouvoir dire d'un coup d'oeil s'il attend quelqu'un — et qui.
+ */
+function bandeauVisa(fiche) {
+  if (fiche.statut !== 'soumise' && !fiche.visa_le) return '';
+
+  if (fiche.visa_statut === 'vise') {
+    return `<p class="bandeau-visa vise">
+        ✓ Visée par le conducteur de travaux${fiche.visa_le ? ` le ${echapper(fiche.visa_le.slice(0, 10))}` : ''}.
+        ${fiche.visa_commentaire ? `Son commentaire : ${echapper(fiche.visa_commentaire)}` : ''}
+      </p>`;
+  }
+  if (fiche.visa_statut === 'attente') {
+    return `<p class="bandeau-visa attente">
+        En attente du visa de ${echapper(fiche.visa_courriel || 'du conducteur de travaux')}${
+      fiche.visa_envoye_le ? `, envoyé le ${echapper(fiche.visa_envoye_le.slice(0, 10))}` : ''
+    }. Vous pouvez valider sans attendre s'il n'est pas joignable.
+      </p>`;
+  }
+  return `<p class="bandeau-visa aucun">
+      Aucun conducteur de travaux n'est rattaché à ce chef d'équipe : la fiche vous est venue directement.
+      Le rattachement se règle dans Paramètres.
+    </p>`;
 }
 
 function cablerFiche(bloc, fiche) {
@@ -470,6 +377,11 @@ function cablerFiche(bloc, fiche) {
       if (action === 'excel') {
         window.location.href = `/api/export/fiche/${fiche.id}.xlsx`;
         return;
+      }
+      if (action === 'relancer') return relancerVisa(fiche.id);
+      if (action === 'valider' && fiche.visa_statut === 'attente') {
+        const nom = fiche.visa_courriel || 'le conducteur de travaux';
+        if (!confirm(`${nom} n'a pas encore visé cette fiche. La valider quand même ?`)) return;
       }
       await enregistrerFiche(bloc, fiche.id);
       let motif = '';

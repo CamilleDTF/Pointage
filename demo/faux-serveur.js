@@ -81,7 +81,17 @@
   const fiches = [];
   let prochainId = 1;
   let session = null;
-  let accesPaie = false; // ouvert par le code du directeur, comme sur l'application
+  const CONDUCTEURS = [
+    { id: 1, nom: 'MOREAU Paul', courriel: 'paul.moreau@exemple.fr', actif: 1 },
+    { id: 2, nom: 'RENAUD Sophie', courriel: 'sophie.renaud@exemple.fr', actif: 1 },
+  ];
+  // Un chef sur deux depend d'un conducteur : la demonstration montre les deux
+  // circuits, avec et sans etape de visa.
+  utilisateurs.filter((u) => u.role === 'chef').forEach((u, i) => {
+    u.conducteur_id = i % 2 === 0 ? CONDUCTEURS[(i / 2) % 2 | 0].id : null;
+  });
+
+  let billetPaie = null; // billet a usage unique, comme sur l'application
 
   const maintenant = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
   const copie = (v) => JSON.parse(JSON.stringify(v));
@@ -104,6 +114,11 @@
       chantier: '',
       ville: '',
       zone_deplacement: '',
+      visa_statut: '',
+      visa_courriel: '',
+      visa_le: null,
+      visa_commentaire: '',
+      visa_envoye_le: null,
       conducteur_vehicule: '',
       type_vehicule: '',
       immatriculation: '',
@@ -180,6 +195,9 @@
       immatriculation: 'GR-707-YM',
       statut: 'soumise',
       soumise_le: maintenant(),
+      visa_statut: 'attente',
+      visa_courriel: 'paul.moreau@exemple.fr',
+      visa_envoye_le: maintenant(),
     });
     soumise.lignes.forEach((ligne, i) => {
       if (!ligne.nom_affiche) return;
@@ -204,6 +222,9 @@
       statut: 'validee',
       soumise_le: maintenant(),
       validee_le: maintenant(),
+      visa_statut: 'vise',
+      visa_le: maintenant(),
+      visa_commentaire: 'Conforme à ce que j’ai constaté sur place.',
     });
     validee.lignes.forEach((ligne) => {
       if (!ligne.nom_affiche) return;
@@ -252,6 +273,11 @@
       statut: fiche.statut,
       motif_rejet: fiche.motif_rejet,
       chef_id: fiche.chef_id,
+      visa_statut: fiche.visa_statut || '',
+      visa_le: fiche.visa_le || null,
+      visa_courriel: fiche.visa_courriel || '',
+      visa_commentaire: fiche.visa_commentaire || '',
+      visa_envoye_le: fiche.visa_envoye_le || null,
       chef_nom: complet.chef_nom,
       nb_salaries: complet.lignes.filter((l) => l.nom_affiche.trim()).length,
       total_minutes: complet.total_minutes,
@@ -341,6 +367,11 @@
   function exigerConnexion() {
     if (!session) erreur(401, 'Session expirée, reconnectez-vous.');
     return session;
+  }
+
+  function conducteurDuChef(chefId) {
+    const chef = utilisateurs.find((u) => u.id === chefId);
+    return chef && chef.conducteur_id ? CONDUCTEURS.find((c) => c.id === chef.conducteur_id && c.actif) : null;
   }
 
   function exigerDirecteur() {
@@ -533,7 +564,20 @@
       fiche.statut = 'soumise';
       fiche.soumise_le = maintenant();
       fiche.motif_rejet = '';
-      return { fiche: enrichir(fiche), anomalies };
+
+      // Le conducteur de travaux vise avant le directeur, quand le chef en a un.
+      const conducteur = conducteurDuChef(fiche.chef_id);
+      fiche.visa_statut = conducteur ? 'attente' : '';
+      fiche.visa_courriel = conducteur ? conducteur.courriel : '';
+      fiche.visa_envoye_le = conducteur ? maintenant() : null;
+
+      return {
+        fiche: enrichir(fiche),
+        anomalies,
+        visa: conducteur
+          ? { demande: true, conducteur: conducteur.nom, courriel: conducteur.courriel, envoye: false }
+          : { demande: false },
+      };
     }],
 
     ['POST', /^\/api\/fiches\/(\d+)\/decision$/, (m, corps) => {
@@ -651,6 +695,52 @@
       erreur(400, 'Ajout de véhicule désactivé dans la démonstration.');
     }],
 
+    ['GET', /^\/api\/admin\/conducteurs$/, () => {
+      exigerDirecteur();
+      return {
+        conducteurs: CONDUCTEURS,
+        chefs: utilisateurs
+          .filter((u) => u.role === 'chef')
+          .map((u) => ({
+            id: u.id, nom: u.nom, conducteur_id: u.conducteur_id || null,
+            conducteur_nom: (CONDUCTEURS.find((c) => c.id === u.conducteur_id) || {}).nom || '',
+          })),
+        envoiConfigure: false,
+      };
+    }],
+
+    ['PUT', /^\/api\/admin\/conducteurs\/(\d+)$/, (m, corps) => {
+      exigerDirecteur();
+      const c = CONDUCTEURS.find((x) => x.id === Number(m[1]));
+      if (c) Object.assign(c, corps);
+      return { ok: true };
+    }],
+
+    ['POST', /^\/api\/admin\/conducteurs$/, () => {
+      exigerDirecteur();
+      erreur(400, 'Ajout de conducteur désactivé dans la démonstration.');
+    }],
+
+    ['PUT', /^\/api\/admin\/chefs\/(\d+)\/conducteur$/, (m, corps) => {
+      exigerDirecteur();
+      const u = utilisateurs.find((x) => x.id === Number(m[1]));
+      if (u) u.conducteur_id = corps.conducteur_id ? Number(corps.conducteur_id) : null;
+      return { ok: true };
+    }],
+
+    ['POST', /^\/api\/fiches\/(\d+)\/relancer-visa$/, (m) => {
+      exigerDirecteur();
+      const fiche = fiches.find((f) => f.id === Number(m[1]));
+      if (!fiche) erreur(404, 'Fiche introuvable.');
+      const conducteur = conducteurDuChef(fiche.chef_id);
+      if (!conducteur) return { visa: { demande: false } };
+      return {
+        visa: { demande: true, conducteur: conducteur.nom, courriel: conducteur.courriel, envoye: false,
+                lien: 'https://votre-adresse/visa.html?jeton=…(démonstration)' },
+        fiche: enrichir(fiche),
+      };
+    }],
+
     ['GET', /^\/api\/admin\/indicateurs$/, () => {
       exigerDirecteur();
       // Chiffres figes : la demonstration n'a pas d'historique a mesurer.
@@ -677,24 +767,22 @@
       };
     }],
 
-    ['POST', /^\/api\/paie\/deverrouiller$/, (m, corps) => {
+    ['POST', /^\/api\/paie\/billet$/, (m, corps) => {
       const u = exigerDirecteur();
       if (String(corps.pin || '') !== u.pin) erreur(401, 'Code incorrect.');
-      accesPaie = true;
-      return { ok: true, dureeMinutes: 20 };
-    }],
-
-    ['POST', /^\/api\/paie\/verrouiller$/, () => {
-      exigerDirecteur();
-      accesPaie = false;
-      return { ok: true };
+      billetPaie = `billet-${Date.now()}`;
+      return { billet: billetPaie };
     }],
 
     ['GET', /^\/api\/mois$/, (m, corps, params) => {
       exigerDirecteur();
       const demandee = params.get('version') === 'direction' ? 'direction' : 'public';
-      if (demandee === 'direction' && !accesPaie) {
-        erreur(403, 'Les montants demandent votre code directeur.', { codeDemande: true });
+      if (demandee === 'direction') {
+        // Usage unique : consulter puis telecharger redemande le code.
+        if (!billetPaie || params.get('billet') !== billetPaie) {
+          erreur(403, 'Les montants demandent votre code directeur.', { codeDemande: true });
+        }
+        billetPaie = null;
       }
       return moisDemonstration(
         Number(params.get('annee')), Number(params.get('mois')),

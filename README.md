@@ -32,7 +32,7 @@ npm run demo     # produit demo/demonstration.html
 ```
 
 Une page autonome, à ouvrir dans n'importe quel navigateur : elle contient les
-trois écrans réels (même HTML, même CSS, même JavaScript), un jeu de données
+écrans réels (même HTML, même CSS, même JavaScript), un jeu de données
 fictives et un faux serveur en mémoire. Aucune installation, aucun réseau, rien
 n'est enregistré — un rechargement remet tout à zéro.
 
@@ -118,7 +118,52 @@ qui ouvrirait directement l'adresse de la fiche d'un collègue reçoit un refus.
 Une fiche transmise n'est plus modifiable par son chef ; seul le directeur peut la
 corriger, la valider, ou la lui renvoyer pour correction avec un motif.
 
-## Les trois écrans
+## Le circuit d'une fiche
+
+```
+  chef d'équipe          conducteur de travaux           directeur
+  ─────────────          ─────────────────────           ─────────
+  remplit et    ──────►  reçoit un courriel     ──────►  vérifie, corrige,
+  transmet               vise ou renvoie                 valide
+                                │
+                                └── renvoyée avec commentaire ──► retour au chef
+```
+
+Le conducteur de travaux vise **avant** la direction. Il n'a pas de compte : chaque
+transmission lui envoie un courriel qui contient le pointage sous les yeux et deux
+boutons — *viser*, ou *renvoyer avec un commentaire*. C'est un choix délibéré : un
+compte de plus par conducteur, ce serait un code de plus à distribuer, à retenir et
+à réinitialiser, pour deux clics par semaine.
+
+Ce que le lien autorise est volontairement étroit : **une seule fiche**, **deux
+actions**, et seulement **tant qu'elle attend ce visa**. Une fiche modifiée puis
+retransmise reçoit un nouveau secret, ce qui condamne aussitôt les liens précédents.
+
+Les liens du courriel **ouvrent une page, ils ne décident de rien**. La décision
+passe par un envoi depuis cette page. Sans cette précaution, l'antivirus d'une
+messagerie d'entreprise — qui visite les liens des messages pour les analyser —
+viserait les fiches à la place du conducteur.
+
+Un chef d'équipe **sans conducteur rattaché** transmet directement à la direction :
+l'étape est sautée sans blocage. Et le directeur peut toujours **valider sans le
+visa** quand le conducteur n'est pas joignable ; le bouton le dit alors explicitement.
+
+### Envoi des courriels
+
+| Variable | Rôle |
+|---|---|
+| `SMTP_HOTE`, `SMTP_PORT` | Serveur d'envoi (587 par défaut, 465 pour du TLS direct) |
+| `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE` | Identifiants, si le serveur en demande |
+| `COURRIEL_EXPEDITEUR` | Adresse d'expédition |
+| `URL_PUBLIQUE` | L'adresse à laquelle les conducteurs joignent l'application |
+
+**Sans SMTP configuré, rien ne casse** : le message est écrit dans
+`DATA_DIR/courriels/`, et le directeur récupère le lien depuis son tableau de bord
+(*Relancer le conducteur*) pour le transmettre lui-même. Ce n'est pas une
+dégradation silencieuse — c'est ce qui permet de faire tourner toute la chaîne
+avant que le service informatique ait fourni un compte d'envoi.
+
+## Les écrans
 
 ### Chef d'équipe — `/chef.html`
 
@@ -202,7 +247,10 @@ le directeur qui doit s'en occuper. Les libellés suivent le rôle
   **Fiche Excel**.
 - Exports de la semaine : **Excel** et **CSV**, au choix sur les fiches validées,
   les fiches à vérifier, ou toutes.
-- **Tableau mensuel consultable à l'écran**, en deux versions (voir ci-dessous).
+- Bouton **Tableau mensuel** vers la page dédiée (voir ci-dessous).
+- Statut particulier **Attente visa conducteur** tant que le conducteur n'a pas
+  répondu, et **Visée — à vérifier** une fois qu'il l'a fait, avec son commentaire.
+  Boutons *Relancer le conducteur* et *Valider sans le visa*.
 
 ### Paramètres — `/parametres.html`
 
@@ -218,20 +266,23 @@ Comme les deux autres écrans, elle est fermée aux chefs d'équipe côté serve
 chef qui ouvrirait l'adresse directement est renvoyé vers sa fiche, et les routes
 `/api/admin/*` lui répondent un refus.
 
-## Le tableau mensuel pour la paie
+## Le tableau mensuel pour la paie — `/mensuel.html`
 
-Il se consulte directement à l'écran et se télécharge, dans **deux versions** :
+Une page à part, atteinte depuis le tableau de bord. Il se consulte à l'écran et se
+télécharge, dans **deux versions** :
 
 | Version | Contenu | Accès |
 |---|---|---|
 | **Publique** | Heures, majorations 25/50 %, route, trajet, jours d'amiante, paniers, GD 72 / GD 80, fériés | Le directeur connecté |
 | **Direction** | La même chose **plus** le taux horaire, le salaire brut et net, les primes en euros et la masse salariale | Le directeur, **après avoir ressaisi son code** |
 
-Le code est redemandé même quand la session est déjà ouverte : une session dure
-trente jours, un salaire affiché sur un écran partagé n'attend pas si longtemps.
-L'accès se referme seul au bout de 20 minutes, et le bouton *Masquer les montants*
-le referme immédiatement. Le refus est appliqué côté serveur, pour la consultation
-comme pour le téléchargement — `test/cloisonnement.test.js` le vérifie.
+Le code est redemandé **à chaque ouverture et à chaque téléchargement** de la
+version direction, même quand la session est déjà ouverte. Il ne s'échange pas
+contre un droit qui dure, mais contre un **billet à usage unique**, valable deux
+minutes, que le serveur consomme dès la première requête : un écran laissé ouvert,
+une session oubliée, un navigateur partagé ne redonnent jamais accès aux salaires.
+Le refus est appliqué côté serveur — `test/cloisonnement.test.js` vérifie qu'un
+même billet ne sert pas deux fois.
 
 **Le taux horaire** se renseigne dans *Paramètres → Personnel et équipes*. Tant
 qu'il ne l'est pas, aucun montant n'est calculé pour la personne concernée et la
@@ -306,6 +357,8 @@ server/
   mensuel.js    Agrégation d'un mois et valorisation de la paie
   export-mensuel.js  Le classeur mensuel, versions publique et direction
   indicateurs.js Suivi des chefs : assiduité, retards, fiches renvoyées
+  visa.js       Liens signés du conducteur de travaux, visa et renvoi
+  courriel.js   Envoi SMTP, et dépôt sur disque à défaut de serveur d'envoi
   index.js      API HTTP et service des fichiers statiques
   seed.js       Jeu de données initial
 public/
@@ -313,6 +366,8 @@ public/
   chef.html       Saisie mobile        + js/chef.js
   directeur.html  Tableau de bord      + js/directeur.js
   parametres.html Paramètres direction + js/parametres.js
+  mensuel.html    Tableau mensuel      + js/mensuel.js
+  visa.html       Visa du conducteur   + js/visa.js  (sans compte, par lien signé)
   js/regles.js  Règles métier partagées avec le serveur (heures, semaines, contrôles)
   js/commun.js  API, signature tactile, file d'attente en cas de coupure réseau
 test/
@@ -370,6 +425,10 @@ relancer.
 | `NODE_ENV` | `production` : messages d'erreur non détaillés | — |
 | `COOKIE_SECURE` | `true` force le cookie `Secure`, même joint en HTTP | déduit du protocole utilisé |
 | `DEBUT_SERVICE` | Première semaine attendue dans l'application (`AAAA-MM-JJ`) | `2026-09-01` |
+| `URL_PUBLIQUE` | Adresse publique, pour les liens envoyés aux conducteurs | `http://localhost:PORT` |
+| `SMTP_HOTE`, `SMTP_PORT` | Serveur d'envoi des courriels | — (messages déposés sur disque) |
+| `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE` | Identifiants du serveur d'envoi | — |
+| `COURRIEL_EXPEDITEUR` | Adresse d'expédition | — |
 
 ### Mise à jour des fichiers de l'interface
 

@@ -45,7 +45,7 @@ surClic('btn-retour', () => { location.href = '/directeur.html'; });
 surClic('btn-quitter', deconnexion);
 
 /* Les quatre volets de l'ecran Parametres. */
-const PANNEAUX = ['effectif', 'comptes', 'vehicules', 'indicateurs'];
+const PANNEAUX = ['effectif', 'comptes', 'conducteurs', 'vehicules', 'indicateurs'];
 
 surEvenement('onglets-parametres', 'click', (e) => {
   const onglet = e.target.closest('.onglet');
@@ -61,6 +61,7 @@ function ouvrirPanneau(nom) {
   document.querySelectorAll('#onglets-parametres .onglet').forEach((o) => {
     o.classList.toggle('actif', o.dataset.onglet === nom);
   });
+  if (nom === 'conducteurs') chargerConducteurs();
   if (nom === 'vehicules') chargerVehicules();
   if (nom === 'indicateurs') chargerIndicateurs();
 }
@@ -71,13 +72,16 @@ async function chargerVehicules() {
   const table = $('table-vehicules');
   if (!table) return;
   const { vehicules } = await API.get('/api/admin/vehicules');
+  const champ = (v, nom, largeur) =>
+    `<input value="${echapper(v[nom])}" style="width:${largeur}" onchange="corrigerVehicule(${v.id}, '${nom}', this.value, this)">`;
+
   table.querySelector('tbody').innerHTML = vehicules
     .map(
       (v) => `<tr style="${v.actif ? '' : 'opacity:.5'}">
-        <td><strong>${echapper(v.immatriculation)}</strong></td>
-        <td>${echapper(v.marque)}</td>
-        <td>${echapper(v.modele)}</td>
-        <td>${echapper(v.motorisation)}</td>
+        <td>${champ(v, 'immatriculation', '130px')}</td>
+        <td>${champ(v, 'marque', '120px')}</td>
+        <td>${champ(v, 'modele', '120px')}</td>
+        <td>${champ(v, 'motorisation', '120px')}</td>
         <td><button class="petit" onclick="basculerVehicule(${v.id}, ${v.actif ? 0 : 1})">${
           v.actif ? 'Retirer du parc' : 'Remettre'
         }</button></td>
@@ -85,6 +89,107 @@ async function chargerVehicules() {
     )
     .join('');
 }
+
+/** Correction d'une case du parc, enregistree a la sortie du champ. */
+window.corrigerVehicule = async (id, champ, valeur, element) => {
+  const ancienne = element.defaultValue;
+  try {
+    await API.put(`/api/admin/vehicules/${id}`, { [champ]: valeur.trim() });
+    element.defaultValue = valeur.trim();
+    reference = await API.get('/api/reference');
+    message('Véhicule mis à jour.', 'succes', 2500);
+  } catch (e) {
+    // On remet la valeur d'avant : laisser a l'ecran une correction refusee
+    // ferait croire qu'elle a ete prise en compte.
+    element.value = ancienne;
+    message(e.message, 'erreur');
+  }
+};
+
+/* --------------------------- Conducteurs de travaux ------------------------ */
+
+async function chargerConducteurs() {
+  const table = $('table-conducteurs');
+  if (!table) return;
+  const { conducteurs, chefs, envoiConfigure } = await API.get('/api/admin/conducteurs');
+
+  $('aide-envoi').innerHTML = envoiConfigure
+    ? '<span class="jauge bon">Envoi de courriels configuré</span>'
+    : '<span class="jauge moyen">Aucun serveur d’envoi configuré</span> — les messages sont conservés sur le serveur ' +
+      'et le lien de visa s’affiche pour être transmis à la main. Voir SMTP_HOTE dans la configuration.';
+
+  const champ = (c, nom, largeur, type = 'text') =>
+    `<input type="${type}" value="${echapper(c[nom])}" style="width:${largeur}"
+            onchange="corrigerConducteur(${c.id}, '${nom}', this.value, this)">`;
+
+  table.querySelector('tbody').innerHTML = conducteurs.length
+    ? conducteurs
+        .map(
+          (c) => `<tr style="${c.actif ? '' : 'opacity:.5'}">
+            <td>${champ(c, 'nom', '190px')}</td>
+            <td>${champ(c, 'courriel', '260px', 'email')}</td>
+            <td><button class="petit" onclick="basculerConducteur(${c.id}, ${c.actif ? 0 : 1})">${
+              c.actif ? 'Désactiver' : 'Réactiver'
+            }</button></td>
+          </tr>`
+        )
+        .join('')
+    : '<tr><td colspan="3" class="vide">Aucun conducteur de travaux enregistré.</td></tr>';
+
+  const options = (selectionne) =>
+    `<option value="">— aucun, transmission directe à la direction</option>${conducteurs
+      .filter((c) => c.actif)
+      .map((c) => `<option value="${c.id}"${c.id === selectionne ? ' selected' : ''}>${echapper(c.nom)}</option>`)
+      .join('')}`;
+
+  $('table-rattachement').querySelector('tbody').innerHTML = chefs
+    .map(
+      (chef) => `<tr>
+        <td>${echapper(chef.nom)}</td>
+        <td><select onchange="rattacherChef(${chef.id}, this.value)" style="min-width:280px">${options(
+          chef.conducteur_id
+        )}</select></td>
+      </tr>`
+    )
+    .join('');
+}
+
+window.corrigerConducteur = async (id, champ, valeur, element) => {
+  const ancienne = element.defaultValue;
+  try {
+    await API.put(`/api/admin/conducteurs/${id}`, { [champ]: valeur.trim() });
+    element.defaultValue = valeur.trim();
+    message('Conducteur mis à jour.', 'succes', 2500);
+  } catch (e) {
+    element.value = ancienne;
+    message(e.message, 'erreur');
+  }
+};
+
+window.basculerConducteur = async (id, actif) => {
+  await API.put(`/api/admin/conducteurs/${id}`, { actif });
+  await chargerConducteurs();
+};
+
+window.rattacherChef = async (chefId, conducteurId) => {
+  try {
+    await API.put(`/api/admin/chefs/${chefId}/conducteur`, { conducteur_id: conducteurId || null });
+    message('Rattachement enregistré.', 'succes', 2500);
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
+};
+
+surClic('btn-ajout-conducteur', async () => {
+  try {
+    await API.post('/api/admin/conducteurs', { nom: $('c-nom').value, courriel: $('c-courriel').value });
+    $('c-nom').value = $('c-courriel').value = '';
+    await chargerConducteurs();
+    message('Conducteur de travaux ajouté.', 'succes');
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
+});
 
 window.basculerVehicule = async (id, actif) => {
   await API.put(`/api/admin/vehicules/${id}`, { actif });
@@ -167,7 +272,12 @@ async function chargerAdmin() {
   $('table-salaries').querySelector('tbody').innerHTML = salaries
     .map(
       (s) => `<tr style="${s.actif ? '' : 'opacity:.5'}">
-        <td>${echapper(s.matricule || '')}</td><td>${echapper(s.nom)}</td><td>${echapper(s.prenom)}</td>
+        <td><input value="${echapper(s.matricule || '')}" style="width:95px"
+                   onchange="corrigerSalarie(${s.id}, 'matricule', this.value, this)"></td>
+        <td><input value="${echapper(s.nom)}" style="width:150px"
+                   onchange="corrigerSalarie(${s.id}, 'nom', this.value, this)"></td>
+        <td><input value="${echapper(s.prenom)}" style="width:150px"
+                   onchange="corrigerSalarie(${s.id}, 'prenom', this.value, this)"></td>
         <td><select onchange="affecter(${s.id}, this.value)">${options(s.chef_id)}</select></td>
         <td class="num"><input class="taux" type="number" min="0" step="0.01" style="width:92px;text-align:right"
                value="${s.taux_horaire || ''}" placeholder="—"
@@ -197,6 +307,24 @@ window.basculerActif = async (id, actif) => {
 window.affecter = async (id, chefId) => {
   await API.put(`/api/admin/salaries/${id}`, { chef_id: chefId ? Number(chefId) : null });
   message('Affectation mise à jour.', 'succes', 2000);
+};
+
+/** Matricule, nom, prenom : corrigeables sur place. */
+window.corrigerSalarie = async (id, champ, valeur, element) => {
+  const ancienne = element.defaultValue;
+  const propre = valeur.trim();
+  if (champ === 'nom' && !propre) {
+    element.value = ancienne;
+    return message('Le nom ne peut pas être vide.', 'erreur');
+  }
+  try {
+    await API.put(`/api/admin/salaries/${id}`, { [champ]: propre });
+    element.defaultValue = propre;
+    message('Fiche du salarié mise à jour.', 'succes', 2500);
+  } catch (e) {
+    element.value = ancienne;
+    message(e.message, 'erreur');
+  }
 };
 
 window.fixerTaux = async (id, valeur) => {

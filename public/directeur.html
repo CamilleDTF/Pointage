@@ -15,6 +15,7 @@
       Pointage hebdomadaire — Direction
       <small id="entete-nom">…</small>
     </div>
+    <button class="petit" id="btn-mensuel-haut" type="button">Tableau mensuel</button>
     <button class="petit" id="btn-admin" type="button">Paramètres</button>
     <button class="petit" id="btn-quitter" type="button">Quitter</button>
   </header>
@@ -49,42 +50,14 @@
     </section>
 
     <section class="carte">
-      <h2>Tableau mensuel pour la paie</h2>
       <div class="rangee">
-        <div style="width:150px">
-          <label for="mois">Mois</label>
-          <select id="mois"></select>
+        <div>
+          <h2 style="margin:0">Tableau mensuel pour la paie</h2>
+          <p class="aide" style="margin:4px 0 0" id="apercu-mois"></p>
         </div>
-        <div style="width:110px">
-          <label for="annee-mois">Année</label>
-          <input id="annee-mois" type="number" min="2020" max="2100" step="1">
-        </div>
-        <div style="width:230px">
-          <label for="version-mois">Version</label>
-          <select id="version-mois">
-            <option value="public">Publique — heures et primes</option>
-            <option value="direction">Direction — avec les montants</option>
-          </select>
-        </div>
-        <button class="principal" id="btn-voir-mois" type="button">Afficher le tableau</button>
-        <button class="valide" id="btn-export-mois" type="button">Télécharger</button>
         <span class="pousse"></span>
-        <p class="aide" id="apercu-mois" style="margin:0;text-align:right;max-width:380px"></p>
+        <button class="principal" id="btn-mensuel" type="button">Ouvrir le tableau mensuel</button>
       </div>
-
-      <div class="rangee masque" id="bloc-panier" style="margin-top:10px">
-        <div style="width:200px">
-          <label for="montant-panier">Montant du panier (€/jour)</label>
-          <input id="montant-panier" type="number" min="0" step="0.01" value="0">
-        </div>
-        <span class="aide" style="margin:0">
-          Laissé à 0 tant qu'il n'est pas fixé : la colonne Paniers reste alors à zéro.
-        </span>
-        <span class="pousse"></span>
-        <button class="petit" id="btn-verrouiller" type="button">Masquer les montants</button>
-      </div>
-
-      <div id="tableau-mois" style="margin-top:14px"></div>
     </section>
 
     <section class="indicateurs" id="indicateurs"></section>

@@ -132,45 +132,46 @@ function exigerDirecteur(req, res, next) {
 /* --------------------- Acces aux montants de la paie ---------------------- */
 
 /*
- * Les salaires ne s'ouvrent pas sur la seule foi d'une session restee ouverte
- * trente jours. Le directeur ressaisit son code, ce qui debloque les montants
- * pour une duree courte, dans ce navigateur uniquement. Le jeton est signe et
- * expire tout seul : rien a purger cote serveur.
+ * Les salaires ne s'ouvrent jamais sur la seule foi d'une session : le code du
+ * directeur est redemande a chaque consultation et a chaque telechargement de
+ * la version direction.
+ *
+ * Le code n'est donc pas echange contre un droit qui dure, mais contre un
+ * billet a usage unique, valable deux minutes, consomme des la premiere
+ * requete. Un ecran laisse ouvert, une session oubliee, un navigateur partage :
+ * aucun de ces cas ne redonne acces aux montants sans redemander le code.
  */
-const DUREE_ACCES_PAIE_MS = 20 * 60 * 1000;
-const NOM_COOKIE_PAIE = 'pointage_paie';
+const DUREE_BILLET_MS = 2 * 60 * 1000;
+const billetsConsommes = new Map(); // identifiant -> expiration, pour interdire le rejeu
 
-function ouvrirAccesPaie(req, res, utilisateur) {
-  const jeton = signer({ uid: utilisateur.id, paie: true, exp: Date.now() + DUREE_ACCES_PAIE_MS });
-  const secure = connexionChiffree(req) || process.env.COOKIE_SECURE === 'true' ? '; Secure' : '';
-  res.setHeader(
-    'Set-Cookie',
-    `${NOM_COOKIE_PAIE}=${encodeURIComponent(jeton)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${
-      DUREE_ACCES_PAIE_MS / 1000
-    }${secure}`
-  );
-  return DUREE_ACCES_PAIE_MS;
+function purgerBillets() {
+  const maintenant = Date.now();
+  for (const [id, exp] of billetsConsommes) if (exp < maintenant) billetsConsommes.delete(id);
 }
 
-function fermerAccesPaie(res) {
-  res.setHeader('Set-Cookie', `${NOM_COOKIE_PAIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+/** Delivre un billet a usage unique, apres verification du code. */
+function delivrerBilletPaie(utilisateur) {
+  return signer({
+    uid: utilisateur.id,
+    paie: true,
+    bid: crypto.randomBytes(9).toString('base64url'),
+    exp: Date.now() + DUREE_BILLET_MS,
+  });
 }
 
-/** Ce navigateur a-t-il un acces aux montants, ouvert par le titulaire lui-meme ? */
-function accesPaieOuvert(req) {
+/**
+ * Verifie et consomme un billet. Le second appel avec le meme billet echoue :
+ * c'est ce qui fait qu'ouvrir le tableau puis le telecharger redemande le code.
+ */
+function consommerBilletPaie(req, jeton) {
   if (!req.utilisateur || req.utilisateur.role !== 'directeur') return false;
-  const donnees = verifier(lireCookies(req)[NOM_COOKIE_PAIE] || '');
-  return Boolean(donnees && donnees.paie && donnees.uid === req.utilisateur.id);
-}
+  const donnees = verifier(String(jeton || ''));
+  if (!donnees || !donnees.paie || !donnees.bid || donnees.uid !== req.utilisateur.id) return false;
 
-function exigerAccesPaie(req, res, next) {
-  if (!accesPaieOuvert(req)) {
-    return res.status(403).json({
-      erreur: 'Les montants demandent votre code directeur.',
-      codeDemande: true,
-    });
-  }
-  next();
+  purgerBillets();
+  if (billetsConsommes.has(donnees.bid)) return false;
+  billetsConsommes.set(donnees.bid, donnees.exp);
+  return true;
 }
 
 // Limitation simple des tentatives de PIN, en memoire (un seul processus).
@@ -205,17 +206,18 @@ const hacherPin = (pin) => bcrypt.hashSync(String(pin), 10);
 const verifierPin = (pin, hash) => bcrypt.compareSync(String(pin), hash);
 
 module.exports = {
+  // Partage avec server/visa.js, qui signe les liens envoyes aux conducteurs
+  // de travaux avec la meme cle : elle vit deja dans DATA_DIR/session.key.
+  SECRET_JETONS: SECRET,
   session,
   ouvrirSession,
   connexionChiffree,
   fermerSession,
   exigerConnexion,
   exigerDirecteur,
-  ouvrirAccesPaie,
-  fermerAccesPaie,
-  accesPaieOuvert,
-  exigerAccesPaie,
-  DUREE_ACCES_PAIE_MS,
+  delivrerBilletPaie,
+  consommerBilletPaie,
+  DUREE_BILLET_MS,
   hacherPin,
   verifierPin,
   tropDeTentatives,

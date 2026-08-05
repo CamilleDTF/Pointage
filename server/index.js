@@ -11,6 +11,8 @@ const X = require('./export');
 const XM = require('./export-mensuel');
 const M = require('./mensuel');
 const I = require('./indicateurs');
+const V = require('./visa');
+const C = require('./courriel');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -237,12 +239,125 @@ app.put('/api/fiches/:id', A.exigerConnexion, (req, res) => {
   repondre(res, resultat);
 });
 
-app.post('/api/fiches/:id/soumettre', A.exigerConnexion, (req, res) => {
-  repondre(res, F.soumettre(Number(req.params.id), req.utilisateur));
-});
+app.post(
+  '/api/fiches/:id/soumettre',
+  A.exigerConnexion,
+  asyncRoute(async (req, res) => {
+    const resultat = F.soumettre(Number(req.params.id), req.utilisateur);
+    if (resultat.erreur) return repondre(res, resultat);
+
+    // La fiche part au conducteur de travaux pour visa. L'envoi ne conditionne
+    // pas la transmission : une adresse fausse ou un serveur muet ne doit pas
+    // faire perdre au chef d'equipe le travail qu'il vient de rendre.
+    const visa = await V.envoyerDemandeVisa(Number(req.params.id));
+    res.json({
+      ...resultat,
+      fiche: F.obtenirFiche(Number(req.params.id)),
+      visa: resumeVisa(visa),
+    });
+  })
+);
+
+/** Ce qu'on peut dire de l'envoi sans exposer le lien a n'importe qui. */
+function resumeVisa(visa, { avecLien = false } = {}) {
+  if (!visa || visa.erreur) return { demande: false };
+  if (!visa.conducteur) return { demande: false, raison: visa.raison || 'aucun_conducteur' };
+  return {
+    demande: true,
+    conducteur: visa.conducteur.nom,
+    courriel: visa.conducteur.courriel,
+    envoye: Boolean(visa.courriel && visa.courriel.envoye),
+    raison: visa.courriel ? visa.courriel.raison : undefined,
+    lien: avecLien ? visa.lien : undefined,
+  };
+}
+
+/**
+ * Relance du conducteur, a la main du directeur. Le lien est renvoye avec la
+ * reponse : quand aucun serveur d'envoi n'est configure, c'est ce qui permet de
+ * le transmettre soi-meme plutot que de rester bloque.
+ */
+app.post(
+  '/api/fiches/:id/relancer-visa',
+  A.exigerDirecteur,
+  asyncRoute(async (req, res) => {
+    const visa = await V.envoyerDemandeVisa(Number(req.params.id), { relance: true });
+    if (visa.erreur) return repondre(res, visa);
+    res.json({ visa: resumeVisa(visa, { avecLien: true }), fiche: F.obtenirFiche(Number(req.params.id)) });
+  })
+);
 
 app.post('/api/fiches/:id/decision', A.exigerDirecteur, (req, res) => {
   repondre(res, F.statuer(Number(req.params.id), req.utilisateur, req.body.decision, req.body.motif));
+});
+
+/* -------------------- Visa du conducteur de travaux ----------------------- */
+
+/*
+ * Les seules routes de l'application ouvertes sans session : le conducteur de
+ * travaux n'a pas de compte, il arrive par le lien signe de son courriel.
+ *
+ * Le GET ne fait que montrer. La decision passe par un POST — un antivirus de
+ * messagerie qui visite les liens d'un message viserait sinon les fiches a la
+ * place du conducteur.
+ */
+app.get('/api/visa/:jeton', (req, res) => {
+  const acces = V.ficheDuJeton(req.params.jeton);
+  if (acces.erreur) return res.status(acces.code || 403).json({ erreur: acces.erreur });
+  res.json({ fiche: V.vueConducteur(acces.fiche), reference: { joursCourts: D.JOURS_COURTS, codesAbsence: D.CODES_ABSENCE } });
+});
+
+app.post('/api/visa/:jeton/decision', (req, res) => {
+  const decision = req.body.decision;
+  if (decision === 'viser') return repondre(res, V.viser(req.params.jeton, req.body.commentaire));
+  if (decision === 'renvoyer') return repondre(res, V.renvoyer(req.params.jeton, req.body.commentaire));
+  res.status(400).json({ erreur: 'Decision inconnue.' });
+});
+
+/* ------------------------ Conducteurs de travaux --------------------------- */
+
+app.get('/api/admin/conducteurs', A.exigerDirecteur, (req, res) => {
+  res.json({
+    conducteurs: db.prepare('SELECT * FROM conducteurs ORDER BY nom').all(),
+    // Qui depend de qui : le rattachement se regle dans le meme ecran.
+    chefs: db
+      .prepare(
+        `SELECT u.id, u.nom, u.conducteur_id, c.nom AS conducteur_nom
+           FROM utilisateurs u
+           LEFT JOIN conducteurs c ON c.id = u.conducteur_id
+          WHERE u.role = 'chef' AND u.actif = 1 ORDER BY u.nom`
+      )
+      .all(),
+    envoiConfigure: C.ACTIF,
+  });
+});
+
+app.post('/api/admin/conducteurs', A.exigerDirecteur, (req, res) => {
+  const nom = String(req.body.nom || '').trim();
+  const courriel = String(req.body.courriel || '').trim();
+  if (!nom) return res.status(400).json({ erreur: 'Le nom est obligatoire.' });
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(courriel)) {
+    return res.status(400).json({ erreur: 'Adresse de courriel invalide.' });
+  }
+  const r = db.prepare('INSERT INTO conducteurs (nom, courriel) VALUES (?, ?)').run(nom, courriel);
+  res.json({ id: r.lastInsertRowid });
+});
+
+app.put('/api/admin/conducteurs/:id', A.exigerDirecteur, (req, res) => {
+  const champs = ['nom', 'courriel', 'actif'];
+  const maj = {};
+  for (const champ of champs) if (req.body[champ] !== undefined) maj[champ] = req.body[champ];
+  if (!Object.keys(maj).length) return res.json({ ok: true });
+  const set = Object.keys(maj).map((c) => `${c} = @${c}`).join(', ');
+  db.prepare(`UPDATE conducteurs SET ${set} WHERE id = @id`).run({ ...maj, id: Number(req.params.id) });
+  res.json({ ok: true });
+});
+
+app.put('/api/admin/chefs/:id/conducteur', A.exigerDirecteur, (req, res) => {
+  const conducteurId = req.body.conducteur_id ? Number(req.body.conducteur_id) : null;
+  db.prepare("UPDATE utilisateurs SET conducteur_id = ? WHERE id = ? AND role = 'chef'")
+    .run(conducteurId, Number(req.params.id));
+  res.json({ ok: true });
 });
 
 /* -------------------------------- Exports --------------------------------- */
@@ -306,10 +421,10 @@ app.get(
       return res.status(400).json({ erreur: 'Mois invalide (1 a 12).' });
     }
 
-    // La version direction porte les salaires : elle exige le code, meme pour
-    // un directeur deja connecte.
+    // La version direction porte les salaires : chaque telechargement consomme
+    // son propre billet, donc redemande le code.
     const version = req.query.version === 'direction' ? 'direction' : 'public';
-    if (version === 'direction' && !A.accesPaieOuvert(req)) {
+    if (version === 'direction' && !A.consommerBilletPaie(req, req.query.billet)) {
       return res.status(403).json({ erreur: 'Les montants demandent votre code directeur.', codeDemande: true });
     }
 
@@ -336,7 +451,7 @@ app.get(
  *                  ouverte : une session dure trente jours, un salaire affiche
  *                  sur un ecran partage n'attend pas si longtemps.
  */
-app.post('/api/paie/deverrouiller', A.exigerDirecteur, (req, res) => {
+app.post('/api/paie/billet', A.exigerDirecteur, (req, res) => {
   const cle = `${req.ip}|paie|${req.utilisateur.id}`;
   if (A.tropDeTentatives(cle)) {
     return res.status(429).json({ erreur: 'Trop de tentatives. Reessayez dans 15 minutes.' });
@@ -347,13 +462,8 @@ app.post('/api/paie/deverrouiller', A.exigerDirecteur, (req, res) => {
     return res.status(401).json({ erreur: 'Code incorrect.' });
   }
   A.reinitialiserTentatives(cle);
-  const duree = A.ouvrirAccesPaie(req, res, req.utilisateur);
-  res.json({ ok: true, dureeMinutes: Math.round(duree / 60000) });
-});
-
-app.post('/api/paie/verrouiller', A.exigerDirecteur, (req, res) => {
-  A.fermerAccesPaie(res);
-  res.json({ ok: true });
+  // Un seul usage : consulter puis telecharger redemande le code.
+  res.json({ billet: A.delivrerBilletPaie(req.utilisateur) });
 });
 
 app.get('/api/mois', A.exigerDirecteur, (req, res) => {
@@ -367,8 +477,7 @@ app.get('/api/mois', A.exigerDirecteur, (req, res) => {
   }
 
   const demandee = req.query.version === 'direction' ? 'direction' : 'public';
-  const accorde = demandee === 'public' || A.accesPaieOuvert(req);
-  if (!accorde) {
+  if (demandee === 'direction' && !A.consommerBilletPaie(req, req.query.billet)) {
     return res.status(403).json({ erreur: 'Les montants demandent votre code directeur.', codeDemande: true });
   }
 
@@ -534,6 +643,38 @@ app.put('/api/admin/salaries/:id', A.exigerDirecteur, (req, res) => {
   res.json({ ok: true });
 });
 
+/* ----------------------- Correction d'un nom de salarie -------------------- */
+
+/**
+ * Un chef d'equipe corrige le nom ou le prenom d'un de ses operateurs.
+ *
+ * C'est lui qui a la personne devant les yeux : il voit avant tout le monde
+ * qu'un prenom est mal orthographie ou qu'un nom composé a ete tronque a
+ * l'import. Le faire remonter au directeur pour une lettre serait un aller-
+ * retour de trop.
+ *
+ * Le geste reste etroit : seuls le nom et le prenom changent — ni le matricule,
+ * ni l'affectation, ni le taux horaire — et chaque correction est journalisee
+ * avec son auteur, pour qu'on sache toujours qui a ecrit quoi.
+ */
+app.put('/api/salaries/:id/nom', A.exigerConnexion, (req, res) => {
+  const id = Number(req.params.id);
+  const salarie = db.prepare('SELECT * FROM salaries WHERE id = ?').get(id);
+  if (!salarie) return res.status(404).json({ erreur: 'Salarie introuvable.' });
+
+  const nom = String(req.body.nom || '').trim();
+  const prenom = String(req.body.prenom || '').trim();
+  if (!nom) return res.status(400).json({ erreur: 'Le nom est obligatoire.' });
+
+  const avant = `${salarie.nom} ${salarie.prenom}`.trim();
+  const apres = `${nom} ${prenom}`.trim();
+  if (avant === apres) return res.json({ ok: true, inchange: true });
+
+  db.prepare('UPDATE salaries SET nom = ?, prenom = ? WHERE id = ?').run(nom, prenom, id);
+  journaliser(null, req.utilisateur.id, 'correction_nom', `${avant} → ${apres}`);
+  res.json({ ok: true, nom, prenom });
+});
+
 /* ---------------------------- Parc de vehicules ---------------------------- */
 
 app.get('/api/admin/vehicules', A.exigerDirecteur, (req, res) => {
@@ -562,9 +703,17 @@ app.put('/api/admin/vehicules/:id', A.exigerDirecteur, (req, res) => {
   const champs = ['immatriculation', 'marque', 'modele', 'motorisation', 'actif'];
   const maj = {};
   for (const champ of champs) if (req.body[champ] !== undefined) maj[champ] = req.body[champ];
+  if (maj.immatriculation !== undefined) {
+    maj.immatriculation = String(maj.immatriculation).trim().toUpperCase();
+    if (!maj.immatriculation) return res.status(400).json({ erreur: "L'immatriculation est obligatoire." });
+  }
   if (!Object.keys(maj).length) return res.json({ ok: true });
   const set = Object.keys(maj).map((c) => `${c} = @${c}`).join(', ');
-  db.prepare(`UPDATE vehicules SET ${set} WHERE id = @id`).run({ ...maj, id: Number(req.params.id) });
+  try {
+    db.prepare(`UPDATE vehicules SET ${set} WHERE id = @id`).run({ ...maj, id: Number(req.params.id) });
+  } catch {
+    return res.status(409).json({ erreur: 'Cette immatriculation existe deja.' });
+  }
   res.json({ ok: true });
 });
 

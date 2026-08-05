@@ -305,6 +305,8 @@
       manquante: 'À faire',
       brouillon: 'À compléter',
       soumise: 'En attente de validation',
+      attenteVisa: 'Chez le conducteur de travaux',
+      visee: 'Visée — en attente de la direction',
       rejetee: 'À corriger',
       validee: 'Validé',
     },
@@ -314,6 +316,8 @@
       manquante: 'Non commencée',
       brouillon: 'En cours',
       soumise: 'À vérifier',
+      attenteVisa: 'Attente visa conducteur',
+      visee: 'Visée — à vérifier',
       rejetee: 'À corriger',
       validee: 'Validée',
     },
@@ -322,6 +326,20 @@
   function etiquetteStatut(statut, role) {
     const table = ETIQUETTES_STATUT[role] || ETIQUETTES_STATUT.directeur;
     return table[statut] || statut;
+  }
+
+  /*
+   * Etat affiche d'une fiche. Le visa du conducteur de travaux est une seconde
+   * dimension du statut « soumise » : dire seulement « a verifier » a un
+   * directeur alors que le conducteur n'a pas encore repondu lui cacherait
+   * exactement ce qu'il a besoin de savoir pour relancer la bonne personne.
+   */
+  function etatAffiche(fiche) {
+    if (!fiche) return 'manquante';
+    if (fiche.statut !== 'soumise') return fiche.statut;
+    if (fiche.visa_statut === 'attente') return 'attenteVisa';
+    if (fiche.visa_statut === 'vise') return 'visee';
+    return 'soumise';
   }
 
   /**
@@ -443,6 +461,7 @@
     semaineAvantService,
     ETIQUETTES_STATUT,
     etiquetteStatut,
+    etatAffiche,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = Regles;

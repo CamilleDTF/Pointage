@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10416b">
+  <title>Pointage — visa du conducteur de travaux</title>
+  <link rel="icon" href="/icone.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="appbar">
+    <div class="titre">
+      Visa du conducteur de travaux
+      <small id="entete-conducteur">…</small>
+    </div>
+  </header>
+
+  <main>
+    <section class="carte" id="bloc-erreur" hidden>
+      <h2>Ce lien n'est plus utilisable</h2>
+      <p class="aide" id="texte-erreur"></p>
+      <p class="aide">
+        Demandez au chef d'équipe de retransmettre sa fiche, ou au directeur de vous
+        renvoyer un lien depuis son tableau de bord.
+      </p>
+    </section>
+
+    <div id="contenu" hidden>
+      <section class="carte">
+        <div class="rangee">
+          <div>
+            <h2 style="margin:0" id="titre-fiche"></h2>
+            <p class="aide" id="sous-titre" style="margin:4px 0 0"></p>
+          </div>
+          <span class="pousse"></span>
+          <span id="badge-visa"></span>
+        </div>
+      </section>
+
+      <section class="carte">
+        <h2>Chantier</h2>
+        <div class="grille deux" id="entete-chantier"></div>
+      </section>
+
+      <section class="carte">
+        <h2>Heures par salarié</h2>
+        <div class="enveloppe-table">
+          <table class="grille-pointage" id="grille"></table>
+        </div>
+        <p class="aide" id="observations" style="margin-top:12px"></p>
+      </section>
+
+      <section class="carte" id="bloc-decision">
+        <h2>Votre décision</h2>
+        <p class="aide">
+          En visant, vous confirmez les heures ci-dessus : la fiche part alors à la direction.
+          En la renvoyant, elle repart au chef d'équipe avec votre commentaire.
+        </p>
+
+        <div style="margin-top:14px">
+          <label for="commentaire">Commentaire — obligatoire pour un renvoi, facultatif pour un visa</label>
+          <textarea id="commentaire" placeholder="Ce qui doit être corrigé, ou une remarque à conserver avec la fiche"></textarea>
+        </div>
+
+        <div class="rangee" style="margin-top:14px">
+          <button class="valide" id="btn-viser" type="button">✓ Viser cette fiche</button>
+          <button class="danger" id="btn-renvoyer" type="button">↩ Renvoyer au chef d'équipe</button>
+        </div>
+      </section>
+
+      <section class="carte masque" id="bloc-resultat">
+        <h2 id="titre-resultat"></h2>
+        <p class="aide" id="texte-resultat"></p>
+      </section>
+    </div>
+  </main>
+
+  <script src="/js/regles.js"></script>
+  <script src="/js/commun.js"></script>
+  <script src="/js/visa.js"></script>
+</body>
+</html>

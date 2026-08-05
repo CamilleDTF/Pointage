@@ -356,7 +356,7 @@ function afficher() {
   $('contenu').classList.remove('masque');
   modifiable = ['brouillon', 'rejetee'].includes(fiche.statut);
 
-  $('badge-statut').innerHTML = badgeStatut(fiche.statut);
+  $('badge-statut').innerHTML = badgeStatut(Regles.etatAffiche(fiche));
   $('periode').textContent = `Du ${jourMois(fiche.dates[0])} au ${jourMois(fiche.dates[6])} ${fiche.annee}`;
 
   const motif = $('motif-rejet');
@@ -420,8 +420,66 @@ function salarieParNom(nom) {
 }
 
 function champNom(ligne) {
-  return `<input class="nom-libre" list="liste-equipe" value="${echapper(ligne.nom_affiche)}"
-                 placeholder="NOM Prénom" autocomplete="off">`;
+  // L'identifiant du salarie rattache voyage avec le champ : c'est lui qui
+  // permet de proposer une correction d'identite plutot qu'une simple retouche
+  // de la ligne.
+  const rattache = ligne.salarie_id ? ` data-salarie="${ligne.salarie_id}"` : '';
+  return `<span class="champ-nom">
+      <input class="nom-libre" list="liste-equipe" value="${echapper(ligne.nom_affiche)}"
+             placeholder="NOM Prénom" autocomplete="off"${rattache}>
+      <button type="button" class="corriger-nom masque" title="Corriger l'identité dans le fichier du personnel">✎</button>
+    </span>`;
+}
+
+/**
+ * Le chef d'equipe a la personne devant lui : c'est lui qui voit le premier
+ * qu'un prenom est mal orthographie ou qu'un nom compose a ete tronque a
+ * l'import. Il corrige donc l'identite directement, sans passer par le
+ * directeur — et la correction vaut pour tout l'effectif, pas seulement pour
+ * cette semaine.
+ */
+function cablerCorrectionNom(conteneur) {
+  const libre = conteneur.querySelector('.nom-libre');
+  const bouton = conteneur.querySelector('.corriger-nom');
+  if (!libre || !bouton) return;
+
+  const salarie = () => {
+    const id = Number(libre.dataset.salarie);
+    return id ? (reference.effectif || []).find((s) => s.id === id) : null;
+  };
+
+  const rafraichir = () => {
+    const s = salarie();
+    const saisi = libre.value.trim();
+    // Le bouton n'apparait que si le nom saisi differe de la fiche du salarie
+    // rattache, et qu'il ne designe pas quelqu'un d'autre de l'effectif.
+    const utile = Boolean(s) && saisi !== '' && !Regles.memePersonne(`${s.nom} ${s.prenom}`, saisi) && !salarieParNom(saisi);
+    bouton.classList.toggle('masque', !utile);
+    if (utile) bouton.title = `Corriger l'identité de ${s.nom} ${s.prenom} dans le fichier du personnel`;
+  };
+
+  libre.addEventListener('input', rafraichir);
+  rafraichir();
+
+  bouton.addEventListener('click', async () => {
+    const s = salarie();
+    const saisi = libre.value.trim();
+    if (!s || !saisi) return;
+    const { nom, prenom } = Regles.separerNomPrenom(saisi);
+    if (!confirm(`Remplacer « ${s.nom} ${s.prenom} » par « ${nom} ${prenom} » dans le fichier du personnel ?`)) return;
+
+    try {
+      await API.put(`/api/salaries/${s.id}/nom`, { nom, prenom });
+      reference = await API.get('/api/reference');
+      s.nom = nom;
+      s.prenom = prenom;
+      rafraichir();
+      message('Identité corrigée pour toute l’équipe.', 'succes');
+      enregistrerPlusTard();
+    } catch (e) {
+      message(e.message, 'erreur');
+    }
+  });
 }
 
 function optionsCodes(codeActuel) {
@@ -585,6 +643,7 @@ function cablerLigne(conteneur, index) {
   libre.addEventListener('input', () => {
     if (etiquette) etiquette.textContent = libre.value || 'Ligne libre';
   });
+  cablerCorrectionNom(conteneur);
 
   // Un code absence remet la journee a zero : les deux ne se cumulent pas.
   conteneur.querySelectorAll('select.code').forEach((select) => {
@@ -885,7 +944,21 @@ async function transmettre() {
     fiche = reponse.fiche;
     afficher();
     await chargerCalendrier();
-    message('Fiche transmise au directeur.', 'succes');
+
+    const visa = reponse.visa || {};
+    if (!visa.demande) {
+      message('Fiche transmise au directeur.', 'succes');
+    } else if (visa.envoye) {
+      message(`Fiche envoyée à ${visa.conducteur} pour visa.`, 'succes', 6000);
+    } else {
+      // L'envoi a echoue : le dire franchement plutot que de laisser croire que
+      // le conducteur a recu quelque chose.
+      message(
+        `Fiche transmise, mais le courriel à ${visa.conducteur} n'est pas parti. Prévenez la direction.`,
+        'erreur',
+        9000
+      );
+    }
   } catch (e) {
     if (e.anomalies) {
       afficherAnomalies(e.anomalies, { deplier: true });
