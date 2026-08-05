@@ -10,8 +10,50 @@ let fiche = null;
 let signaturesLignes = [];
 let modifiable = true;
 let presentation = window.matchMedia('(min-width: 1024px)').matches ? 'tableau' : 'cartes';
+let differerEnregistrement = null;
 
 const $ = (id) => document.getElementById(id);
+
+/*
+ * Cablage tolerant d'un bouton.
+ *
+ * Un `$('...').addEventListener(...)` sur un identifiant absent leve une erreur
+ * qui interrompt tout le reste du fichier : les ecouteurs suivants ne sont plus
+ * poses, la page ne demarre pas, et le chef d'equipe se retrouve devant un
+ * ecran vide sans savoir pourquoi. C'est arrive avec un chef.html d'une version
+ * anterieure servi avec ce script. Un bouton manquant ne doit couter que ce
+ * bouton.
+ */
+const elementsAbsents = [];
+
+/** Applique une preparation a un element, en notant son absence sans echouer. */
+function poser(id, preparation) {
+  const element = $(id);
+  if (!element) {
+    if (!elementsAbsents.includes(id)) elementsAbsents.push(id);
+    return;
+  }
+  preparation(element);
+}
+
+function surClic(id, action) {
+  poser(id, (bouton) => bouton.addEventListener('click', action));
+}
+
+/**
+ * Si des elements attendus manquent, la page affichee vient d'une version
+ * anterieure au script — un cache navigateur qui n'a pas suivi. Le dire est
+ * plus utile que de laisser des fonctions disparaitre en silence.
+ */
+function signalerPagePerimee() {
+  if (!elementsAbsents.length) return;
+  console.warn('Elements absents de la page :', elementsAbsents.join(', '));
+  message(
+    'La page affichée date d’une version antérieure. Rechargez avec Ctrl+Maj+R (ou Cmd+Maj+R).',
+    'erreur',
+    15000
+  );
+}
 
 /* ------------------------------ Initialisation ---------------------------- */
 
@@ -22,30 +64,33 @@ async function demarrer() {
     return;
   }
   definirRole('chef');
-  $('entete-chef').textContent = utilisateur.nom;
-
   reference = await API.get('/api/reference');
-  // La version a l'ecran : elle dit sans ambiguite quel code tourne vraiment.
-  $('entete-chef').textContent = `${utilisateur.nom} · version ${reference.version}`;
-  $('annee').value = reference.semaineCourante.annee;
-  $('semaine').value = reference.semaineCourante.semaine;
 
-  $('annee-calendrier').value = reference.semaineCourante.annee;
+  const grandEcran = window.matchMedia('(min-width: 1024px)').matches;
+  // Chaque element est facultatif : une page d'une version anterieure doit
+  // perdre une fonction, jamais l'ecran entier.
+  poser('entete-chef', (e) => { e.textContent = `${utilisateur.nom} · version ${reference.version}`; });
+  poser('annee', (e) => { e.value = reference.semaineCourante.annee; });
+  poser('semaine', (e) => { e.value = reference.semaineCourante.semaine; });
+  poser('annee-calendrier', (e) => { e.value = reference.semaineCourante.annee; });
   // Deplie sur grand ecran ; replie sur telephone, ou 53 semaines separeraient
   // le chef de sa fiche.
-  $('bloc-calendrier').open = window.matchMedia('(min-width: 1024px)').matches;
+  poser('bloc-calendrier', (e) => { e.open = grandEcran; });
+
   majBoutonPresentation();
   surveillerReseau();
+  signalerPagePerimee();
   await chargerCalendrier();
   await ouvrirFiche();
 }
 
-$('annee-calendrier').addEventListener('change', chargerCalendrier);
+if ($('annee-calendrier')) $('annee-calendrier').addEventListener('change', chargerCalendrier);
 
 /* -------------------------- Calendrier de l'annee ------------------------- */
 
 /** Vue d'ensemble : chaque semaine de l'annee avec l'etat de sa fiche. */
 async function chargerCalendrier() {
+  if (!$('calendrier')) return; // page d'une version anterieure : pas de calendrier a remplir
   const annee = Number($('annee-calendrier').value);
   let donnees;
   try {
@@ -62,10 +107,12 @@ async function chargerCalendrier() {
     ['soumise', donnees.totaux.soumise],
     ['validee', donnees.totaux.validee],
   ];
-  $('resume-calendrier').innerHTML = aTraiter
-    .filter(([, nombre]) => nombre > 0)
-    .map(([etat, nombre]) => `<span class="etat ${etat}">${nombre} ${echapper(etiquetteStatut(etat))}</span>`)
-    .join('');
+  poser('resume-calendrier', (zone) => {
+    zone.innerHTML = aTraiter
+      .filter(([, nombre]) => nombre > 0)
+      .map(([etat, nombre]) => `<span class="etat ${etat}">${nombre} ${echapper(etiquetteStatut(etat))}</span>`)
+      .join('');
+  });
 
   const parMois = new Map();
   for (const semaine of donnees.semaines) {
@@ -85,9 +132,11 @@ async function chargerCalendrier() {
   // Les semaines grisees d'avant la mise en service ne sont pas un oubli : on
   // le dit, plutot que de laisser deviner pourquoi elles sont eteintes.
   const grisees = donnees.semaines.some((s) => s.etat === 'horsPerimetre');
-  $('note-mise-en-service').textContent = grisees && donnees.debutService
-    ? ` Les semaines antérieures au ${dateFrancaise(donnees.debutService)} ont été pointées sur papier : elles n'ont rien à recevoir ici.`
-    : '';
+  poser('note-mise-en-service', (note) => {
+    note.textContent = grisees && donnees.debutService
+      ? ` Les semaines antérieures au ${dateFrancaise(donnees.debutService)} ont été pointées sur papier : elles n'ont rien à recevoir ici.`
+      : '';
+  });
 
   $('calendrier').querySelectorAll('.case-semaine').forEach((bouton) => {
     bouton.addEventListener('click', () => {
@@ -117,21 +166,21 @@ function caseSemaine(semaine) {
     </button>`;
 }
 
-$('btn-ouvrir').addEventListener('click', () => ouvrirFiche());
-$('btn-quitter').addEventListener('click', deconnexion);
-$('btn-code').addEventListener('click', changerCode);
-$('btn-transmettre').addEventListener('click', transmettre);
-$('btn-presentation').addEventListener('click', () => {
+surClic('btn-ouvrir', () => ouvrirFiche());
+surClic('btn-quitter', deconnexion);
+surClic('btn-code', changerCode);
+surClic('btn-transmettre', transmettre);
+surClic('btn-presentation', () => {
   presentation = presentation === 'tableau' ? 'cartes' : 'tableau';
   majBoutonPresentation();
   construireSalaries();
   // La grille vient d etre reconstruite : les champs en rouge sont a reposer.
   if (fiche) afficherAnomalies(fiche.anomalies || []);
 });
-$('btn-excel').addEventListener('click', () => {
+surClic('btn-excel', () => {
   if (fiche) window.location.href = `/api/export/fiche/${fiche.id}.xlsx`;
 });
-$('btn-jours-vides').addEventListener('click', marquerJoursNonTravailles);
+surClic('btn-jours-vides', marquerJoursNonTravailles);
 
 /**
  * Declare non travaillees toutes les journees ouvrables restees vides. Saisir
@@ -164,11 +213,13 @@ function marquerJoursNonTravailles() {
 }
 
 function majBoutonPresentation() {
-  $('btn-presentation').textContent = presentation === 'tableau' ? 'Vue téléphone' : 'Vue tableau';
-  $('btn-presentation').title =
-    presentation === 'tableau'
-      ? 'Basculer vers la saisie en cartes, adaptée au téléphone'
-      : 'Basculer vers la grille complète, adaptée au PC portable';
+  poser('btn-presentation', (bouton) => {
+    bouton.textContent = presentation === 'tableau' ? 'Vue téléphone' : 'Vue tableau';
+    bouton.title =
+      presentation === 'tableau'
+        ? 'Basculer vers la saisie en cartes, adaptée au téléphone'
+        : 'Basculer vers la grille complète, adaptée au PC portable';
+  });
 }
 
 async function changerCode() {
@@ -618,7 +669,18 @@ async function enregistrer() {
   }
 }
 
-const enregistrerPlusTard = antiRebond(enregistrer, 1200);
+/*
+ * Volontairement une fonction declaree, et non une const : `afficher()` s'en
+ * sert bien plus haut dans le fichier. Avec une const, la moindre interruption
+ * du script avant cette ligne laissait la liaison dans sa zone morte, et le
+ * premier affichage de fiche echouait sur un message incomprehensible. Une
+ * declaration de fonction est hoistee, et l'anti-rebond se construit au premier
+ * appel : plus rien ici ne depend de l'ordre d'evaluation du fichier.
+ */
+function enregistrerPlusTard(...args) {
+  if (!differerEnregistrement) differerEnregistrement = antiRebond(enregistrer, 1200);
+  differerEnregistrement(...args);
+}
 
 /* -------------------------------- Contrôles ------------------------------- */
 

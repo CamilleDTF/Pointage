@@ -6,6 +6,24 @@ const fichesChargees = new Map();
 
 const $ = (id) => document.getElementById(id);
 
+/*
+ * Cablage tolerant : un identifiant absent de la page ne doit couter que la
+ * fonction concernee. Sans ce garde-fou, un `addEventListener` sur un element
+ * manquant interrompt tout le fichier — les ecouteurs suivants ne sont plus
+ * poses et l'ecran ne demarre jamais.
+ */
+function surEvenement(id, evenement, action) {
+  const element = $(id);
+  if (!element) {
+    console.warn(`Element "${id}" absent de la page : fonction indisponible, le reste fonctionne.`);
+    return;
+  }
+  element.addEventListener(evenement, action);
+}
+function surClic(id, action) {
+  surEvenement(id, 'click', action);
+}
+
 async function demarrer() {
   const { utilisateur } = await API.get('/api/moi');
   if (utilisateur.role !== 'directeur') {
@@ -24,17 +42,17 @@ async function demarrer() {
   await apercuMois();
 }
 
-$('btn-charger').addEventListener('click', charger);
-$('btn-quitter').addEventListener('click', deconnexion);
-$('btn-precedente').addEventListener('click', () => decalerSemaine(-1));
-$('btn-suivante').addEventListener('click', () => decalerSemaine(1));
-$('btn-admin').addEventListener('click', basculerAdmin);
-$('btn-export-xlsx').addEventListener('click', () => exporter('xlsx'));
-$('btn-export-csv').addEventListener('click', () => exporter('csv'));
-$('btn-export-mois').addEventListener('click', () => {
+surClic('btn-charger', charger);
+surClic('btn-quitter', deconnexion);
+surClic('btn-precedente', () => decalerSemaine(-1));
+surClic('btn-suivante', () => decalerSemaine(1));
+surClic('btn-admin', basculerAdmin);
+surClic('btn-export-xlsx', () => exporter('xlsx'));
+surClic('btn-export-csv', () => exporter('csv'));
+surClic('btn-export-mois', () => {
   window.location.href = `/api/export/mois.xlsx?annee=${$('annee-mois').value}&mois=${$('mois').value}`;
 });
-for (const champ of ['mois', 'annee-mois']) $(champ).addEventListener('change', apercuMois);
+for (const champ of ['mois', 'annee-mois']) surEvenement(champ, 'change', apercuMois);
 
 /** Annonce ce que contiendra le tableau mensuel avant de le telecharger. */
 async function apercuMois() {
@@ -465,7 +483,7 @@ window.basculerSalarie = async (id, actif) => {
   await chargerAdmin();
 };
 
-$('btn-ajout-chef').addEventListener('click', async () => {
+surClic('btn-ajout-chef', async () => {
   try {
     await API.post('/api/admin/utilisateurs', {
       nom: $('u-nom').value,
@@ -481,7 +499,7 @@ $('btn-ajout-chef').addEventListener('click', async () => {
   }
 });
 
-$('btn-ajout-salarie').addEventListener('click', async () => {
+surClic('btn-ajout-salarie', async () => {
   try {
     await API.post('/api/admin/salaries', {
       matricule: $('s-matricule').value,

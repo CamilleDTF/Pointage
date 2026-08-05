@@ -272,7 +272,6 @@ public/
   directeur.html Tableau de bord        + js/directeur.js
   js/regles.js  Règles métier partagées avec le serveur (heures, semaines, contrôles)
   js/commun.js  API, signature tactile, file d'attente en cas de coupure réseau
-  sw.js         Service worker : mise en cache de la coquille de l'application
 test/
   domaine.test.js       Conversion des heures, semaines ISO, contrôles de cohérence
   paie.test.js          Majorations 25 / 50 %, grand déplacement, découpage des mois
@@ -309,6 +308,24 @@ chaque correction est tracée dans le journal.
 | `NODE_ENV` | `production` : messages d'erreur non détaillés | — |
 | `COOKIE_SECURE` | `true` force le cookie `Secure`, même joint en HTTP | déduit du protocole utilisé |
 | `DEBUT_SERVICE` | Première semaine attendue dans l'application (`AAAA-MM-JJ`) | `2026-09-01` |
+
+### Mise à jour des fichiers de l'interface
+
+Les pages, feuilles de style et scripts sont servis en `Cache-Control: no-cache` :
+le navigateur les garde, mais revalide à chaque fois et se contente d'un `304`
+tant que rien n'a changé. C'est délibéré. Avec une durée de vie ferme, une page
+pouvait rester en cache pendant qu'un script était rechargé — la page de la
+veille appelait alors le code du jour, et l'écran restait vide. Sur une poignée
+de postes en réseau local, la revalidation ne coûte rien.
+
+Pour la même raison, l'application n'installe plus de *service worker* : le mode
+hors ligne n'est pas nécessaire (les chefs sont connectés en permanence) et il
+pouvait servir une page et son script de deux générations différentes. Celui
+déjà posé sur un appareil se désinstalle tout seul au premier chargement.
+
+Si un écran se comporte malgré tout comme s'il datait, il l'annonce lui-même et
+demande un `Ctrl+Maj+R`. La version exécutée est affichée dans le bandeau, à côté
+du nom de l'utilisateur.
 
 Mise en production sans abonnement : voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
 

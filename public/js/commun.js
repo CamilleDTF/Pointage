@@ -232,6 +232,16 @@ async function deconnexion() {
   location.href = '/';
 }
 
+/*
+ * Le service worker mettait la coquille de l'application en cache pour un mode
+ * hors ligne dont les chefs d'equipe n'ont pas besoin : ils sont connectes en
+ * permanence. En echange, il pouvait servir une page d'une version et son
+ * script d'une autre — un ecran blanc pour un benefice nul. On le retire, et on
+ * desinstalle celui deja pose sur les appareils.
+ */
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+  navigator.serviceWorker.getRegistrations?.()
+    .then((enregistrements) => enregistrements.forEach((r) => r.unregister()))
+    .catch(() => {});
+  if (window.caches) caches.keys().then((cles) => cles.forEach((c) => caches.delete(c))).catch(() => {});
 }

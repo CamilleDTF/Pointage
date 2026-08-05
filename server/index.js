@@ -438,10 +438,31 @@ app.put('/api/admin/salaries/:id', A.exigerDirecteur, (req, res) => {
 
 /* --------------------------------- Statique -------------------------------- */
 
-app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h' }));
+/*
+ * `no-cache` ne veut pas dire « ne rien garder » : le navigateur conserve les
+ * fichiers, mais revalide a chaque fois et se contente d'un 304 quand rien n'a
+ * bouge. C'est indispensable ici. Avec une duree de vie ferme (maxAge), une
+ * page pouvait rester en cache pendant qu'un script etait recharge : la version
+ * d'hier appelait alors le code d'aujourd'hui, et l'ecran restait vide. Sur une
+ * poignee de postes en reseau local, la revalidation ne coute rien.
+ */
+app.use(
+  express.static(path.join(__dirname, '..', 'public'), {
+    etag: true,
+    lastModified: true,
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+  })
+);
 
+/*
+ * Une adresse inconnue renvoie a l'ecran de connexion — mais seulement s'il
+ * s'agit d'une navigation. Repondre la page d'accueil a la place d'un fichier
+ * .js ou .css manquant est pire que de ne rien repondre : le navigateur recoit
+ * du HTML la ou il attend du code, et l'echec devient incomprehensible.
+ */
 app.use((req, res) => {
   if (req.path.startsWith('/api/')) return res.status(404).json({ erreur: 'Route inconnue.' });
+  if (/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type('text/plain').send('Fichier introuvable.');
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 

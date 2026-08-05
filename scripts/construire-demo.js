@@ -67,9 +67,9 @@ function preparerCommun() {
     'déconnexion'
   );
 
-  // Pas de service worker dans une page unique.
+  // La desinstallation du service worker n'a pas de sens dans une page unique.
   const swDebut = source.indexOf("if ('serviceWorker' in navigator)");
-  if (swDebut === -1) throw new Error('Enregistrement du service worker introuvable dans commun.js.');
+  if (swDebut === -1) throw new Error('Bloc service worker introuvable dans commun.js.');
   source = source.slice(0, swDebut);
 
   return source;

@@ -1,6 +1,6 @@
 {
   "name": "pointage-dtf",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Digitalisation des fiches de pointage hebdomadaires (desamiantage)",
   "type": "commonjs",
