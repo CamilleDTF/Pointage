@@ -44,6 +44,7 @@ function ficheType(modifications = {}) {
   return {
     chantier: 'Lycee Jean Moulin',
     ville: 'Toulouse',
+    zone_deplacement: 'AUTRE',
     annee: 2026,
     semaine: 31,
     ...modifications,
@@ -207,4 +208,43 @@ test('semaineISO et datesDeLaSemaine sont reciproques sur toute une annee', () =
       );
     }
   }
+});
+
+test('la zone cochee decide seule du taux de grand deplacement', () => {
+  // Paris et Nice ouvrent le taux 80, quelle que soit la ville saisie.
+  assert.equal(D.estGrandDeplacement80('Levallois', 'PARIS'), true);
+  assert.equal(D.estGrandDeplacement80('Cagnes', 'NICE'), true);
+  // Et « Autre » ferme le 80, meme si le nom de ville contient Paris.
+  assert.equal(D.estGrandDeplacement80('Paris-l Hopital', 'AUTRE'), false);
+});
+
+test('sans zone, la lecture du nom de ville reste la regle historique', () => {
+  // Les fiches saisies avant l introduction de la zone doivent continuer a
+  // etre valorisees comme elles l ont toujours ete.
+  assert.equal(D.estGrandDeplacement80('Nice', ''), true);
+  assert.equal(D.estGrandDeplacement80('PARIS 15e', ''), true);
+  assert.equal(D.estGrandDeplacement80('Toulouse', ''), false);
+});
+
+test('la zone se deduit d une ancienne fiche pour proposer un choix', () => {
+  assert.equal(D.zoneDepuisVille('Nice'), 'NICE');
+  assert.equal(D.zoneDepuisVille('Paris 15e'), 'PARIS');
+  assert.equal(D.zoneDepuisVille('Toulouse'), 'AUTRE');
+  assert.equal(D.zoneDepuisVille(''), '');
+});
+
+test('une fiche sans zone ne peut pas etre transmise', () => {
+  const anomalies = D.controlerFiche(ficheType({ zone_deplacement: '' }), [ligneType()]);
+  assert.equal(anomalies.length, 1);
+  assert.equal(anomalies[0].niveau, 'bloquant');
+  assert.match(anomalies[0].message, /zone/);
+  assert.deepEqual(anomalies[0].cible, { champZone: true });
+});
+
+test('un nom complet se separe en nom de famille et prenom', () => {
+  assert.deepEqual(D.separerNomPrenom('BENALI Karim'), { nom: 'BENALI', prenom: 'Karim' });
+  assert.deepEqual(D.separerNomPrenom('DE LA CROIX Jean-Pierre'), { nom: 'DE LA CROIX', prenom: 'Jean-Pierre' });
+  // Tout en capitales : on ne peut plus deviner, le premier mot fait office de nom.
+  assert.deepEqual(D.separerNomPrenom('BENALI KARIM'), { nom: 'BENALI', prenom: 'KARIM' });
+  assert.deepEqual(D.separerNomPrenom(''), { nom: '', prenom: '' });
 });

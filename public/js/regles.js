@@ -189,12 +189,43 @@
     return normaliser(a) !== '' && normaliser(a) === normaliser(b);
   }
 
-  /** Le chantier se situe-t-il dans une ville au taux 80 ? */
-  function estGrandDeplacement80(ville) {
+  /*
+   * Zone de deplacement declaree sur la fiche. Le chef coche, il ne redige
+   * pas : c'est ce choix, et non l'orthographe du nom de ville, qui decide du
+   * taux de grand deplacement.
+   */
+  const ZONES_DEPLACEMENT = [
+    { code: 'PARIS', libelle: 'Paris', taux: 80 },
+    { code: 'NICE', libelle: 'Nice', taux: 80 },
+    { code: 'AUTRE', libelle: 'Autre (préciser)', taux: 72 },
+  ];
+
+  /**
+   * Le chantier ouvre-t-il droit au grand deplacement au taux 80 ?
+   *
+   * La zone cochee fait foi. Les fiches saisies avant son introduction n'en ont
+   * pas : on retombe alors sur la lecture du nom de ville, qui reste la regle
+   * historique — « a partir du moment ou c'est ecrit Paris ou Nice, on passe
+   * en 80 ».
+   */
+  function estGrandDeplacement80(ville, zone) {
+    const declaree = String(zone || '').trim().toUpperCase();
+    if (declaree === 'PARIS' || declaree === 'NICE') return true;
+    if (declaree === 'AUTRE') return false;
+
     const normalisee = sansAccents(ville);
     return VILLES_GRAND_DEPLACEMENT_80.some(
       (v) => normalisee === v || new RegExp(`(^|[^A-Z])${v}([^A-Z]|$)`).test(normalisee)
     );
+  }
+
+  /** Zone deduite d'un nom de ville, pour proposer un choix aux anciennes fiches. */
+  function zoneDepuisVille(ville) {
+    const normalisee = sansAccents(ville);
+    for (const v of VILLES_GRAND_DEPLACEMENT_80) {
+      if (normalisee === v || new RegExp(`(^|[^A-Z])${v}([^A-Z]|$)`).test(normalisee)) return v;
+    }
+    return String(ville || '').trim() ? 'AUTRE' : '';
   }
 
   /**
@@ -313,6 +344,11 @@
     if (!String(fiche.ville || '').trim()) {
       bloquant('La ville est obligatoire.', { entete: 'ville' });
     }
+    // La zone commande le taux de grand deplacement (72 ou 80) : sans elle, la
+    // prime se calcule au jugé.
+    if (!ZONES_DEPLACEMENT.some((z) => z.code === String(fiche.zone_deplacement || '').toUpperCase())) {
+      bloquant('Indiquez la zone du chantier : Paris, Nice ou Autre.', { champZone: true });
+    }
 
     const remplies = lignes
       .map((ligne, index) => ({ ligne, index }))
@@ -395,6 +431,8 @@
     VILLES_GRAND_DEPLACEMENT_80,
     heuresSupplementaires,
     estGrandDeplacement80,
+    ZONES_DEPLACEMENT,
+    zoneDepuisVille,
     semainesDuMois,
     sansAccents,
     separerNomPrenom,

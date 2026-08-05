@@ -10,6 +10,7 @@ const A = require('./auth');
 const X = require('./export');
 const XM = require('./export-mensuel');
 const M = require('./mensuel');
+const I = require('./indicateurs');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -109,6 +110,11 @@ app.get('/api/reference', A.exigerConnexion, (req, res) => {
     effectif: db
       .prepare('SELECT id, nom, prenom, matricule FROM salaries WHERE actif = 1 ORDER BY nom, prenom')
       .all(),
+    // Le parc : le chef choisit une immatriculation, le reste se remplit seul.
+    vehicules: db
+      .prepare('SELECT id, immatriculation, marque, modele, motorisation FROM vehicules WHERE actif = 1 ORDER BY immatriculation')
+      .all(),
+    zonesDeplacement: D.ZONES_DEPLACEMENT,
   });
 });
 
@@ -300,14 +306,106 @@ app.get(
       return res.status(400).json({ erreur: 'Mois invalide (1 a 12).' });
     }
 
+    // La version direction porte les salaires : elle exige le code, meme pour
+    // un directeur deja connecte.
+    const version = req.query.version === 'direction' ? 'direction' : 'public';
+    if (version === 'direction' && !A.accesPaieOuvert(req)) {
+      return res.status(403).json({ erreur: 'Les montants demandent votre code directeur.', codeDemande: true });
+    }
+
     const donnees = M.agregerMois(annee, mois, { statut: req.query.statut || 'validee' });
-    const buffer = await XM.exporterMois(donnees);
-    const nom = nomFichier(`pointage_mensuel_${annee}_${String(mois).padStart(2, '0')}.xlsx`);
+    const buffer = await XM.exporterMois(donnees, { version });
+    const nom = nomFichier(
+      `pointage_mensuel_${annee}_${String(mois).padStart(2, '0')}_${version}.xlsx`
+    );
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${nom}"`);
     res.send(Buffer.from(buffer));
   })
 );
+
+/* ------------------------- Tableau mensuel a l'ecran ----------------------- */
+
+/*
+ * Le meme tableau que le classeur, mais consultable directement. Deux versions :
+ *
+ *  - "public"    : heures, majorations, jours de zone, paniers, grands
+ *                  deplacements. Aucun montant, aucun taux horaire.
+ *  - "direction" : la meme chose plus la valorisation. Elle exige que le
+ *                  directeur ait ressaisi son code, meme si sa session est
+ *                  ouverte : une session dure trente jours, un salaire affiche
+ *                  sur un ecran partage n'attend pas si longtemps.
+ */
+app.post('/api/paie/deverrouiller', A.exigerDirecteur, (req, res) => {
+  const cle = `${req.ip}|paie|${req.utilisateur.id}`;
+  if (A.tropDeTentatives(cle)) {
+    return res.status(429).json({ erreur: 'Trop de tentatives. Reessayez dans 15 minutes.' });
+  }
+  const u = db.prepare('SELECT pin_hash FROM utilisateurs WHERE id = ?').get(req.utilisateur.id);
+  if (!A.verifierPin(String(req.body.pin || ''), u.pin_hash)) {
+    A.enregistrerEchec(cle);
+    return res.status(401).json({ erreur: 'Code incorrect.' });
+  }
+  A.reinitialiserTentatives(cle);
+  const duree = A.ouvrirAccesPaie(req, res, req.utilisateur);
+  res.json({ ok: true, dureeMinutes: Math.round(duree / 60000) });
+});
+
+app.post('/api/paie/verrouiller', A.exigerDirecteur, (req, res) => {
+  A.fermerAccesPaie(res);
+  res.json({ ok: true });
+});
+
+app.get('/api/mois', A.exigerDirecteur, (req, res) => {
+  const annee = Number(req.query.annee);
+  const mois = Number(req.query.mois);
+  if (!Number.isInteger(annee) || annee < 2020 || annee > 2100) {
+    return res.status(400).json({ erreur: 'Annee invalide.' });
+  }
+  if (!Number.isInteger(mois) || mois < 1 || mois > 12) {
+    return res.status(400).json({ erreur: 'Mois invalide (1 a 12).' });
+  }
+
+  const demandee = req.query.version === 'direction' ? 'direction' : 'public';
+  const accorde = demandee === 'public' || A.accesPaieOuvert(req);
+  if (!accorde) {
+    return res.status(403).json({ erreur: 'Les montants demandent votre code directeur.', codeDemande: true });
+  }
+
+  const montantPanier = Number(req.query.panier) || 0;
+  const donnees = M.agregerMois(annee, mois, { statut: req.query.statut || 'validee' });
+
+  const salaries = donnees.salaries.map((s) => {
+    const commun = {
+      nom: s.nom,
+      prenom: s.prenom,
+      matricule: s.matricule,
+      chantiers: s.chantiers,
+      semaines: s.semaines.map((x) => x.minutesTotal),
+      minutesMois: s.minutesMois,
+      minutes25: s.minutes25,
+      minutes50: s.minutes50,
+      minutesRoute: s.minutesRoute,
+      minutesTrajet: s.minutesTrajet,
+      joursAmiante1: s.joursAmiante1,
+      joursAmiante2: s.joursAmiante2,
+      joursPanier: s.joursPanier,
+      joursGD72: s.joursGD72,
+      joursGD80: s.joursGD80,
+      joursFeries: s.joursFeries,
+    };
+    return demandee === 'direction' ? { ...commun, ...M.valoriser(s, { montantPanier }) } : commun;
+  });
+
+  res.json({
+    annee,
+    mois,
+    version: demandee,
+    montantPanier,
+    semaines: donnees.semaines.map((s) => ({ annee: s.annee, semaine: s.semaine, debut: s.dates[0] })),
+    salaries,
+  });
+});
 
 /** Ce que contiendra l'export mensuel, pour l'annoncer avant de le telecharger. */
 app.get('/api/export/mois-apercu', A.exigerDirecteur, (req, res) => {
@@ -427,13 +525,56 @@ app.post('/api/admin/salaries', A.exigerDirecteur, (req, res) => {
 });
 
 app.put('/api/admin/salaries/:id', A.exigerDirecteur, (req, res) => {
-  const champs = ['matricule', 'nom', 'prenom', 'chef_id', 'actif'];
+  const champs = ['matricule', 'nom', 'prenom', 'chef_id', 'actif', 'taux_horaire'];
   const maj = {};
   for (const champ of champs) if (req.body[champ] !== undefined) maj[champ] = req.body[champ];
   if (!Object.keys(maj).length) return res.json({ ok: true });
   const set = Object.keys(maj).map((c) => `${c} = @${c}`).join(', ');
   db.prepare(`UPDATE salaries SET ${set} WHERE id = @id`).run({ ...maj, id: Number(req.params.id) });
   res.json({ ok: true });
+});
+
+/* ---------------------------- Parc de vehicules ---------------------------- */
+
+app.get('/api/admin/vehicules', A.exigerDirecteur, (req, res) => {
+  res.json({ vehicules: db.prepare('SELECT * FROM vehicules ORDER BY immatriculation').all() });
+});
+
+app.post('/api/admin/vehicules', A.exigerDirecteur, (req, res) => {
+  const immatriculation = String(req.body.immatriculation || '').trim().toUpperCase();
+  if (!immatriculation) return res.status(400).json({ erreur: "L'immatriculation est obligatoire." });
+  try {
+    const r = db
+      .prepare('INSERT INTO vehicules (immatriculation, marque, modele, motorisation) VALUES (?, ?, ?, ?)')
+      .run(
+        immatriculation,
+        String(req.body.marque || '').trim(),
+        String(req.body.modele || '').trim(),
+        String(req.body.motorisation || '').trim()
+      );
+    res.json({ id: r.lastInsertRowid });
+  } catch {
+    res.status(409).json({ erreur: 'Cette immatriculation existe deja.' });
+  }
+});
+
+app.put('/api/admin/vehicules/:id', A.exigerDirecteur, (req, res) => {
+  const champs = ['immatriculation', 'marque', 'modele', 'motorisation', 'actif'];
+  const maj = {};
+  for (const champ of champs) if (req.body[champ] !== undefined) maj[champ] = req.body[champ];
+  if (!Object.keys(maj).length) return res.json({ ok: true });
+  const set = Object.keys(maj).map((c) => `${c} = @${c}`).join(', ');
+  db.prepare(`UPDATE vehicules SET ${set} WHERE id = @id`).run({ ...maj, id: Number(req.params.id) });
+  res.json({ ok: true });
+});
+
+/* ------------------------------- Indicateurs ------------------------------- */
+
+app.get('/api/admin/indicateurs', A.exigerDirecteur, (req, res) => {
+  res.json({
+    debutService: DEBUT_SERVICE,
+    chefs: I.indicateursChefs(DEBUT_SERVICE),
+  });
 });
 
 /* --------------------------------- Statique -------------------------------- */

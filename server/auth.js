@@ -129,6 +129,50 @@ function exigerDirecteur(req, res, next) {
   next();
 }
 
+/* --------------------- Acces aux montants de la paie ---------------------- */
+
+/*
+ * Les salaires ne s'ouvrent pas sur la seule foi d'une session restee ouverte
+ * trente jours. Le directeur ressaisit son code, ce qui debloque les montants
+ * pour une duree courte, dans ce navigateur uniquement. Le jeton est signe et
+ * expire tout seul : rien a purger cote serveur.
+ */
+const DUREE_ACCES_PAIE_MS = 20 * 60 * 1000;
+const NOM_COOKIE_PAIE = 'pointage_paie';
+
+function ouvrirAccesPaie(req, res, utilisateur) {
+  const jeton = signer({ uid: utilisateur.id, paie: true, exp: Date.now() + DUREE_ACCES_PAIE_MS });
+  const secure = connexionChiffree(req) || process.env.COOKIE_SECURE === 'true' ? '; Secure' : '';
+  res.setHeader(
+    'Set-Cookie',
+    `${NOM_COOKIE_PAIE}=${encodeURIComponent(jeton)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${
+      DUREE_ACCES_PAIE_MS / 1000
+    }${secure}`
+  );
+  return DUREE_ACCES_PAIE_MS;
+}
+
+function fermerAccesPaie(res) {
+  res.setHeader('Set-Cookie', `${NOM_COOKIE_PAIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+}
+
+/** Ce navigateur a-t-il un acces aux montants, ouvert par le titulaire lui-meme ? */
+function accesPaieOuvert(req) {
+  if (!req.utilisateur || req.utilisateur.role !== 'directeur') return false;
+  const donnees = verifier(lireCookies(req)[NOM_COOKIE_PAIE] || '');
+  return Boolean(donnees && donnees.paie && donnees.uid === req.utilisateur.id);
+}
+
+function exigerAccesPaie(req, res, next) {
+  if (!accesPaieOuvert(req)) {
+    return res.status(403).json({
+      erreur: 'Les montants demandent votre code directeur.',
+      codeDemande: true,
+    });
+  }
+  next();
+}
+
 // Limitation simple des tentatives de PIN, en memoire (un seul processus).
 const tentatives = new Map();
 const MAX_TENTATIVES = 8;
@@ -167,6 +211,11 @@ module.exports = {
   fermerSession,
   exigerConnexion,
   exigerDirecteur,
+  ouvrirAccesPaie,
+  fermerAccesPaie,
+  accesPaieOuvert,
+  exigerAccesPaie,
+  DUREE_ACCES_PAIE_MS,
   hacherPin,
   verifierPin,
   tropDeTentatives,

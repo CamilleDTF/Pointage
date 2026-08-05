@@ -192,7 +192,7 @@ test('une fiche transmise n est plus modifiable par son chef', async () => {
     type_masque: i === 0 ? 'VA' : '',
     jours: ligne.jours.map((j) => ({ ...j, minutes: i === 0 && j.jour <= 4 ? 450 : 0 })),
   }));
-  await a('PUT', `/api/fiches/${fiche.id}`, { chantier: 'Chantier test', ville: 'Toulouse', lignes });
+  await a('PUT', `/api/fiches/${fiche.id}`, { chantier: 'Chantier test', ville: 'Toulouse', zone_deplacement: 'AUTRE', lignes });
 
   assert.equal((await a('POST', `/api/fiches/${fiche.id}/soumettre`)).statut, 200);
   assert.equal((await a('PUT', `/api/fiches/${fiche.id}`, { chantier: 'Apres coup' })).statut, 409);
@@ -212,7 +212,7 @@ test('une correction partielle du directeur ne detruit pas la saisie du chef', a
     nom_affiche: i === 0 ? 'ANDRE Alain' : '',
     jours: ligne.jours.map((j) => ({ ...j, minutes: i === 0 && j.jour <= 4 ? 450 : 0 })),
   }));
-  await a('PUT', `/api/fiches/${fiche.id}`, { chantier: 'Chantier test', ville: 'Toulouse', lignes });
+  await a('PUT', `/api/fiches/${fiche.id}`, { chantier: 'Chantier test', ville: 'Toulouse', zone_deplacement: 'AUTRE', lignes });
 
   // Le directeur ne corrige que la ville : les heures doivent survivre.
   const apres = await d('PUT', `/api/fiches/${fiche.id}`, { ville: 'Blagnac' });
@@ -322,7 +322,7 @@ test('une journee mise a zero par le chef est conservee comme telle', async () =
     })),
   }));
   const enregistree = await a('PUT', `/api/fiches/${fiche.id}`, {
-    chantier: 'Chantier test', ville: 'Toulouse', lignes,
+    chantier: 'Chantier test', ville: 'Toulouse', zone_deplacement: 'AUTRE', lignes,
   });
   assert.equal(enregistree.statut, 200);
 
@@ -345,7 +345,7 @@ test('une journee laissee vide bloque toujours la transmission', async () => {
     nom_affiche: i === 0 ? 'ANDRE Alain' : '',
     jours: ligne.jours.map((j) => ({ ...j, minutes: 0, saisi: i === 0 && j.jour <= 3 ? 1 : 0 })),
   }));
-  await a('PUT', `/api/fiches/${fiche.id}`, { chantier: 'Chantier test', ville: 'Toulouse', lignes });
+  await a('PUT', `/api/fiches/${fiche.id}`, { chantier: 'Chantier test', ville: 'Toulouse', zone_deplacement: 'AUTRE', lignes });
 
   const refus = await a('POST', `/api/fiches/${fiche.id}/soumettre`);
   assert.equal(refus.statut, 422);
@@ -369,7 +369,7 @@ test('un operateur d une autre equipe se pointe et se rattache correctement', as
     jours: ligne.jours.map((j) => ({ ...j, minutes: i === 0 && j.jour <= 4 ? 450 : 0 })),
   }));
   const reponse = await a('PUT', `/api/fiches/${fiche.id}`, {
-    chantier: 'Chantier partage', ville: 'Toulouse', lignes,
+    chantier: 'Chantier partage', ville: 'Toulouse', zone_deplacement: 'AUTRE', lignes,
   });
 
   assert.equal(reponse.statut, 200);
@@ -391,4 +391,78 @@ test('la fiche s ouvre pre-remplie avec le chef d equipe en premiere ligne', asy
   await a('POST', '/api/fiches/semaine', { annee: 2026, semaine: 42 });
   const doublons = db.prepare("SELECT COUNT(*) AS n FROM salaries WHERE nom = 'CHEF' AND prenom = 'A'").get().n;
   assert.equal(doublons, 1);
+});
+
+test('les montants de la paie exigent le code, meme pour un directeur connecte', async () => {
+  const d = await connexion('dir', '9999');
+
+  // La version publique s'ouvre sans rien redemander.
+  const publique = await d('GET', '/api/mois?annee=2026&mois=9&version=public');
+  assert.equal(publique.statut, 200);
+  assert.equal(publique.corps.version, 'public');
+  // Et elle ne laisse filtrer aucun montant.
+  for (const s of publique.corps.salaries) {
+    for (const champ of ['tauxHoraire', 'salaireBrut', 'salaireNet', 'totalNet']) {
+      assert.equal(s[champ], undefined, `${champ} ne doit pas figurer dans la version publique`);
+    }
+  }
+
+  // La version direction est refusee tant que le code n'a pas ete ressaisi.
+  const refus = await d('GET', '/api/mois?annee=2026&mois=9&version=direction');
+  assert.equal(refus.statut, 403);
+  assert.equal(refus.corps.codeDemande, true);
+  assert.equal((await d('GET', '/api/export/mois.xlsx?annee=2026&mois=9&version=direction')).statut, 403);
+
+  // Un mauvais code ne l'ouvre pas davantage.
+  assert.equal((await d('POST', '/api/paie/deverrouiller', { pin: '0000' })).statut, 401);
+});
+
+test('les ecrans de parametrage et les montants restent fermes aux chefs', async () => {
+  const a = await connexion('chefa', '1111');
+  for (const [methode, chemin] of [
+    ['GET', '/api/mois?annee=2026&mois=9'],
+    ['GET', '/api/admin/vehicules'],
+    ['GET', '/api/admin/indicateurs'],
+    ['POST', '/api/paie/deverrouiller'],
+  ]) {
+    assert.equal((await a(methode, chemin, methode === 'POST' ? { pin: '1111' } : undefined)).statut, 403, chemin);
+  }
+});
+
+test('le parc de vehicules est propose a la saisie et modifiable par le directeur', async () => {
+  const a = await connexion('chefa', '1111');
+  const d = await connexion('dir', '9999');
+
+  const parc = (await a('GET', '/api/reference')).corps.vehicules;
+  assert.ok(parc.length >= 14, 'le parc initial est charge');
+  const trafic = parc.find((v) => v.immatriculation === 'GR-707-YM');
+  assert.equal(`${trafic.marque} ${trafic.modele}`, 'Renault Trafic');
+
+  // Retire du parc, il disparait des propositions faites aux chefs.
+  assert.equal((await d('PUT', `/api/admin/vehicules/${trafic.id}`, { actif: 0 })).statut, 200);
+  const apres = (await a('GET', '/api/reference')).corps.vehicules;
+  assert.ok(!apres.some((v) => v.id === trafic.id));
+  await d('PUT', `/api/admin/vehicules/${trafic.id}`, { actif: 1 });
+});
+
+test('le taux horaire se renseigne et n apparait jamais en version publique', async () => {
+  const d = await connexion('dir', '9999');
+  const andre = db.prepare("SELECT id FROM salaries WHERE nom = 'ANDRE'").get();
+
+  assert.equal((await d('PUT', `/api/admin/salaries/${andre.id}`, { taux_horaire: 14.5 })).statut, 200);
+  const { salaries } = (await d('GET', '/api/admin/utilisateurs')).corps;
+  assert.equal(salaries.find((s) => s.id === andre.id).taux_horaire, 14.5);
+});
+
+test('les indicateurs ne reclament rien avant la mise en service', async () => {
+  const d = await connexion('dir', '9999');
+  const r = await d('GET', '/api/admin/indicateurs');
+  assert.equal(r.statut, 200);
+  assert.equal(r.corps.debutService, '2026-09-01');
+  for (const chef of r.corps.chefs) {
+    // Aujourd hui precede la mise en service dans le jeu de test : aucune
+    // semaine n est attendue, donc personne n est en retard.
+    assert.ok(chef.enRetard <= chef.semainesAttendues);
+    assert.ok(chef.retardMoyen === null || chef.retardMoyen >= 0);
+  }
 });

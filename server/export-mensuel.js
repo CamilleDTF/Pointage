@@ -118,7 +118,7 @@ function ecrireLegende(ws, ligne) {
 
 /* ---------------------------- Feuille d'un salarie ------------------------- */
 
-function ecrireFeuilleSalarie(ws, salarie, ligneDansTotal, ligneTotalGenerale) {
+function ecrireFeuilleSalarie(ws, salarie, ligneDansTotal, ligneTotalGenerale, financier = true) {
   for (const [col, largeur] of Object.entries(LARGEURS_SALARIE)) ws.getColumn(col).width = largeur;
 
   ws.mergeCells('A1:AA1');
@@ -232,7 +232,7 @@ function ecrireFeuilleSalarie(ws, salarie, ligneDansTotal, ligneTotalGenerale) {
       COLONNES.directeur.flatMap((col) => semainesPointees.map((r) => `${col}${r}`))
     );
   }
-  signalerSiVide(ws, ['J27']);
+  if (financier) signalerSiVide(ws, ['J27']);
 
   // Ligne des totaux du mois
   const lignesValeurs = BLOCS_SEMAINE.map((b) => b.valeurs);
@@ -255,7 +255,9 @@ function ecrireFeuilleSalarie(ws, salarie, ligneDansTotal, ligneTotalGenerale) {
   remplir(controle, BLEU_PALE);
   controle.border = BORDURE;
 
-  ecrireBlocPaie(ws, ligneDansTotal, ligneTotalGenerale);
+  // Version publique : la grille des heures et des primes s'arrete ici. Le bloc
+  // de paie, seul endroit ou apparaissent des montants, n'est pas ecrit.
+  if (financier) ecrireBlocPaie(ws, ligneDansTotal, ligneTotalGenerale);
 }
 
 /** Bloc de calcul de la paie, sous la grille : formules du classeur d'origine. */
@@ -349,12 +351,13 @@ const ENTETES_TOTAL = [
 // Colonnes de la feuille Total remontees depuis la ligne 22 des feuilles salaries.
 const REMONTEES = ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
 
-function ecrireFeuilleTotal(ws, mois) {
+function ecrireFeuilleTotal(ws, mois, financier = true) {
   for (const [col, largeur] of Object.entries(LARGEURS_TOTAL)) ws.getColumn(col).width = largeur;
 
   ecrireLegende(ws, 1);
 
-  for (const [col, libelle] of ENTETES_TOTAL) {
+  const entetes = financier ? ENTETES_TOTAL : ENTETES_TOTAL.filter(([col]) => col !== 'AA');
+  for (const [col, libelle] of entetes) {
     const cellule = ws.getCell(`${col}3`);
     cellule.value = libelle;
     cellule.font = { name: POLICE, size: 11, bold: true };
@@ -395,10 +398,14 @@ function ecrireFeuilleTotal(ws, mois) {
       cellule.numFmt = '#,##0.00';
     }
 
-    // Taux horaire : la seule donnee que le classeur attend de la direction.
-    remplir(ws.getCell(`AA${r}`), JAUNE);
-    ws.getCell(`AA${r}`).numFmt = '#,##0.00 €';
-    ws.getCell(`AA${r}`).border = BORDURE;
+    // Taux horaire : renseigne depuis l'ecran Parametres. Reste en jaune tant
+    // qu'il ne l'est pas — c'est ce qui bloque tout le calcul de paie.
+    if (financier) {
+      if (salarie.tauxHoraire) ws.getCell(`AA${r}`).value = salarie.tauxHoraire;
+      remplir(ws.getCell(`AA${r}`), JAUNE);
+      ws.getCell(`AA${r}`).numFmt = '#,##0.00 €';
+      ws.getCell(`AA${r}`).border = BORDURE;
+    }
 
     for (let c = 1; c <= 26; c += 1) ws.getCell(r, c).border = BORDURE;
   });
@@ -414,7 +421,7 @@ function ecrireFeuilleTotal(ws, mois) {
   }
 
   if (mois.salaries.length) {
-    signalerSiVide(ws, [`AA${premiere}:AA${derniere}`, `J${premiere}`]);
+    signalerSiVide(ws, financier ? [`AA${premiere}:AA${derniere}`, `J${premiere}`] : [`J${premiere}`]);
   }
 
   const rTotal = derniere + 1;
@@ -430,6 +437,8 @@ function ecrireFeuilleTotal(ws, mois) {
   }
 
   // Recapitulatifs de masse salariale, sommes sur les feuilles individuelles.
+  // Ils n'existent que dans la version direction.
+  if (!financier) return rTotal;
   const feuilles = mois.salaries.map((s) => `'${s.feuille}'`);
   const somme = (cellule) =>
     feuilles.length ? { formula: feuilles.map((f) => `${f}!${cellule}`).join('+') } : 0;
@@ -466,17 +475,24 @@ function ecrireFeuilleTotal(ws, mois) {
 
 /* --------------------------------- Assemblage ------------------------------ */
 
-async function exporterMois(mois) {
+/**
+ * `version` vaut 'direction' (le classeur complet, avec taux horaire et bloc de
+ * paie) ou 'public' (les memes heures et primes, sans aucun montant). La version
+ * publique se transmet a qui doit verifier des heures sans avoir a connaitre
+ * les salaires.
+ */
+async function exporterMois(mois, { version = 'direction' } = {}) {
+  const financier = version !== 'public';
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Pointage DTF';
   wb.created = new Date();
 
   const total = wb.addWorksheet('Total');
-  const ligneTotalGenerale = ecrireFeuilleTotal(total, mois);
+  const ligneTotalGenerale = ecrireFeuilleTotal(total, mois, financier);
 
   mois.salaries.forEach((salarie, i) => {
     const ws = wb.addWorksheet(salarie.feuille);
-    ecrireFeuilleSalarie(ws, salarie, 4 + i, ligneTotalGenerale);
+    ecrireFeuilleSalarie(ws, salarie, 4 + i, ligneTotalGenerale, financier);
   });
 
   if (!mois.salaries.length) {

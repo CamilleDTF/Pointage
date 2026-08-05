@@ -176,6 +176,7 @@ function obtenirOuCreerFicheSemaine(chefId, annee, semaine) {
 const CHAMPS_ENTETE = [
   'chantier',
   'ville',
+  'zone_deplacement',
   'conducteur_vehicule',
   'type_vehicule',
   'immatriculation',

@@ -62,9 +62,26 @@
       }
     });
 
+  const VEHICULES = [
+    ['GR-686-YM', 'Renault', 'Trafic'], ['GR-714-YM', 'Renault', 'Trafic'],
+    ['GR-719-YM', 'Renault', 'Trafic'], ['GR-707-YM', 'Renault', 'Trafic'],
+    ['GV-710-TF', 'Renault', 'Trafic'], ['GV-674-TF', 'Renault', 'Trafic'],
+    ['FT-156-HW', 'Iveco', 'Hayon'], ['HB-065-XP', 'Renault', 'Trafic'],
+    ['HB-256-YJ', 'Renault', 'Trafic'], ['HE-968-WJ', 'Renault', 'Trafic'],
+    ['HA-409-XC', 'Renault', 'Master'], ['DM-320-AY', 'Peugeot', '308'],
+    ['FC-291-KA', 'Citroen', 'C4'], ['EB-308-KY', 'Citroen', 'C4 Cactus'],
+  ].map(([immatriculation, marque, modele], i) => ({
+    id: i + 1, immatriculation, marque, modele, motorisation: 'Diesel', actif: 1,
+  }));
+
+  // Un taux sur deux seulement : la demonstration montre aussi ce que donne un
+  // taux horaire manquant, puisque c'est ce qui bloque le calcul de la paie.
+  salaries.forEach((s, i) => { s.taux_horaire = i % 2 ? 0 : 13.5 + (i % 5); });
+
   const fiches = [];
   let prochainId = 1;
   let session = null;
+  let accesPaie = false; // ouvert par le code du directeur, comme sur l'application
 
   const maintenant = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
   const copie = (v) => JSON.parse(JSON.stringify(v));
@@ -86,6 +103,7 @@
       semaine,
       chantier: '',
       ville: '',
+      zone_deplacement: '',
       conducteur_vehicule: '',
       type_vehicule: '',
       immatriculation: '',
@@ -135,9 +153,10 @@
     Object.assign(brouillon, {
       chantier: 'Lycée Jean Moulin - Bâtiment C',
       ville: 'Toulouse',
+      zone_deplacement: 'AUTRE',
       conducteur_vehicule: 'BENALI Karim',
-      type_vehicule: 'Master L2H2',
-      immatriculation: 'GK-482-QR',
+      type_vehicule: 'Renault Master',
+      immatriculation: 'HA-409-XC',
     });
     brouillon.lignes.forEach((ligne, i) => {
       if (!ligne.nom_affiche) return;
@@ -155,9 +174,10 @@
     Object.assign(soumise, {
       chantier: 'Collège Marcel Pagnol - Aile B',
       ville: 'Blagnac',
+      zone_deplacement: 'AUTRE',
       conducteur_vehicule: 'DUARTE Manuel',
-      type_vehicule: 'Trafic',
-      immatriculation: 'EF-201-TR',
+      type_vehicule: 'Renault Trafic',
+      immatriculation: 'GR-707-YM',
       statut: 'soumise',
       soumise_le: maintenant(),
     });
@@ -176,10 +196,11 @@
     const validee = nouvelleFiche(4, annee, semaine);
     Object.assign(validee, {
       chantier: 'Hôpital Purpan - Pavillon 3',
-      ville: 'Toulouse',
+      ville: 'Nice',
+      zone_deplacement: 'NICE',
       conducteur_vehicule: 'FONTAINE Julien',
-      type_vehicule: 'Boxer',
-      immatriculation: 'AZ-773-KL',
+      type_vehicule: 'Citroen C4',
+      immatriculation: 'FC-291-KA',
       statut: 'validee',
       soumise_le: maintenant(),
       validee_le: maintenant(),
@@ -198,6 +219,7 @@
     Object.assign(renvoyee, {
       chantier: 'Résidence Les Tilleuls',
       ville: 'Colomiers',
+      zone_deplacement: 'AUTRE',
       statut: 'rejetee',
       motif_rejet: 'Jeudi manquant sur toute l’équipe, et type de masque non renseigné.',
     });
@@ -238,11 +260,83 @@
 
   /* -------------------------------- Routage -------------------------------- */
 
-  const erreur = (code, texte) => {
+  const erreur = (code, texte, extras = {}) => {
     const e = new Error(texte);
     e.statut = code;
+    Object.assign(e, extras);
     throw e;
   };
+
+  /*
+   * Le tableau mensuel de la demonstration. Il reprend les fiches validees, les
+   * agrege comme le serveur, et valorise si l'acces aux montants est ouvert.
+   */
+  function moisDemonstration(annee, mois, version, montantPanier) {
+    const semaines = R.semainesDuMois(annee, mois);
+    const cles = new Set(semaines.map((s) => `${s.annee}-${s.semaine}`));
+    const parSalarie = new Map();
+
+    for (const fiche of fiches.filter((f) => f.statut === 'validee' && cles.has(`${f.annee}-${f.semaine}`))) {
+      const index = semaines.findIndex((s) => s.annee === fiche.annee && s.semaine === fiche.semaine);
+      for (const ligne of fiche.lignes.filter((l) => l.nom_affiche.trim())) {
+        const cle = ligne.nom_affiche.trim();
+        if (!parSalarie.has(cle)) {
+          const { nom, prenom } = R.separerNomPrenom(cle);
+          const salarie = salaries.find((x) => R.memePersonne(`${x.nom} ${x.prenom}`, cle));
+          parSalarie.set(cle, {
+            nom, prenom, matricule: salarie ? salarie.matricule : '',
+            tauxHoraire: salarie ? salarie.taux_horaire : 0,
+            semaines: semaines.map(() => 0),
+            minutesMois: 0, minutes25: 0, minutes50: 0, minutesRoute: 0, minutesTrajet: 0,
+            joursAmiante1: 0, joursAmiante2: 0, joursPanier: 0, joursGD72: 0, joursGD80: 0, joursFeries: 0,
+          });
+        }
+        const cible = parSalarie.get(cle);
+        const minutes = R.totalMinutesLigne(ligne);
+        cible.semaines[index] += minutes;
+        cible.minutesMois += minutes;
+        const sup = R.heuresSupplementaires(minutes);
+        cible.minutes25 += sup.minutes25;
+        cible.minutes50 += sup.minutes50;
+        cible.minutesRoute += ligne.minutes_route;
+        cible.minutesTrajet += ligne.minutes_trajet;
+        if (ligne.type_masque === 'VA') cible.joursAmiante1 += ligne.jours_zone;
+        if (ligne.type_masque === 'AA') cible.joursAmiante2 += ligne.jours_zone;
+        cible.joursPanier += ligne.nb_deplacement;
+        if (R.estGrandDeplacement80(fiche.ville, fiche.zone_deplacement)) cible.joursGD80 += ligne.nb_deplacement;
+        else cible.joursGD72 += ligne.nb_deplacement;
+        cible.joursFeries += ligne.jours.filter((j) => j.code_absence === 'F').length;
+      }
+    }
+
+    const liste = [...parSalarie.values()].sort((a, b) => `${a.nom}`.localeCompare(b.nom, 'fr'));
+    return {
+      annee, mois, version, montantPanier,
+      semaines: semaines.map((s) => ({ annee: s.annee, semaine: s.semaine, debut: s.dates[0] })),
+      salaries: liste.map((s) => (version === 'direction' ? { ...s, ...valoriser(s, montantPanier) } : s)),
+    };
+  }
+
+  /** Les memes formules que server/mensuel.js, rejouees dans le navigateur. */
+  function valoriser(s, montantPanier) {
+    const taux = Number(s.tauxHoraire) || 0;
+    const h = (min) => (Number(min) || 0) / 60;
+    if (!taux) return { tauxManquant: true };
+
+    const salaireBrut = 151.67 * taux;
+    const heuresSupBrut = taux * 1.25 * h(s.minutes25) + taux * 1.5 * h(s.minutes50);
+    const primeAmiante = (s.joursAmiante1 * 5 + s.joursAmiante2 * 10) * 0.8;
+    const paniers = s.joursPanier * montantPanier;
+    const grandDeplacement = s.joursGD72 * 72 + s.joursGD80 * 80;
+    const trajet = taux * (h(s.minutesTrajet) / 2) + taux * h(s.minutesRoute);
+    return {
+      tauxManquant: false, tauxHoraire: taux, salaireBrut, salaireNet: salaireBrut * 0.77,
+      heuresSupBrut, heuresSupNet: heuresSupBrut * 0.77,
+      primeAmiante, paniers, grandDeplacement, trajet,
+      totalBrut: salaireBrut + heuresSupBrut + primeAmiante + paniers + grandDeplacement + trajet,
+      totalNet: salaireBrut * 0.77 + heuresSupBrut * 0.77 + primeAmiante + paniers + grandDeplacement + trajet,
+    };
+  }
 
   function exigerConnexion() {
     if (!session) erreur(401, 'Session expirée, reconnectez-vous.');
@@ -301,6 +395,8 @@
           : [],
         equipe: u.role === 'chef' ? equipeDuChef(u.id) : salaries.filter((s) => s.actif),
         effectif: salaries.filter((s) => s.actif),
+        vehicules: VEHICULES.filter((v) => v.actif),
+        zonesDeplacement: R.ZONES_DEPLACEMENT,
       };
     }],
 
@@ -384,7 +480,8 @@
       }
 
       for (const champ of ['chantier', 'ville', 'conducteur_vehicule', 'type_vehicule', 'immatriculation',
-        'observations_pointage', 'commentaire_responsable', 'nom_responsable', 'visa_conducteur']) {
+        'zone_deplacement', 'observations_pointage', 'commentaire_responsable',
+        'nom_responsable', 'visa_conducteur']) {
         if (corps[champ] !== undefined) fiche[champ] = String(corps[champ] || '');
       }
       if (typeof corps.signature_responsable === 'string' || corps.signature_responsable === null) {
@@ -535,6 +632,74 @@
     ['POST', /^\/api\/admin\/utilisateurs$/, () => {
       exigerDirecteur();
       erreur(400, 'Création de comptes désactivée dans la démonstration.');
+    }],
+
+    ['GET', /^\/api\/admin\/vehicules$/, () => {
+      exigerDirecteur();
+      return { vehicules: VEHICULES };
+    }],
+
+    ['PUT', /^\/api\/admin\/vehicules\/(\d+)$/, (m, corps) => {
+      exigerDirecteur();
+      const v = VEHICULES.find((x) => x.id === Number(m[1]));
+      if (v) Object.assign(v, corps);
+      return { ok: true };
+    }],
+
+    ['POST', /^\/api\/admin\/vehicules$/, () => {
+      exigerDirecteur();
+      erreur(400, 'Ajout de véhicule désactivé dans la démonstration.');
+    }],
+
+    ['GET', /^\/api\/admin\/indicateurs$/, () => {
+      exigerDirecteur();
+      // Chiffres figes : la demonstration n'a pas d'historique a mesurer.
+      const exemples = [
+        [100, 12, 12, 1, 2, 0, 0], [92, 12, 11, 2, 5, 1, 1], [83, 12, 10, 3, 6, 2, 2],
+        [100, 12, 12, 1, 1, 0, 0], [75, 12, 9, 4, 8, 3, 1], [100, 12, 12, 2, 3, 0, 0],
+        [92, 12, 11, 1, 2, 0, 1], [58, 12, 7, 5, 9, 4, 2],
+      ];
+      return {
+        debutService: R.DEBUT_SERVICE_PAR_DEFAUT,
+        chefs: utilisateurs
+          .filter((u) => u.role === 'chef')
+          .map((u, i) => {
+            const [assiduite, attendues, transmises, moyen, max, horsDelai, renvoyees] = exemples[i];
+            return {
+              chef_id: u.id, nom: u.nom,
+              semainesAttendues: attendues, fichesTransmises: transmises,
+              fichesValidees: transmises, enRetard: attendues - transmises,
+              assiduite, retardMoyen: moyen, retardMax: max, horsDelai,
+              fichesRenvoyees: renvoyees,
+              tauxRejet: Math.round((renvoyees / transmises) * 100),
+            };
+          }),
+      };
+    }],
+
+    ['POST', /^\/api\/paie\/deverrouiller$/, (m, corps) => {
+      const u = exigerDirecteur();
+      if (String(corps.pin || '') !== u.pin) erreur(401, 'Code incorrect.');
+      accesPaie = true;
+      return { ok: true, dureeMinutes: 20 };
+    }],
+
+    ['POST', /^\/api\/paie\/verrouiller$/, () => {
+      exigerDirecteur();
+      accesPaie = false;
+      return { ok: true };
+    }],
+
+    ['GET', /^\/api\/mois$/, (m, corps, params) => {
+      exigerDirecteur();
+      const demandee = params.get('version') === 'direction' ? 'direction' : 'public';
+      if (demandee === 'direction' && !accesPaie) {
+        erreur(403, 'Les montants demandent votre code directeur.', { codeDemande: true });
+      }
+      return moisDemonstration(
+        Number(params.get('annee')), Number(params.get('mois')),
+        demandee, Number(params.get('panier')) || 0
+      );
     }],
   ];
 

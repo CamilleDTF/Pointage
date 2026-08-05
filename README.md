@@ -79,7 +79,7 @@ node scripts/creer-compte.js --nom "Direction travaux" \
 ```
 
 Chacun change ensuite son code depuis le bouton **Code** de l'en-tête ; le
-directeur peut réinitialiser n'importe quel code depuis l'écran **Équipes**.
+directeur peut réinitialiser n'importe quel code depuis l'écran **Paramètres**.
 
 `npm run seed -- --demo` reste disponible pour peupler une base d'essai avec
 8 chefs fictifs, leurs équipes et une fiche d'exemple.
@@ -135,6 +135,15 @@ corriger, la valider, ou la lui renvoyer pour correction avec un motif.
   Contrepartie assumée : un chef d'équipe voit désormais les noms de tout
   l'effectif. Il ne voit toujours ni les fiches, ni les heures, ni les comptes
   des autres chefs.
+- **La zone du chantier se coche** — Paris, Nice, ou Autre avec la ville à préciser.
+  C'est ce choix, et non l'orthographe du nom de ville, qui décide du taux de grand
+  déplacement (80 pour Paris et Nice, 72 ailleurs). Paris et Nice remplissent la ville
+  d'eux-mêmes. Les fiches saisies avant cette zone restent lues à l'ancienne, par
+  lecture du nom de ville.
+- **L'immatriculation se choisit dans le parc**, et le type de véhicule se remplit
+  tout seul. Le parc se gère depuis l'écran Paramètres.
+- **Une aide dépliante rappelle les codes d'absence** et leur signification, reprise
+  du bas de la fiche papier.
 - Heures acceptées en `7h30`, `7:30`, `7,5` ou `7.5` ; le total se recalcule à la volée.
 - Un code absence par jour, repris de la fiche papier (`ACH`, `F`, `NJ`, `VM`,
   `AT`, `EV`, `FOR`, `CSS`, `AA`).
@@ -193,12 +202,33 @@ le directeur qui doit s'en occuper. Les libellés suivent le rôle
   **Fiche Excel**.
 - Exports de la semaine : **Excel** et **CSV**, au choix sur les fiches validées,
   les fiches à vérifier, ou toutes.
-- Écran **Équipes** : comptes des chefs, codes, salariés et leur affectation.
+- **Tableau mensuel consultable à l'écran**, en deux versions (voir ci-dessous).
+- Écran **Paramètres**, en quatre volets :
+  - *Personnel et équipes* — affectations et **taux horaire** de chacun ;
+  - *Comptes des chefs* — création, codes, désactivation ;
+  - *Véhicules* — le parc proposé aux chefs à la saisie ;
+  - *Indicateurs de suivi* — voir plus bas.
 
 ## Le tableau mensuel pour la paie
 
-Depuis le tableau de bord, le bouton **Télécharger le tableau mensuel** produit le
-classeur au format du tableau interne : une feuille `Total` et une feuille par
+Il se consulte directement à l'écran et se télécharge, dans **deux versions** :
+
+| Version | Contenu | Accès |
+|---|---|---|
+| **Publique** | Heures, majorations 25/50 %, route, trajet, jours d'amiante, paniers, GD 72 / GD 80, fériés | Le directeur connecté |
+| **Direction** | La même chose **plus** le taux horaire, le salaire brut et net, les primes en euros et la masse salariale | Le directeur, **après avoir ressaisi son code** |
+
+Le code est redemandé même quand la session est déjà ouverte : une session dure
+trente jours, un salaire affiché sur un écran partagé n'attend pas si longtemps.
+L'accès se referme seul au bout de 20 minutes, et le bouton *Masquer les montants*
+le referme immédiatement. Le refus est appliqué côté serveur, pour la consultation
+comme pour le téléchargement — `test/cloisonnement.test.js` le vérifie.
+
+**Le taux horaire** se renseigne dans *Paramètres → Personnel et équipes*. Tant
+qu'il ne l'est pas, aucun montant n'est calculé pour la personne concernée et la
+ligne l'indique : une case vide vaut mieux qu'un salaire faux.
+
+Le bouton **Télécharger** produit le classeur au format du tableau interne : une feuille `Total` et une feuille par
 salarié, avec les six emplacements de semaine, la ligne de totaux et le bloc de
 calcul de paie. Les formules d'origine sont conservées (`INDIRECT` depuis Total,
 taux horaire remonté vers les feuilles individuelles).
@@ -297,6 +327,25 @@ brouillon ──transmettre──► soumise ──valider──► validée
 Un chef ne modifie que ses propres fiches, et seulement en `brouillon` ou
 `rejetée`. Le directeur peut corriger n'importe quelle fiche à tout moment ;
 chaque correction est tracée dans le journal.
+
+## Indicateurs de suivi
+
+*Paramètres → Indicateurs de suivi* répond à trois questions : qui rend ses fiches,
+qui les rend à temps, qui les rend justes.
+
+| Indicateur | Ce qu'il mesure |
+|---|---|
+| Assiduité | Part des semaines attendues effectivement transmises |
+| Transmises / Manquantes | Le décompte brut, depuis la mise en service |
+| Retard moyen et maximum | Jours écoulés entre le dimanche de la semaine et l'envoi |
+| Hors délai | Fiches transmises plus de 3 jours après la fin de semaine |
+| Renvoyées | Fiches que le directeur a dû retourner pour correction |
+
+Rien n'est compté avant la date de mise en service, ni sur la semaine en cours :
+une semaine pointée sur papier n'est pas un oubli, une semaine en cours n'est pas
+un retard. Ces chiffres décrivent un circuit administratif, pas des personnes — un
+chantier isolé rend naturellement plus tard qu'un autre. Ils servent à savoir qui
+relancer.
 
 ## Configuration
 

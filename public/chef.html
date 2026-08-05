@@ -66,6 +66,11 @@
             <input id="chantier" data-entete="chantier">
           </div>
           <div>
+            <label>Zone du chantier *</label>
+            <div class="choix-zone" id="zone-deplacement"></div>
+            <p class="aide" id="aide-zone" style="margin-top:6px"></p>
+          </div>
+          <div id="bloc-ville">
             <label for="ville">Ville *</label>
             <input id="ville" data-entete="ville">
           </div>
@@ -74,12 +79,13 @@
             <input id="conducteur_vehicule" data-entete="conducteur_vehicule">
           </div>
           <div>
-            <label for="type_vehicule">Type de véhicule utilisé</label>
-            <input id="type_vehicule" data-entete="type_vehicule">
+            <label for="immatriculation">N° d'immatriculation</label>
+            <select id="immatriculation" data-entete="immatriculation"></select>
           </div>
           <div>
-            <label for="immatriculation">N° d'immatriculation</label>
-            <input id="immatriculation" data-entete="immatriculation">
+            <label for="type_vehicule">Type de véhicule utilisé</label>
+            <input id="type_vehicule" data-entete="type_vehicule" readonly
+                   title="Rempli automatiquement à partir de l'immatriculation">
           </div>
         </div>
       </section>
@@ -92,6 +98,14 @@
           ou choisissez un code d'absence : chaque jour du lundi au vendredi doit être renseigné.
           Ce qu'il reste à compléter apparaît <span style="color:var(--rouge);font-weight:600">encadré en rouge</span>.
         </p>
+
+        <details class="aide-codes" id="aide-codes">
+          <summary>À quoi correspondent les codes d'absence ?</summary>
+          <div class="enveloppe-table">
+            <table class="legende-codes"><tbody id="legende-codes"></tbody></table>
+          </div>
+        </details>
+
         <div id="salaries"></div>
       </section>
 

@@ -109,6 +109,15 @@ CREATE TABLE IF NOT EXISTS fiche_jours (
   UNIQUE (ligne_id, jour)
 );
 
+CREATE TABLE IF NOT EXISTS vehicules (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  immatriculation TEXT   NOT NULL UNIQUE,
+  marque         TEXT    NOT NULL DEFAULT '',
+  modele         TEXT    NOT NULL DEFAULT '',
+  motorisation   TEXT    NOT NULL DEFAULT '',
+  actif          INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS journal (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
   fiche_id  INTEGER REFERENCES fiches(id) ON DELETE CASCADE,
@@ -142,6 +151,51 @@ function ajouterColonne(table, colonne, definition) {
  * des heures ou un code absence est de toute facon consideree comme renseignee.
  */
 ajouterColonne('fiche_jours', 'saisi', 'INTEGER NOT NULL DEFAULT 0');
+
+/*
+ * Taux horaire brut du salarie, saisi par le directeur depuis l'ecran
+ * Parametres. Zero signifie « pas encore renseigne » : les montants ne sont
+ * alors pas calcules plutot que d'afficher un salaire faux.
+ */
+ajouterColonne('salaries', 'taux_horaire', 'REAL NOT NULL DEFAULT 0');
+
+/*
+ * Zone de deplacement du chantier : PARIS, NICE ou AUTRE. Elle decide seule du
+ * taux de grand deplacement (80 pour Paris et Nice, 72 ailleurs). Avant, ce
+ * taux se devinait en cherchant « paris » ou « nice » dans le nom de la ville —
+ * une orthographe inattendue suffisait a le fausser. Les fiches anterieures,
+ * sans zone, continuent d'etre lues a l'ancienne.
+ */
+ajouterColonne('fiches', 'zone_deplacement', "TEXT NOT NULL DEFAULT ''");
+
+/*
+ * Parc de vehicules : le chef choisit une immatriculation, le reste suit. La
+ * liste initiale vient du parc communique par la direction ; elle se modifie
+ * ensuite depuis l'ecran Parametres, sans toucher au code.
+ */
+const PARC_INITIAL = [
+  ['GR-686-YM', 'Renault', 'Trafic', 'Diesel'],
+  ['GR-714-YM', 'Renault', 'Trafic', 'Diesel'],
+  ['GR-719-YM', 'Renault', 'Trafic', 'Diesel'],
+  ['GR-707-YM', 'Renault', 'Trafic', 'Diesel'],
+  ['GV-710-TF', 'Renault', 'Trafic', 'Diesel'],
+  ['GV-674-TF', 'Renault', 'Trafic', 'Diesel'],
+  ['FT-156-HW', 'Iveco', 'Hayon', 'Diesel'],
+  ['HB-065-XP', 'Renault', 'Trafic', 'Diesel'],
+  ['HB-256-YJ', 'Renault', 'Trafic', 'Diesel'],
+  ['HE-968-WJ', 'Renault', 'Trafic', 'Diesel'],
+  ['HA-409-XC', 'Renault', 'Master', 'Diesel'],
+  ['DM-320-AY', 'Peugeot', '308', 'Diesel'],
+  ['FC-291-KA', 'Citroen', 'C4', 'Diesel'],
+  ['EB-308-KY', 'Citroen', 'C4 Cactus', 'Diesel'],
+];
+
+if (db.prepare('SELECT COUNT(*) AS n FROM vehicules').get().n === 0) {
+  const inserer = db.prepare(
+    'INSERT INTO vehicules (immatriculation, marque, modele, motorisation) VALUES (?, ?, ?, ?)'
+  );
+  db.transaction(() => PARC_INITIAL.forEach((v) => inserer.run(...v)))();
+}
 
 function journaliser(ficheId, userId, action, detail = '') {
   db.prepare(

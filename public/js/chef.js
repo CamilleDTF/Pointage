@@ -77,6 +77,9 @@ async function demarrer() {
   // le chef de sa fiche.
   poser('bloc-calendrier', (e) => { e.open = grandEcran; });
 
+  construireChoixZone();
+  construireListeVehicules();
+  construireLegendeCodes();
   majBoutonPresentation();
   surveillerReseau();
   signalerPagePerimee();
@@ -85,6 +88,104 @@ async function demarrer() {
 }
 
 if ($('annee-calendrier')) $('annee-calendrier').addEventListener('change', chargerCalendrier);
+
+/* ---------------------- Chantier, zone et vehicule ------------------------ */
+
+/*
+ * La zone se coche, elle ne se redige pas. C'est elle qui decide du taux de
+ * grand deplacement — 80 pour Paris et Nice, 72 ailleurs. Avant, le taux se
+ * devinait en cherchant « paris » ou « nice » dans le nom de la ville, ce
+ * qu'une orthographe inattendue suffisait a fausser.
+ */
+function construireChoixZone() {
+  poser('zone-deplacement', (zone) => {
+    zone.innerHTML = (reference.zonesDeplacement || Regles.ZONES_DEPLACEMENT)
+      .map(
+        (z) => `
+        <label class="option-zone">
+          <input type="radio" name="zone" value="${z.code}">
+          <span>${echapper(z.libelle)}</span>
+          <small>GD ${z.taux}</small>
+        </label>`
+      )
+      .join('');
+
+    zone.querySelectorAll('input[name="zone"]').forEach((radio) => {
+      radio.addEventListener('change', () => {
+        appliquerZone(radio.value);
+        enregistrerPlusTard();
+      });
+    });
+  });
+}
+
+/**
+ * Paris et Nice remplissent la ville d'eux-memes : le chef n'a rien a taper, et
+ * le nom enregistre est toujours le meme. « Autre » rend la main.
+ */
+function appliquerZone(code) {
+  const zone = String(code || '').toUpperCase();
+  const ville = $('ville');
+  const bloc = $('bloc-ville');
+  if (!ville) return;
+
+  const libre = zone === 'AUTRE' || zone === '';
+  ville.disabled = !libre || !modifiable;
+  if (bloc) bloc.classList.toggle('masque', zone === 'PARIS' || zone === 'NICE');
+  if (zone === 'PARIS') ville.value = 'Paris';
+  if (zone === 'NICE') ville.value = 'Nice';
+  if (zone === 'AUTRE' && ['Paris', 'Nice'].includes(ville.value)) ville.value = '';
+
+  poser('aide-zone', (aide) => {
+    aide.textContent = {
+      PARIS: 'Grand déplacement au taux 80.',
+      NICE: 'Grand déplacement au taux 80.',
+      AUTRE: 'Grand déplacement au taux 72 — indiquez la ville ci-dessous.',
+    }[zone] || 'À cocher : la zone détermine le montant du grand déplacement.';
+  });
+}
+
+function zoneCochee() {
+  const choisi = document.querySelector('input[name="zone"]:checked');
+  return choisi ? choisi.value : '';
+}
+
+/** Le parc en liste : le type de vehicule se deduit de l'immatriculation. */
+function construireListeVehicules() {
+  poser('immatriculation', (select) => {
+    const parc = reference.vehicules || [];
+    select.innerHTML =
+      '<option value="">—</option>' +
+      parc
+        .map(
+          (v) =>
+            `<option value="${echapper(v.immatriculation)}">${echapper(v.immatriculation)} · ${echapper(
+              `${v.marque} ${v.modele}`.trim()
+            )}</option>`
+        )
+        .join('');
+    select.addEventListener('change', () => {
+      appliquerVehicule(select.value);
+      enregistrerPlusTard();
+    });
+  });
+}
+
+function appliquerVehicule(immatriculation) {
+  const vehicule = (reference.vehicules || []).find((v) => v.immatriculation === immatriculation);
+  poser('type_vehicule', (champ) => {
+    champ.value = vehicule ? `${vehicule.marque} ${vehicule.modele}`.trim() : '';
+  });
+}
+
+/** Le bas de la fiche papier, repris a l'ecran : chaque code et son libelle. */
+function construireLegendeCodes() {
+  poser('legende-codes', (corps) => {
+    corps.innerHTML = reference.codesAbsence
+      .map((c) => `<tr><td>${echapper(c.libelle)}</td><td class="code">${echapper(c.code)}</td></tr>`)
+      .join('');
+  });
+}
 
 /* -------------------------- Calendrier de l'annee ------------------------- */
 
@@ -267,6 +368,16 @@ function afficher() {
     champ.disabled = !modifiable;
     champ.oninput = enregistrerPlusTard;
   }
+
+  // Les fiches anterieures a la zone n'en portent pas : on propose celle que
+  // leur ville laisse deduire, plutot que de les renvoyer a un choix vide.
+  const zone = fiche.zone_deplacement || Regles.zoneDepuisVille(fiche.ville);
+  document.querySelectorAll('input[name="zone"]').forEach((radio) => {
+    radio.checked = radio.value === zone;
+    radio.disabled = !modifiable;
+  });
+  appliquerZone(zone);
+  if (!fiche.type_vehicule) appliquerVehicule(fiche.immatriculation);
 
   signaturesLignes = fiche.lignes.map((l) => l.signature || null);
   construireSalaries();
@@ -616,6 +727,7 @@ function construireSignatureResponsable() {
 function collecter() {
   const corps = { lignes: [] };
   for (const champ of document.querySelectorAll('[data-entete]')) corps[champ.dataset.entete] = champ.value;
+  corps.zone_deplacement = zoneCochee();
   if (fiche.signature_responsable !== undefined) corps.signature_responsable = fiche.signature_responsable;
 
   document.querySelectorAll('[data-ligne]').forEach((conteneur) => {
@@ -727,6 +839,7 @@ const CLASSES_CHAMP = {
 
 function elementsVises(cible) {
   if (!cible) return [];
+  if (cible.champZone) return [$('zone-deplacement')].filter(Boolean);
   if (cible.entete) return [...document.querySelectorAll(`[data-entete="${cible.entete}"]`)];
 
   const conteneur = document.querySelector(`[data-ligne="${cible.ligne}"]`);

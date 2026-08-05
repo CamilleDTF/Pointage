@@ -111,3 +111,56 @@ test('chaque jour du mois est couvert par les six semaines', () => {
     }
   }
 });
+
+/* ------------------------ Valorisation d'un mois -------------------------- */
+
+const M = require('../server/mensuel');
+
+function moisType(modifications = {}) {
+  return {
+    tauxHoraire: 14,
+    minutes25: 8 * 60,
+    minutes50: 2 * 60,
+    minutesRoute: 60,
+    minutesTrajet: 120,
+    joursAmiante1: 4,
+    joursAmiante2: 2,
+    joursPanier: 10,
+    joursGD72: 6,
+    joursGD80: 4,
+    ...modifications,
+  };
+}
+
+test('sans taux horaire, aucun montant n est calcule', () => {
+  const v = M.valoriser(moisType({ tauxHoraire: 0 }));
+  assert.equal(v.tauxManquant, true);
+  assert.equal(v.salaireBrut, 0);
+  assert.equal(v.totalNet, 0);
+});
+
+test('le salaire de base suit la duree legale mensualisee', () => {
+  const v = M.valoriser(moisType());
+  assert.equal(v.tauxManquant, false);
+  assert.equal(Math.round(v.salaireBrut * 100) / 100, Math.round(151.67 * 14 * 100) / 100);
+  assert.equal(Math.round(v.salaireNet * 100) / 100, Math.round(151.67 * 14 * 0.77 * 100) / 100);
+});
+
+test('les heures supplementaires sont majorees a 25 puis 50 %', () => {
+  const v = M.valoriser(moisType());
+  // 8 h a 125 % + 2 h a 150 %, au taux de 14 €.
+  assert.equal(v.heuresSupBrut, 14 * 1.25 * 8 + 14 * 1.5 * 2);
+});
+
+test('primes amiante, paniers et grands deplacements suivent le classeur', () => {
+  const v = M.valoriser(moisType(), { montantPanier: 11.7 });
+  assert.equal(v.primeAmiante, (4 * 5 + 2 * 10) * 0.8);
+  assert.equal(Math.round(v.paniers * 100) / 100, 117);
+  assert.equal(v.grandDeplacement, 6 * 72 + 4 * 80);
+  // Trajet paye a 50 %, route a 100 %.
+  assert.equal(v.trajet, 14 * 1 + 14 * 1);
+});
+
+test('sans montant de panier fixe, la ligne Paniers reste a zero', () => {
+  assert.equal(M.valoriser(moisType()).paniers, 0);
+});

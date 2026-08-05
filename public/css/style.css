@@ -165,6 +165,75 @@ tbody tr:hover { background: #f8fafc; }
 td.num, th.num { text-align: center; }
 td.weekend { background: #f5f7fa; }
 
+/* ------------------- Parametres : onglets et indicateurs ------------------ */
+
+.onglets { display: flex; gap: 6px; flex-wrap: wrap; }
+.onglet {
+  padding: 8px 14px;
+  border: 1px solid var(--gris-bord);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 0.85rem;
+}
+.onglet.actif { background: var(--bleu); border-color: var(--bleu); color: #fff; }
+.panneau { margin-top: 14px; }
+
+.jauge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+.jauge.bon { background: #e2f4ea; color: #14653a; }
+.jauge.moyen { background: #fdf3e2; color: #96590a; }
+.jauge.faible { background: #fbe6e3; color: #9d2b1f; }
+
+/* --------------------------- Tableau mensuel ------------------------------ */
+
+.grille-mois { font-size: 0.82rem; border-collapse: collapse; min-width: 100%; }
+.grille-mois th, .grille-mois td { border: 1px solid var(--gris-bord); padding: 5px 8px; white-space: nowrap; }
+.grille-mois thead th { background: #f2f5f9; position: sticky; top: 0; }
+.grille-mois td.total, .grille-mois th.num { font-weight: 700; }
+.grille-mois tbody tr:nth-child(even) { background: #fbfcfd; }
+.grille-mois td.manque { color: var(--orange); font-style: italic; font-weight: 600; text-align: left; }
+.grille-mois tfoot .cumul th { background: #eef4fa; text-align: right; }
+
+/* ------------------------ Zone du chantier, codes ------------------------- */
+
+.choix-zone { display: flex; gap: 8px; flex-wrap: wrap; }
+.option-zone {
+  flex: 1 1 110px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--gris-bord);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 600;
+  margin: 0;
+}
+.option-zone input { width: auto; margin: 0; }
+.option-zone small { margin-left: auto; color: var(--gris-texte); font-weight: 500; }
+.option-zone:has(input:checked) { border-color: var(--bleu); background: #eef4fa; }
+.option-zone:has(input:checked) small { color: var(--bleu); }
+.choix-zone.champ-bloquant { border-radius: 8px; padding: 4px; }
+
+.aide-codes { margin-bottom: 14px; }
+.aide-codes > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--bleu);
+  padding: 8px 0;
+}
+.legende-codes { font-size: 0.85rem; }
+.legende-codes td { padding: 5px 10px; border: 1px solid var(--gris-bord); }
+.legende-codes td.code { font-weight: 700; text-align: center; width: 70px; background: #f7f9fc; }
+
+input[readonly] { background: #f7f9fc; color: var(--gris-texte); }
+
 /* --------------------------- Saisie des heures --------------------------- */
 
 .salarie {

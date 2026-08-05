@@ -81,8 +81,9 @@ function agregerMois(annee, mois, { statut = 'validee' } = {}) {
 
   const lignes = db
     .prepare(
-      `SELECT l.*, f.annee, f.semaine, f.chantier, f.ville, f.statut,
-              s.matricule, s.nom AS salarie_nom, s.prenom AS salarie_prenom
+      `SELECT l.*, f.annee, f.semaine, f.chantier, f.ville, f.zone_deplacement, f.statut,
+              s.matricule, s.nom AS salarie_nom, s.prenom AS salarie_prenom,
+              s.taux_horaire
          FROM fiche_lignes l
          JOIN fiches f ON f.id = l.fiche_id
          LEFT JOIN salaries s ON s.id = l.salarie_id
@@ -102,10 +103,12 @@ function agregerMois(annee, mois, { statut = 'validee' } = {}) {
       const [nom, ...reste] = ligne.nom_affiche.trim().split(/\s+/);
       parSalarie.set(cle, {
         cle,
+        salarie_id: ligne.salarie_id || null,
         matricule: ligne.matricule || '',
         nom: ligne.salarie_nom || nom,
         prenom: ligne.salarie_prenom || reste.join(' '),
         nom_affiche: ligne.nom_affiche.trim(),
+        tauxHoraire: Number(ligne.taux_horaire) || 0,
         semaines: semaines.map(semaineVide),
       });
     }
@@ -137,7 +140,7 @@ function agregerMois(annee, mois, { statut = 'validee' } = {}) {
     // GD 80 decoule de la ville du chantier (voir Regles.estGrandDeplacement80).
     const deplacements = arrondiQuart(ligne.nb_deplacement * part);
     cible.joursPanier += deplacements;
-    if (D.estGrandDeplacement80(ligne.ville)) cible.joursGD80 += deplacements;
+    if (D.estGrandDeplacement80(ligne.ville, ligne.zone_deplacement)) cible.joursGD80 += deplacements;
     else cible.joursGD72 += deplacements;
 
     if (ligne.chantier && !cible.chantiers.includes(ligne.chantier)) cible.chantiers.push(ligne.chantier);
@@ -171,9 +174,89 @@ function agregerMois(annee, mois, { statut = 'validee' } = {}) {
       semaine.minutesFeries = semaine.joursFeries * D.DUREE_JOURNEE_REFERENCE_MINUTES;
     }
     salarie.minutesMois = salarie.semaines.reduce((s, x) => s + x.minutesTotal, 0);
+    Object.assign(salarie, cumulerMois(salarie));
   }
 
   return { annee, mois, semaines, salaries };
 }
 
-module.exports = { agregerMois, nomFeuille, cleSalarie };
+/**
+ * Les colonnes du tableau mensuel, cumulees sur les six semaines. Les heures
+ * supplementaires restent calculees semaine par semaine — c'est la regle de
+ * paie — puis seulement additionnees ici.
+ */
+function cumulerMois(salarie) {
+  const somme = (champ) => salarie.semaines.reduce((s, x) => s + (x[champ] || 0), 0);
+  return {
+    minutes25: somme('minutes25'),
+    minutes50: somme('minutes50'),
+    minutesRoute: somme('minutesRoute'),
+    minutesTrajet: somme('minutesTrajet'),
+    joursAmiante1: somme('joursAmiante1'),
+    joursAmiante2: somme('joursAmiante2'),
+    joursPanier: somme('joursPanier'),
+    joursGD72: somme('joursGD72'),
+    joursGD80: somme('joursGD80'),
+    joursFeries: somme('joursFeries'),
+    minutesFeries: somme('minutesFeries'),
+    chantiers: [...new Set(salarie.semaines.flatMap((s) => s.chantiers))],
+  };
+}
+
+/*
+ * Valorisation d'un mois, aux formules du classeur de la direction.
+ *
+ * Sans taux horaire renseigne, rien n'est calcule : un salaire faux serait pire
+ * qu'une case vide. C'est `tauxManquant` qui le signale a l'ecran.
+ */
+const HEURES_MENSUELLES_BASE = 151.67; // duree legale mensualisee
+const PART_NET = 0.77;                 // du brut au net, taux du classeur
+const PRIME_AMIANTE_1 = 5;             // par jour en masque VA
+const PRIME_AMIANTE_2 = 10;            // par jour en masque AA
+const ABATTEMENT_PRIME_AMIANTE = 0.8;
+const MONTANT_GD_72 = 72;
+const MONTANT_GD_80 = 80;
+
+function valoriser(salarie, { montantPanier = 0 } = {}) {
+  const taux = Number(salarie.tauxHoraire) || 0;
+  const h = (minutes) => (Number(minutes) || 0) / 60;
+
+  if (!taux) {
+    return { tauxManquant: true, tauxHoraire: 0, salaireBrut: 0, salaireNet: 0, heuresSupBrut: 0,
+      heuresSupNet: 0, primeAmiante: 0, paniers: 0, grandDeplacement: 0, trajet: 0, totalBrut: 0, totalNet: 0 };
+  }
+
+  const salaireBrut = HEURES_MENSUELLES_BASE * taux;
+  const heuresSupBrut = taux * 1.25 * h(salarie.minutes25) + taux * 1.5 * h(salarie.minutes50);
+  const primeAmiante =
+    (salarie.joursAmiante1 * PRIME_AMIANTE_1 + salarie.joursAmiante2 * PRIME_AMIANTE_2) * ABATTEMENT_PRIME_AMIANTE;
+  const paniers = salarie.joursPanier * montantPanier;
+  const grandDeplacement = salarie.joursGD72 * MONTANT_GD_72 + salarie.joursGD80 * MONTANT_GD_80;
+  // Trajet paye a 50 %, route a 100 % : la convention des deux colonnes de la fiche.
+  const trajet = taux * (h(salarie.minutesTrajet) / 2) + taux * h(salarie.minutesRoute);
+
+  const totalBrut = salaireBrut + heuresSupBrut + primeAmiante + paniers + grandDeplacement + trajet;
+  return {
+    tauxManquant: false,
+    tauxHoraire: taux,
+    salaireBrut,
+    salaireNet: salaireBrut * PART_NET,
+    heuresSupBrut,
+    heuresSupNet: heuresSupBrut * PART_NET,
+    primeAmiante,
+    paniers,
+    grandDeplacement,
+    trajet,
+    totalBrut,
+    totalNet: salaireBrut * PART_NET + heuresSupBrut * PART_NET + primeAmiante + paniers + grandDeplacement + trajet,
+  };
+}
+
+module.exports = {
+  agregerMois,
+  nomFeuille,
+  cleSalarie,
+  valoriser,
+  HEURES_MENSUELLES_BASE,
+  PART_NET,
+};
