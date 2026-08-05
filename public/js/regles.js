@@ -351,7 +351,7 @@
    * que l'interface le souligne au lieu de laisser le chef chercher dans une
    * liste de messages quelle case, sur onze lignes et sept jours, lui manque.
    */
-  function controlerFiche(fiche, lignes) {
+  function controlerFiche(fiche, lignes, options = {}) {
     const anomalies = [];
     const bloquant = (m, cible) => anomalies.push({ niveau: 'bloquant', message: m, cible: cible || null });
     const alerte = (m, cible) => anomalies.push({ niveau: 'alerte', message: m, cible: cible || null });
@@ -366,6 +366,17 @@
     // prime se calcule au jugé.
     if (!ZONES_DEPLACEMENT.some((z) => z.code === String(fiche.zone_deplacement || '').toUpperCase())) {
       bloquant('Indiquez la zone du chantier : Paris, Nice ou Autre.', { champZone: true });
+    }
+
+    /*
+     * Le conducteur de travaux qui doit viser. Exige seulement s'il y en a a
+     * proposer : une organisation ou aucun conducteur n'est encore enregistre
+     * ne doit pas se retrouver bloquee par une etape qui n'existe pas chez elle.
+     */
+    if (options.conducteursDisponibles > 0 && !Number(fiche.conducteur_id)) {
+      bloquant('Choisissez le conducteur de travaux qui doit viser cette fiche.', {
+        entete: 'conducteur_id',
+      });
     }
 
     const remplies = lignes

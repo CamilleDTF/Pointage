@@ -114,6 +114,7 @@
       chantier: '',
       ville: '',
       zone_deplacement: '',
+      conducteur_id: null,
       visa_statut: '',
       visa_courriel: '',
       visa_le: null,
@@ -169,6 +170,7 @@
       chantier: 'Lycée Jean Moulin - Bâtiment C',
       ville: 'Toulouse',
       zone_deplacement: 'AUTRE',
+      conducteur_id: 1,
       conducteur_vehicule: 'BENALI Karim',
       type_vehicule: 'Renault Master',
       immatriculation: 'HA-409-XC',
@@ -195,6 +197,7 @@
       immatriculation: 'GR-707-YM',
       statut: 'soumise',
       soumise_le: maintenant(),
+      conducteur_id: 1,
       visa_statut: 'attente',
       visa_courriel: 'paul.moreau@exemple.fr',
       visa_envoye_le: maintenant(),
@@ -222,6 +225,7 @@
       statut: 'validee',
       soumise_le: maintenant(),
       validee_le: maintenant(),
+      conducteur_id: 1,
       visa_statut: 'vise',
       visa_le: maintenant(),
       visa_commentaire: 'Conforme à ce que j’ai constaté sur place.',
@@ -369,8 +373,13 @@
     return session;
   }
 
-  function conducteurDuChef(chefId) {
-    const chef = utilisateurs.find((u) => u.id === chefId);
+  /* Le choix fait sur la fiche prime ; le rattachement du chef sert de repli. */
+  function conducteurDeLaFiche(fiche) {
+    if (fiche && fiche.conducteur_id) {
+      const choisi = CONDUCTEURS.find((c) => c.id === fiche.conducteur_id && c.actif);
+      if (choisi) return choisi;
+    }
+    const chef = utilisateurs.find((u) => u.id === (fiche ? fiche.chef_id : null));
     return chef && chef.conducteur_id ? CONDUCTEURS.find((c) => c.id === chef.conducteur_id && c.actif) : null;
   }
 
@@ -428,6 +437,8 @@
         effectif: salaries.filter((s) => s.actif),
         vehicules: VEHICULES.filter((v) => v.actif),
         zonesDeplacement: R.ZONES_DEPLACEMENT,
+        conducteurs: CONDUCTEURS.filter((c) => c.actif).map((c) => ({ id: c.id, nom: c.nom })),
+        conducteurParDefaut: u.conducteur_id || null,
       };
     }],
 
@@ -498,7 +509,9 @@
     ['GET', /^\/api\/fiches\/(\d+)$/, (m) => {
       const u = exigerConnexion();
       const fiche = enrichir(ficheAccessible(m[1], u));
-      fiche.anomalies = R.controlerFiche(fiche, fiche.lignes);
+      fiche.anomalies = R.controlerFiche(fiche, fiche.lignes, {
+        conducteursDisponibles: CONDUCTEURS.filter((c) => c.actif).length,
+      });
       fiche.journal = [];
       return { fiche };
     }],
@@ -514,6 +527,9 @@
         'zone_deplacement', 'observations_pointage', 'commentaire_responsable',
         'nom_responsable', 'visa_conducteur']) {
         if (corps[champ] !== undefined) fiche[champ] = String(corps[champ] || '');
+      }
+      if (corps.conducteur_id !== undefined) {
+        fiche.conducteur_id = Number(corps.conducteur_id) || null;
       }
       if (typeof corps.signature_responsable === 'string' || corps.signature_responsable === null) {
         fiche.signature_responsable = corps.signature_responsable;
@@ -547,14 +563,21 @@
       }
 
       const complet = enrichir(fiche);
-      return { fiche: complet, anomalies: R.controlerFiche(complet, complet.lignes) };
+      return {
+        fiche: complet,
+        anomalies: R.controlerFiche(complet, complet.lignes, {
+          conducteursDisponibles: CONDUCTEURS.filter((c) => c.actif).length,
+        }),
+      };
     }],
 
     ['POST', /^\/api\/fiches\/(\d+)\/soumettre$/, (m) => {
       const u = exigerConnexion();
       const fiche = ficheAccessible(m[1], u);
       const complet = enrichir(fiche);
-      const anomalies = R.controlerFiche(complet, complet.lignes);
+      const anomalies = R.controlerFiche(complet, complet.lignes, {
+        conducteursDisponibles: CONDUCTEURS.filter((c) => c.actif).length,
+      });
       if (anomalies.some((a) => a.niveau === 'bloquant')) {
         const e = new Error('La fiche est incomplète.');
         e.statut = 422;
@@ -566,7 +589,7 @@
       fiche.motif_rejet = '';
 
       // Le conducteur de travaux vise avant le directeur, quand le chef en a un.
-      const conducteur = conducteurDuChef(fiche.chef_id);
+      const conducteur = conducteurDeLaFiche(fiche);
       fiche.visa_statut = conducteur ? 'attente' : '';
       fiche.visa_courriel = conducteur ? conducteur.courriel : '';
       fiche.visa_envoye_le = conducteur ? maintenant() : null;
@@ -732,7 +755,7 @@
       exigerDirecteur();
       const fiche = fiches.find((f) => f.id === Number(m[1]));
       if (!fiche) erreur(404, 'Fiche introuvable.');
-      const conducteur = conducteurDuChef(fiche.chef_id);
+      const conducteur = conducteurDeLaFiche(fiche);
       if (!conducteur) return { visa: { demande: false } };
       return {
         visa: { demande: true, conducteur: conducteur.nom, courriel: conducteur.courriel, envoye: false,

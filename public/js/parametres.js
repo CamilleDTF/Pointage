@@ -218,11 +218,15 @@ surClic('btn-ajout-vehicule', async () => {
 async function chargerIndicateurs() {
   const table = $('table-indicateurs');
   if (!table) return;
-  const { chefs, debutService } = await API.get('/api/admin/indicateurs');
+  const { chefs, debutService, delaiJours } = await API.get('/api/admin/indicateurs');
 
-  $('aide-indicateurs').textContent = chefs.length && chefs[0].semainesAttendues
-    ? `${chefs[0].semainesAttendues} semaine(s) attendue(s) depuis la mise en service du ${dateFrancaise(debutService)}.`
-    : `Aucune semaine complète depuis la mise en service du ${dateFrancaise(debutService)} : rien à mesurer encore.`;
+  const echeance = delaiJours === 1 ? 'le lundi qui suit' : `${delaiJours} jour(s) après le dimanche`;
+  const attendues = chefs.length ? chefs[0].semainesAttendues : 0;
+  $('aide-indicateurs').innerHTML = attendues
+    ? `${attendues} semaine(s) attendue(s) depuis la mise en service du ${echapper(dateFrancaise(debutService))}. ` +
+      `Une fiche est <strong>à l'heure</strong> si elle est transmise ${echapper(echeance)} au plus tard.`
+    : `Aucune semaine complète depuis la mise en service du ${echapper(dateFrancaise(debutService))} : ` +
+      `rien à mesurer encore. Les fiches sont attendues pour ${echapper(echeance)}.`;
 
   const jours = (v) => (v === null ? '—' : `${v} j`);
   const pourcent = (v, seuilVert, seuilOrange) => {
@@ -240,7 +244,11 @@ async function chargerIndicateurs() {
         <td class="num">${c.enRetard ? `<span class="jauge faible">${c.enRetard}</span>` : '0'}</td>
         <td class="num">${jours(c.retardMoyen)}</td>
         <td class="num">${jours(c.retardMax)}</td>
-        <td class="num">${c.horsDelai || '0'}</td>
+        <td class="num">${
+          c.horsDelai
+            ? `<span class="jauge faible">${c.horsDelai}</span>`
+            : '0'
+        }${c.ponctualite !== null ? ` <span class="aide">(${c.ponctualite} % à l’heure)</span>` : ''}</td>
         <td class="num">${c.fichesRenvoyees}${c.tauxRejet !== null ? ` <span class="aide">(${c.tauxRejet} %)</span>` : ''}</td>
       </tr>`
     )

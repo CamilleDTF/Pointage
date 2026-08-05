@@ -3,6 +3,17 @@
 const { db, journaliser } = require('./db');
 const D = require('./domaine');
 
+/**
+ * Contexte des controles : le nombre de conducteurs de travaux proposables. Le
+ * choix d'un conducteur n'est exige que s'il y en a — une organisation ou
+ * personne n'est encore enregistre ne doit pas se retrouver bloquee.
+ */
+function optionsControle() {
+  return {
+    conducteursDisponibles: db.prepare('SELECT COUNT(*) AS n FROM conducteurs WHERE actif = 1').get().n,
+  };
+}
+
 const NB_LIGNES_FICHE = 11; // la fiche papier comporte 11 lignes de salaries (lignes 11 a 21).
 
 function normaliserLigne(brut, ordre) {
@@ -212,6 +223,13 @@ function enregistrerFiche(ficheId, corps, utilisateur) {
     for (const champ of CHAMPS_ENTETE) {
       if (corps[champ] !== undefined) maj[champ] = String(corps[champ] || '').slice(0, 2000);
     }
+    // Le conducteur est un identifiant, pas un texte : on le range comme tel,
+    // ou a null quand le chef n'a rien choisi.
+    if (corps.conducteur_id !== undefined) {
+      const choisi = Number(corps.conducteur_id);
+      db.prepare('UPDATE fiches SET conducteur_id = ? WHERE id = ?')
+        .run(Number.isInteger(choisi) && choisi > 0 ? choisi : null, ficheId);
+    }
     if (typeof corps.signature_responsable === 'string' && corps.signature_responsable.startsWith('data:image/')) {
       maj.signature_responsable = corps.signature_responsable.slice(0, 200000);
     }
@@ -268,7 +286,7 @@ function soumettre(ficheId, utilisateur) {
     return { erreur: 'Fiche deja transmise.', code: 409 };
   }
 
-  const anomalies = D.controlerFiche(fiche, fiche.lignes);
+  const anomalies = D.controlerFiche(fiche, fiche.lignes, optionsControle());
   const bloquantes = anomalies.filter((a) => a.niveau === 'bloquant');
   if (bloquantes.length) return { erreur: 'La fiche est incomplete.', anomalies, code: 422 };
 
@@ -285,7 +303,7 @@ function statuer(ficheId, utilisateur, decision, motif = '') {
   if (!fiche) return { erreur: 'Fiche introuvable.', code: 404 };
 
   if (decision === 'valider') {
-    const bloquantes = D.controlerFiche(fiche, fiche.lignes).filter((a) => a.niveau === 'bloquant');
+    const bloquantes = D.controlerFiche(fiche, fiche.lignes, optionsControle()).filter((a) => a.niveau === 'bloquant');
     if (bloquantes.length) {
       return { erreur: 'Fiche incomplete, validation impossible.', anomalies: bloquantes, code: 422 };
     }
@@ -326,7 +344,7 @@ function listerFiches({ annee, semaine, statut, chefId } = {}) {
   return db
     .prepare(
       `SELECT f.id, f.annee, f.semaine, f.chantier, f.ville, f.statut, f.soumise_le,
-              f.validee_le, f.motif_rejet, f.chef_id, f.visa_statut, f.visa_le,
+              f.validee_le, f.motif_rejet, f.chef_id, f.conducteur_id, f.visa_statut, f.visa_le,
               f.visa_courriel, f.visa_commentaire, f.visa_envoye_le, u.nom AS chef_nom,
               (SELECT COUNT(*) FROM fiche_lignes l
                 WHERE l.fiche_id = f.id AND TRIM(l.nom_affiche) <> '') AS nb_salaries,
@@ -374,6 +392,7 @@ function lignesPourExport({ annee, semaine, statut }) {
 
 module.exports = {
   NB_LIGNES_FICHE,
+  optionsControle,
   salarieDuChef,
   equipeDuChef,
   obtenirFiche,

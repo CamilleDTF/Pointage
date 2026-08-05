@@ -54,7 +54,7 @@ function verifier(jeton) {
   }
 }
 
-/** Le conducteur de travaux dont depend un chef d'equipe. */
+/** Le conducteur de travaux dont depend habituellement un chef d'equipe. */
 function conducteurDuChef(chefId) {
   return db
     .prepare(
@@ -63,6 +63,22 @@ function conducteurDuChef(chefId) {
         WHERE u.id = ? AND c.actif = 1`
     )
     .get(chefId);
+}
+
+/**
+ * Le conducteur qui doit viser une fiche donnee.
+ *
+ * Le choix fait par le chef au moment de transmettre l'emporte : c'est lui qui
+ * sait sous quelle conduite s'est deroule le chantier de la semaine. Son
+ * rattachement habituel ne sert que de proposition, et de repli pour les fiches
+ * transmises avant que ce choix existe.
+ */
+function conducteurDeLaFiche(fiche) {
+  if (fiche && fiche.conducteur_id) {
+    const choisi = db.prepare('SELECT * FROM conducteurs WHERE id = ? AND actif = 1').get(fiche.conducteur_id);
+    if (choisi) return choisi;
+  }
+  return conducteurDuChef(fiche ? fiche.chef_id : null);
 }
 
 /**
@@ -76,7 +92,7 @@ function demanderVisa(ficheId, { relance = false } = {}) {
   const fiche = db.prepare('SELECT * FROM fiches WHERE id = ?').get(ficheId);
   if (!fiche) return { erreur: 'Fiche introuvable.', code: 404 };
 
-  const conducteur = conducteurDuChef(fiche.chef_id);
+  const conducteur = conducteurDeLaFiche(fiche);
   if (!conducteur) {
     db.prepare("UPDATE fiches SET visa_statut = '' WHERE id = ?").run(ficheId);
     return { visa: null, raison: 'aucun_conducteur' };
@@ -141,7 +157,7 @@ function ficheDuJeton(jeton) {
  * autres semaines, ni les autres chefs, ni le moindre montant.
  */
 function vueConducteur(fiche) {
-  const conducteur = conducteurDuChef(fiche.chef_id);
+  const conducteur = conducteurDeLaFiche(fiche);
   return {
     id: fiche.id,
     annee: fiche.annee,
@@ -191,7 +207,7 @@ function viser(jeton, commentaire = '') {
     return { erreur: 'Cette fiche n attend plus de visa.', code: 409 };
   }
 
-  const conducteur = conducteurDuChef(fiche.chef_id);
+  const conducteur = conducteurDeLaFiche(fiche);
   db.prepare(
     `UPDATE fiches SET visa_statut = 'vise', visa_le = datetime('now'),
             visa_conducteur = ?, visa_commentaire = ?, maj_le = datetime('now')
@@ -212,7 +228,7 @@ function renvoyer(jeton, commentaire) {
   if (!motif) return { erreur: 'Indiquez ce qui doit etre corrige.', code: 400 };
   if (fiche.statut !== 'soumise') return { erreur: 'Cette fiche n attend plus de visa.', code: 409 };
 
-  const conducteur = conducteurDuChef(fiche.chef_id);
+  const conducteur = conducteurDeLaFiche(fiche);
   const signature = conducteur ? `${conducteur.nom} (conducteur de travaux)` : 'Conducteur de travaux';
 
   db.prepare(
@@ -229,6 +245,7 @@ module.exports = {
   demanderVisa,
   envoyerDemandeVisa,
   conducteurDuChef,
+  conducteurDeLaFiche,
   ficheDuJeton,
   vueConducteur,
   viser,

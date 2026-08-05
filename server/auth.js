@@ -62,7 +62,7 @@ function session(req, res, next) {
   const donnees = jeton ? verifier(jeton) : null;
   if (donnees) {
     const u = db
-      .prepare('SELECT id, nom, identifiant, role, actif FROM utilisateurs WHERE id = ?')
+      .prepare('SELECT id, nom, identifiant, role, actif, conducteur_id FROM utilisateurs WHERE id = ?')
       .get(donnees.uid);
     if (u && u.actif) req.utilisateur = u;
   }

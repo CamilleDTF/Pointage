@@ -140,6 +140,13 @@ boutons — *viser*, ou *renvoyer avec un commentaire*. C'est un choix délibér
 compte de plus par conducteur, ce serait un code de plus à distribuer, à retenir et
 à réinitialiser, pour deux clics par semaine.
 
+**C'est le chef d'équipe qui désigne le conducteur**, en bas de sa fiche, juste avant
+de transmettre. D'une semaine à l'autre le chantier peut relever de quelqu'un d'autre,
+et c'est lui qui le sait. Le rattachement défini dans *Paramètres* n'est qu'une
+proposition, pré-sélectionnée pour lui. Le choix est obligatoire — dès lors qu'au moins
+un conducteur est enregistré : une organisation qui n'en a encore aucun n'est pas
+bloquée par une étape qui n'existe pas chez elle.
+
 Ce que le lien autorise est volontairement étroit : **une seule fiche**, **deux
 actions**, et seulement **tant qu'elle attend ce visa**. Une fiche modifiée puis
 retransmise reçoit un nouveau secret, ce qui condamne aussitôt les liens précédents.
@@ -149,8 +156,8 @@ passe par un envoi depuis cette page. Sans cette précaution, l'antivirus d'une
 messagerie d'entreprise — qui visite les liens des messages pour les analyser —
 viserait les fiches à la place du conducteur.
 
-Un chef d'équipe **sans conducteur rattaché** transmet directement à la direction :
-l'étape est sautée sans blocage. Et le directeur peut toujours **valider sans le
+Tant qu'**aucun conducteur n'est enregistré**, les fiches partent directement à la
+direction : l'étape est sautée sans blocage. Et le directeur peut toujours **valider sans le
 visa** quand le conducteur n'est pas joignable ; le bouton le dit alors explicitement.
 
 ### Envoi des courriels
@@ -385,6 +392,7 @@ test/
   paie.test.js          Majorations 25 / 50 %, grand déplacement, découpage des mois
   mensuel.test.js       Agrégation d'un mois depuis les fiches
   cloisonnement.test.js Cloisonnement des accès par code, bout en bout sur l'API
+  indicateurs.test.js   Délai attendu, calcul des retards et des semaines dues
   composants.test.js    Les lanceurs vérifient bien toutes les dépendances
 Dockerfile, docker-compose.yml   Installation en une commande sur votre machine
 ```
@@ -417,8 +425,16 @@ qui les rend à temps, qui les rend justes.
 | Assiduité | Part des semaines attendues effectivement transmises |
 | Transmises / Manquantes | Le décompte brut, depuis la mise en service |
 | Retard moyen et maximum | Jours écoulés entre le dimanche de la semaine et l'envoi |
-| Hors délai | Fiches transmises plus de 3 jours après la fin de semaine |
+| Hors délai | Fiches transmises **après le lundi** qui suit, avec la part rendue à l'heure |
 | Renvoyées | Fiches que le directeur a dû retourner pour correction |
+
+**L'échéance est le lundi** qui suit la semaine pointée : une fiche transmise le lundi
+est à l'heure, à partir du mardi elle est hors délai. Le seuil se règle par
+`DELAI_TRANSMISSION_JOURS` si la consigne change.
+
+Le retard se compte en jours calendaires, sans tenir compte des week-ends ni des jours
+fériés, et la date retenue est celle de la **dernière** transmission : une fiche
+renvoyée puis corrigée n'est complète qu'au second envoi.
 
 Rien n'est compté avant la date de mise en service, ni sur la semaine en cours :
 une semaine pointée sur papier n'est pas un oubli, une semaine en cours n'est pas
@@ -436,6 +452,7 @@ relancer.
 | `NODE_ENV` | `production` : messages d'erreur non détaillés | — |
 | `COOKIE_SECURE` | `true` force le cookie `Secure`, même joint en HTTP | déduit du protocole utilisé |
 | `DEBUT_SERVICE` | Première semaine attendue dans l'application (`AAAA-MM-JJ`) | `2026-09-01` |
+| `DELAI_TRANSMISSION_JOURS` | Délai attendu, en jours après le dimanche (1 = le lundi) | `1` |
 | `URL_PUBLIQUE` | Adresse publique, pour les liens envoyés aux conducteurs | `http://localhost:PORT` |
 | `SMTP_HOTE`, `SMTP_PORT` | Serveur d'envoi des courriels | — (messages déposés sur disque) |
 | `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE` | Identifiants du serveur d'envoi | — |

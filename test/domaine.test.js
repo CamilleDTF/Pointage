@@ -45,6 +45,7 @@ function ficheType(modifications = {}) {
     chantier: 'Lycee Jean Moulin',
     ville: 'Toulouse',
     zone_deplacement: 'AUTRE',
+    conducteur_id: 1,
     annee: 2026,
     semaine: 31,
     ...modifications,
@@ -247,4 +248,22 @@ test('un nom complet se separe en nom de famille et prenom', () => {
   // Tout en capitales : on ne peut plus deviner, le premier mot fait office de nom.
   assert.deepEqual(D.separerNomPrenom('BENALI KARIM'), { nom: 'BENALI', prenom: 'KARIM' });
   assert.deepEqual(D.separerNomPrenom(''), { nom: '', prenom: '' });
+});
+
+test('le conducteur de travaux doit etre choisi, mais seulement s il y en a', () => {
+  const sansChoix = ficheType({ conducteur_id: null });
+
+  // Aucun conducteur enregistre : l etape n existe pas, rien n est exige.
+  assert.deepEqual(D.controlerFiche(sansChoix, [ligneType()], { conducteursDisponibles: 0 }), []);
+  assert.deepEqual(D.controlerFiche(sansChoix, [ligneType()]), []);
+
+  // Des qu il y en a, le choix devient obligatoire avant de transmettre.
+  const anomalies = D.controlerFiche(sansChoix, [ligneType()], { conducteursDisponibles: 2 });
+  assert.equal(anomalies.length, 1);
+  assert.equal(anomalies[0].niveau, 'bloquant');
+  assert.match(anomalies[0].message, /conducteur de travaux/);
+  assert.deepEqual(anomalies[0].cible, { entete: 'conducteur_id' });
+
+  // Et le choix fait leve le blocage.
+  assert.deepEqual(D.controlerFiche(ficheType(), [ligneType()], { conducteursDisponibles: 2 }), []);
 });

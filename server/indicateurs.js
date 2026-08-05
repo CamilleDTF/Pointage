@@ -17,6 +17,15 @@
 const { db } = require('./db');
 const D = require('./domaine');
 
+/*
+ * Delai attendu, en jours apres le dimanche de la semaine pointee.
+ *
+ * 1 = le lundi qui suit, la regle de la maison. Une fiche transmise le lundi est
+ * donc a l'heure ; a partir du mardi, elle est hors delai. Se regle par
+ * DELAI_TRANSMISSION_JOURS si la consigne change.
+ */
+const DELAI_ATTENDU_JOURS = Number(process.env.DELAI_TRANSMISSION_JOURS) || 1;
+
 /** Nombre de semaines attendues d'un chef entre la mise en service et aujourd'hui. */
 function semainesAttendues(debutService, maintenant = new Date()) {
   const debut = new Date(`${debutService}T00:00:00Z`);
@@ -98,12 +107,17 @@ function indicateursChefs(debutService, maintenant = new Date()) {
       assiduite: attendues.length ? Math.round((transmises.length / attendues.length) * 100) : null,
       retardMoyen: moyenne(retards),
       retardMax: retards.length ? Math.max(...retards) : null,
-      // Transmise apres le mercredi suivant : au-dela, la paie commence a attendre.
-      horsDelai: retards.filter((r) => r > 3).length,
+      // Hors delai : transmise apres le lundi qui suit la semaine pointee.
+      horsDelai: retards.filter((r) => r > DELAI_ATTENDU_JOURS).length,
+      // Part des fiches rendues a temps. Plus parlante qu'un decompte brut :
+      // trois retards sur trois fiches ne se lisent pas comme trois sur vingt.
+      ponctualite: retards.length
+        ? Math.round((retards.filter((r) => r <= DELAI_ATTENDU_JOURS).length / retards.length) * 100)
+        : null,
       fichesRenvoyees: rejetees,
       tauxRejet: transmises.length ? Math.round((rejetees / transmises.length) * 100) : null,
     };
   });
 }
 
-module.exports = { indicateursChefs, semainesAttendues, retardEnJours };
+module.exports = { indicateursChefs, semainesAttendues, retardEnJours, DELAI_ATTENDU_JOURS };

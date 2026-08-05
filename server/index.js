@@ -117,6 +117,9 @@ app.get('/api/reference', A.exigerConnexion, (req, res) => {
       .prepare('SELECT id, immatriculation, marque, modele, motorisation FROM vehicules WHERE actif = 1 ORDER BY immatriculation')
       .all(),
     zonesDeplacement: D.ZONES_DEPLACEMENT,
+    // Le chef choisit lui-meme qui doit viser sa fiche : il lui faut la liste.
+    conducteurs: db.prepare('SELECT id, nom FROM conducteurs WHERE actif = 1 ORDER BY nom').all(),
+    conducteurParDefaut: req.utilisateur.conducteur_id || null,
   });
 });
 
@@ -175,6 +178,7 @@ app.get('/api/calendrier', A.exigerConnexion, (req, res) => {
     annee,
     semaineCourante: courante,
     debutService: DEBUT_SERVICE,
+    delaiJours: I.DELAI_ATTENDU_JOURS,
     semaines,
     totaux: {
       manquante: compter('manquante'),
@@ -216,13 +220,20 @@ app.post('/api/fiches/semaine', A.exigerConnexion, (req, res) => {
   res.json({ fiche: F.obtenirOuCreerFicheSemaine(chefId, annee, semaine) });
 });
 
+/** Combien de conducteurs sont proposables : le controle en depend. */
+function optionsControle() {
+  return {
+    conducteursDisponibles: db.prepare('SELECT COUNT(*) AS n FROM conducteurs WHERE actif = 1').get().n,
+  };
+}
+
 app.get('/api/fiches/:id', A.exigerConnexion, (req, res) => {
   const fiche = F.obtenirFiche(Number(req.params.id));
   if (!fiche) return res.status(404).json({ erreur: 'Fiche introuvable.' });
   if (req.utilisateur.role === 'chef' && fiche.chef_id !== req.utilisateur.id) {
     return res.status(403).json({ erreur: 'Cette fiche appartient a un autre chef d equipe.' });
   }
-  fiche.anomalies = D.controlerFiche(fiche, fiche.lignes);
+  fiche.anomalies = D.controlerFiche(fiche, fiche.lignes, optionsControle());
   fiche.journal = db
     .prepare(
       `SELECT j.action, j.detail, j.horodatage, u.nom AS auteur
@@ -235,7 +246,7 @@ app.get('/api/fiches/:id', A.exigerConnexion, (req, res) => {
 
 app.put('/api/fiches/:id', A.exigerConnexion, (req, res) => {
   const resultat = F.enregistrerFiche(Number(req.params.id), req.body, req.utilisateur);
-  if (resultat.fiche) resultat.anomalies = D.controlerFiche(resultat.fiche, resultat.fiche.lignes);
+  if (resultat.fiche) resultat.anomalies = D.controlerFiche(resultat.fiche, resultat.fiche.lignes, optionsControle());
   repondre(res, resultat);
 });
 
@@ -722,6 +733,7 @@ app.put('/api/admin/vehicules/:id', A.exigerDirecteur, (req, res) => {
 app.get('/api/admin/indicateurs', A.exigerDirecteur, (req, res) => {
   res.json({
     debutService: DEBUT_SERVICE,
+    delaiJours: I.DELAI_ATTENDU_JOURS,
     chefs: I.indicateursChefs(DEBUT_SERVICE),
   });
 });

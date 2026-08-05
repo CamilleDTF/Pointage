@@ -205,8 +205,18 @@ ajouterColonne('fiches', 'visa_courriel', "TEXT NOT NULL DEFAULT ''");
 ajouterColonne('fiches', 'visa_commentaire', "TEXT NOT NULL DEFAULT ''");
 ajouterColonne('fiches', 'visa_envoye_le', 'TEXT');
 
-/* Le conducteur de travaux dont depend un chef d'equipe. */
+/*
+ * Le conducteur de travaux dont depend un chef d'equipe : c'est le choix
+ * propose par defaut sur ses fiches.
+ */
 ajouterColonne('utilisateurs', 'conducteur_id', 'INTEGER REFERENCES conducteurs(id) ON DELETE SET NULL');
+
+/*
+ * Le conducteur choisi pour cette fiche-la. Un chef ne travaille pas toujours
+ * sous le meme : le chantier de la semaine decide, et c'est lui qui sait. Son
+ * rattachement habituel ne sert plus que de proposition.
+ */
+ajouterColonne('fiches', 'conducteur_id', 'INTEGER REFERENCES conducteurs(id) ON DELETE SET NULL');
 
 const PARC_INITIAL = [
   ['GR-686-YM', 'Renault', 'Trafic', 'Diesel'],

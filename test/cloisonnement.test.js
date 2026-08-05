@@ -493,7 +493,7 @@ test('la page Parametres est servie, mais ses donnees restent reservees au direc
 
 /* ------------------ Visa du conducteur de travaux ------------------------- */
 
-async function ficheTransmise(chef, semaine) {
+async function ficheTransmise(chef, semaine, conducteurId) {
   const fiche = (await chef('POST', '/api/fiches/semaine', { annee: 2026, semaine })).corps.fiche;
   const lignes = fiche.lignes.map((ligne, i) => ({
     ...ligne,
@@ -501,8 +501,14 @@ async function ficheTransmise(chef, semaine) {
     signature: i === 0 ? 'data:image/png;base64,xxx' : null,
     jours: ligne.jours.map((j) => ({ ...j, minutes: i === 0 && j.jour <= 4 ? 450 : 0, saisi: i === 0 && j.jour <= 4 ? 1 : 0 })),
   }));
+  // Le chef designe lui-meme qui doit viser, comme sur son ecran.
+  const conducteur =
+    conducteurId !== undefined
+      ? conducteurId
+      : (db.prepare('SELECT id FROM conducteurs WHERE actif = 1 ORDER BY id LIMIT 1').get() || {}).id || null;
   await chef('PUT', `/api/fiches/${fiche.id}`, {
-    chantier: 'Chantier visa', ville: 'Toulouse', zone_deplacement: 'AUTRE', lignes,
+    chantier: 'Chantier visa', ville: 'Toulouse', zone_deplacement: 'AUTRE',
+    conducteur_id: conducteur, lignes,
   });
   const envoi = await chef('POST', `/api/fiches/${fiche.id}/soumettre`);
   assert.equal(envoi.statut, 200);
@@ -518,7 +524,7 @@ test('sans conducteur rattache, la fiche part directement a la direction', async
   assert.equal(db.prepare('SELECT visa_statut FROM fiches WHERE id = ?').get(id).visa_statut, '');
 });
 
-test('avec un conducteur rattache, la fiche attend son visa', async () => {
+test('un conducteur choisi met la fiche en attente de son visa', async () => {
   const d = await connexion('dir', '9999');
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
@@ -529,7 +535,7 @@ test('avec un conducteur rattache, la fiche attend son visa', async () => {
   const chefA = db.prepare("SELECT id FROM utilisateurs WHERE identifiant = 'chefa'").get().id;
   assert.equal((await d('PUT', `/api/admin/chefs/${chefA}/conducteur`, { conducteur_id: conducteur.id })).statut, 200);
 
-  const { id, visa } = await ficheTransmise(a, 21);
+  const { id, visa } = await ficheTransmise(a, 21, conducteur.id);
   assert.equal(visa.demande, true);
   assert.equal(visa.conducteur, 'MOREAU Paul');
 
@@ -654,4 +660,50 @@ test('un chef d equipe corrige le nom d un operateur pour tout l effectif', asyn
   // Un nom vide est refuse.
   assert.equal((await a('PUT', `/api/salaries/${andre.id}/nom`, { nom: '  ' })).statut, 400);
   db.prepare('UPDATE salaries SET nom = ? WHERE id = ?').run('ANDRE', andre.id);
+});
+
+test('le chef choisit lui-meme le conducteur, et son choix l emporte', async () => {
+  const d = await connexion('dir', '9999');
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+  db.exec('DELETE FROM conducteurs');
+
+  const habituel = (await d('POST', '/api/admin/conducteurs', {
+    nom: 'MOREAU Paul', courriel: 'paul@exemple.fr',
+  })).corps;
+  const autre = (await d('POST', '/api/admin/conducteurs', {
+    nom: 'RENAUD Sophie', courriel: 'sophie@exemple.fr',
+  })).corps;
+
+  const chefA = db.prepare("SELECT id FROM utilisateurs WHERE identifiant = 'chefa'").get().id;
+  await d('PUT', `/api/admin/chefs/${chefA}/conducteur`, { conducteur_id: habituel.id });
+
+  // Le chef voit la liste, et son rattachement habituel comme proposition.
+  const reference = (await a('GET', '/api/reference')).corps;
+  assert.deepEqual(reference.conducteurs.map((c) => c.nom), ['MOREAU Paul', 'RENAUD Sophie']);
+  assert.equal(reference.conducteurParDefaut, habituel.id);
+
+  const fiche = (await a('POST', '/api/fiches/semaine', { annee: 2026, semaine: 24 })).corps.fiche;
+  const lignes = fiche.lignes.map((ligne, i) => ({
+    ...ligne,
+    nom_affiche: i === 0 ? 'ANDRE Alain' : '',
+    signature: i === 0 ? 'data:image/png;base64,xxx' : null,
+    jours: ligne.jours.map((j) => ({ ...j, minutes: i === 0 && j.jour <= 4 ? 450 : 0, saisi: i === 0 && j.jour <= 4 ? 1 : 0 })),
+  }));
+  await a('PUT', `/api/fiches/${fiche.id}`, {
+    chantier: 'Chantier choix', ville: 'Toulouse', zone_deplacement: 'AUTRE', lignes,
+  });
+
+  // Sans choix, la transmission est refusee.
+  const refus = await a('POST', `/api/fiches/${fiche.id}/soumettre`);
+  assert.equal(refus.statut, 422);
+  assert.ok(refus.corps.anomalies.some((x) => /conducteur de travaux/.test(x.message)));
+
+  // Le chef designe quelqu un d autre que son rattachement : c'est lui qui recoit.
+  await a('PUT', `/api/fiches/${fiche.id}`, { conducteur_id: autre.id });
+  const envoi = await a('POST', `/api/fiches/${fiche.id}/soumettre`);
+  assert.equal(envoi.statut, 200);
+  assert.equal(envoi.corps.visa.conducteur, 'RENAUD Sophie');
+  assert.equal(db.prepare('SELECT visa_courriel FROM fiches WHERE id = ?').get(fiche.id).visa_courriel,
+    'sophie@exemple.fr');
 });

@@ -80,6 +80,7 @@ async function demarrer() {
   construireChoixZone();
   construireListeVehicules();
   construireLegendeCodes();
+  construireChoixConducteur();
   majBoutonPresentation();
   surveillerReseau();
   signalerPagePerimee();
@@ -178,6 +179,34 @@ function appliquerVehicule(immatriculation) {
   });
 }
 
+/**
+ * Qui doit viser cette fiche. Le chef choisit lui-meme : d'une semaine a
+ * l'autre le chantier peut relever d'un autre conducteur de travaux, et c'est
+ * lui qui le sait. Son rattachement habituel n'est qu'une proposition.
+ */
+function construireChoixConducteur() {
+  const conducteurs = reference.conducteurs || [];
+
+  poser('bloc-conducteur', (bloc) => {
+    // Aucun conducteur enregistre : l'etape n'existe pas encore, on n'affiche
+    // pas un choix vide dont personne ne comprendrait l'objet.
+    bloc.classList.toggle('masque', conducteurs.length === 0);
+  });
+
+  poser('conducteur_id', (select) => {
+    select.innerHTML =
+      '<option value="">— choisir —</option>' +
+      conducteurs.map((c) => `<option value="${c.id}">${echapper(c.nom)}</option>`).join('');
+    select.addEventListener('change', enregistrerPlusTard);
+  });
+
+  poser('aide-conducteur', (aide) => {
+    aide.textContent = conducteurs.length
+      ? "Il recevra la fiche par courriel dès la transmission, et pourra la viser ou vous la renvoyer avec un commentaire."
+      : '';
+  });
+}
+
 /** Le bas de la fiche papier, repris a l'ecran : chaque code et son libelle. */
 function construireLegendeCodes() {
   poser('legende-codes', (corps) => {
@@ -234,9 +263,17 @@ async function chargerCalendrier() {
   // le dit, plutot que de laisser deviner pourquoi elles sont eteintes.
   const grisees = donnees.semaines.some((s) => s.etat === 'horsPerimetre');
   poser('note-mise-en-service', (note) => {
-    note.textContent = grisees && donnees.debutService
-      ? ` Les semaines antérieures au ${dateFrancaise(donnees.debutService)} ont été pointées sur papier : elles n'ont rien à recevoir ici.`
-      : '';
+    const echeance =
+      donnees.delaiJours === 1
+        ? ' La fiche de la semaine est attendue pour le lundi qui suit.'
+        : donnees.delaiJours
+          ? ` La fiche de la semaine est attendue sous ${donnees.delaiJours} jours après le dimanche.`
+          : '';
+    const papier =
+      grisees && donnees.debutService
+        ? ` Les semaines antérieures au ${dateFrancaise(donnees.debutService)} ont été pointées sur papier : elles n'ont rien à recevoir ici.`
+        : '';
+    note.textContent = echeance + papier;
   });
 
   $('calendrier').querySelectorAll('.case-semaine').forEach((bouton) => {
@@ -378,6 +415,11 @@ function afficher() {
   });
   appliquerZone(zone);
   if (!fiche.type_vehicule) appliquerVehicule(fiche.immatriculation);
+
+  // A defaut de choix deja fait, on propose le conducteur habituel du chef.
+  poser('conducteur_id', (select) => {
+    select.value = String(fiche.conducteur_id || reference.conducteurParDefaut || '');
+  });
 
   signaturesLignes = fiche.lignes.map((l) => l.signature || null);
   construireSalaries();
@@ -826,7 +868,11 @@ async function enregistrer() {
 
   // Controle immediat, avec les memes regles que le serveur : le chef voit ce
   // qui manque sans attendre la reponse.
-  afficherAnomalies(controlerFiche({ ...fiche, ...corps }, corps.lignes));
+  afficherAnomalies(
+    controlerFiche({ ...fiche, ...corps }, corps.lignes, {
+      conducteursDisponibles: (reference.conducteurs || []).length,
+    })
+  );
 
   $('etat-sauvegarde').textContent = 'Enregistrement…';
   try {
