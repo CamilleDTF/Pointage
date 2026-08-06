@@ -290,8 +290,12 @@ function soumettre(ficheId, utilisateur) {
   const bloquantes = anomalies.filter((a) => a.niveau === 'bloquant');
   if (bloquantes.length) return { erreur: 'La fiche est incomplete.', anomalies, code: 422 };
 
+  // `premiere_soumission_le` ne s'ecrit qu'une fois : c'est elle qui mesure la
+  // ponctualite, et une correction ne doit pas effacer le fait d'avoir rendu a
+  // temps. `soumise_le` continue de suivre la derniere version.
   db.prepare(
     `UPDATE fiches SET statut = 'soumise', soumise_le = datetime('now'),
+            premiere_soumission_le = COALESCE(premiere_soumission_le, datetime('now')),
             motif_rejet = '', maj_le = datetime('now') WHERE id = ?`
   ).run(ficheId);
   journaliser(ficheId, utilisateur.id, 'soumission', `Semaine ${fiche.semaine}/${fiche.annee}`);
@@ -344,7 +348,8 @@ function listerFiches({ annee, semaine, statut, chefId } = {}) {
   return db
     .prepare(
       `SELECT f.id, f.annee, f.semaine, f.chantier, f.ville, f.statut, f.soumise_le,
-              f.validee_le, f.motif_rejet, f.chef_id, f.conducteur_id, f.visa_statut, f.visa_le,
+              f.validee_le, f.motif_rejet, f.chef_id, f.conducteur_id, f.premiere_soumission_le,
+              f.visa_statut, f.visa_le,
               f.visa_courriel, f.visa_commentaire, f.visa_envoye_le, u.nom AS chef_nom,
               (SELECT COUNT(*) FROM fiche_lignes l
                 WHERE l.fiche_id = f.id AND TRIM(l.nom_affiche) <> '') AS nb_salaries,

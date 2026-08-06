@@ -51,7 +51,15 @@ function semainesAttendues(debutService, maintenant = new Date()) {
   return attendues;
 }
 
-/** Ecart en jours entre la fin de la semaine pointee et la transmission. */
+/**
+ * Ecart en jours entre le dimanche de la semaine pointee et la PREMIERE demande
+ * de validation.
+ *
+ * C'est le premier envoi qui compte, pas le dernier : un chef qui rend le lundi
+ * et dont la fiche revient pour correction a fait sa part dans les temps. Les
+ * allers-retours se comptent ailleurs, dans les fiches renvoyees, sans qu'un
+ * meme incident penalise deux fois.
+ */
 function retardEnJours(finSemaine, soumiseLe) {
   if (!soumiseLe) return null;
   const fin = new Date(`${finSemaine}T00:00:00Z`);
@@ -80,7 +88,8 @@ function indicateursChefs(debutService, maintenant = new Date()) {
 
   const fiches = db
     .prepare(
-      `SELECT f.chef_id, f.annee, f.semaine, f.statut, f.soumise_le,
+      `SELECT f.chef_id, f.annee, f.semaine, f.statut,
+              COALESCE(f.premiere_soumission_le, f.soumise_le) AS premier_envoi,
               (SELECT COUNT(*) FROM journal j
                 WHERE j.fiche_id = f.id AND j.action = 'rejet') AS nb_rejets
          FROM fiches f`
@@ -92,7 +101,7 @@ function indicateursChefs(debutService, maintenant = new Date()) {
     const transmises = siennes.filter((f) => f.statut !== 'brouillon');
 
     const retards = transmises
-      .map((f) => retardEnJours(finParCle.get(`${f.annee}-${f.semaine}`), f.soumise_le))
+      .map((f) => retardEnJours(finParCle.get(`${f.annee}-${f.semaine}`), f.premier_envoi))
       .filter((v) => v !== null);
 
     const rejetees = siennes.filter((f) => f.nb_rejets > 0).length;

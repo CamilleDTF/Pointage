@@ -104,6 +104,7 @@ function ecrireLegende(ws, ligne) {
     ['C', 'à compléter', ORANGE],
     ['H', 'complété', JAUNE],
     ['M', 'calculé depuis les fiches de pointage', null],
+    ['R', 'calculé depuis le calendrier', VERT_PALE],
   ];
   for (const [col, texte, couleur] of entrees) {
     const cellule = ws.getCell(`${col}${ligne}`);
@@ -412,16 +413,21 @@ function ecrireFeuilleTotal(ws, mois, financier = true) {
 
   const derniere = premiere + Math.max(0, mois.salaries.length - 1);
 
-  // "Mois" : nombre d'heures du mois, saisi une fois et fusionne sur la colonne.
+  // "Mois" : horaire de reference du mois, identique pour tout le monde, d'ou la
+  // fusion sur la colonne. Il vaut nombre de jours ouvres x 7 h et se calcule
+  // desormais tout seul : c'est un fait du calendrier, pas une decision.
   if (mois.salaries.length) {
     ws.mergeCells(`J${premiere}:J${derniere}`);
-    ws.getCell(`J${premiere}`).alignment = { horizontal: 'center', vertical: 'middle' };
-    remplir(ws.getCell(`J${premiere}`), JAUNE);
-    ws.getCell(`J${premiere}`).numFmt = '#,##0.00';
+    const cellule = ws.getCell(`J${premiere}`);
+    cellule.value = D.heuresReferenceMois(mois.annee, mois.mois);
+    cellule.alignment = { horizontal: 'center', vertical: 'middle' };
+    remplir(cellule, VERT_PALE);
+    cellule.numFmt = '#,##0.00';
+    cellule.note = `${D.joursOuvresDuMois(mois.annee, mois.mois)} jours ouvrés x 7 h`;
   }
 
-  if (mois.salaries.length) {
-    signalerSiVide(ws, financier ? [`AA${premiere}:AA${derniere}`, `J${premiere}`] : [`J${premiere}`]);
+  if (mois.salaries.length && financier) {
+    signalerSiVide(ws, [`AA${premiere}:AA${derniere}`]);
   }
 
   const rTotal = derniere + 1;

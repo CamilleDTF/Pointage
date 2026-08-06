@@ -250,3 +250,25 @@ test('seul le code F alimente les feries, pas les autres absences', () => {
   assert.equal(semaine.joursFeries, 0);
   assert.equal(semaine.minutesFeries, 0);
 });
+
+/*
+ * La case « Mois » du classeur de paie : nombre de jours ouvres x 7 h. Elle
+ * n'est plus saisie par le directeur, et sert de denominateur a la retenue pour
+ * absence — une erreur ici fausse toutes les paies du mois.
+ */
+test('l horaire de reference du mois vaut les jours ouvres fois 7 heures', () => {
+  // Juillet 2026 : 23 jours ouvres (le 1er tombe un mercredi, le 31 un vendredi).
+  assert.equal(D.joursOuvresDuMois(2026, 7), 23);
+  assert.equal(D.heuresReferenceMois(2026, 7), 161);
+
+  // Fevrier 2026 : 20 jours ouvres, du dimanche 1er au samedi 28.
+  assert.equal(D.joursOuvresDuMois(2026, 2), 20);
+  assert.equal(D.heuresReferenceMois(2026, 2), 140);
+
+  // Fevrier bissextile : le 29 fevrier 2028 est un mardi, il compte.
+  assert.equal(D.joursOuvresDuMois(2028, 2), 21);
+
+  // Les jours feries ne sont pas deduits : mai 2026 compte ses 21 jours ouvres
+  // bien que le 1er et le 8 mai tombent en semaine.
+  assert.equal(D.joursOuvresDuMois(2026, 5), 21);
+});

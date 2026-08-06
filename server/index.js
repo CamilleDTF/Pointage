@@ -522,6 +522,9 @@ app.get('/api/mois', A.exigerDirecteur, (req, res) => {
     mois,
     version: demandee,
     montantPanier,
+    // Horaire de reference du mois, la case "Mois" du classeur de paie.
+    joursOuvres: D.joursOuvresDuMois(annee, mois),
+    heuresReference: D.heuresReferenceMois(annee, mois),
     semaines: donnees.semaines.map((s) => ({ annee: s.annee, semaine: s.semaine, debut: s.dates[0] })),
     salaries,
   });

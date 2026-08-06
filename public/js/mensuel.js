@@ -233,6 +233,11 @@ function gabaritTableauMois(mois) {
         ? 'Version direction — montants visibles. Ils se masquent seuls au bout de 20 minutes.'
         : 'Version publique — aucun montant, aucun taux horaire.'}
     </p>
+    <p class="aide">
+      Horaire de référence du mois (case « Mois » du classeur de paie) :
+      <strong>${nombre(mois.heuresReference)} h</strong>
+      — ${mois.joursOuvres} jours ouvrés × 7 h.
+    </p>
     <div class="enveloppe-table">
       <table class="grille-mois">
         <thead><tr>${entetes.map((e) => `<th>${echapper(e)}</th>`).join('')}</tr></thead>

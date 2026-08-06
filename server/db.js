@@ -212,6 +212,17 @@ ajouterColonne('fiches', 'visa_envoye_le', 'TEXT');
 ajouterColonne('utilisateurs', 'conducteur_id', 'INTEGER REFERENCES conducteurs(id) ON DELETE SET NULL');
 
 /*
+ * Date de la PREMIERE demande de validation.
+ *
+ * `soumise_le` est ecrase a chaque retransmission : une fiche renvoyee puis
+ * corrigee porte la date de sa correction, ce qui fait passer pour un retard un
+ * chef d'equipe qui avait rendu a temps. La ponctualite se mesure sur le
+ * premier envoi — le moment ou il a fait sa part — et les corrections restent
+ * comptees a part, dans les fiches renvoyees.
+ */
+ajouterColonne('fiches', 'premiere_soumission_le', 'TEXT');
+
+/*
  * Le conducteur choisi pour cette fiche-la. Un chef ne travaille pas toujours
  * sous le meme : le chantier de la semaine decide, et c'est lui qui sait. Son
  * rattachement habituel ne sert plus que de proposition.
@@ -234,6 +245,19 @@ const PARC_INITIAL = [
   ['FC-291-KA', 'Citroen', 'C4', 'Diesel'],
   ['EB-308-KY', 'Citroen', 'C4 Cactus', 'Diesel'],
 ];
+
+/*
+ * Reprise des fiches deja transmises : leur premiere demande de validation se
+ * lit dans le journal, qui la conserve depuis le debut. A defaut, on retombe
+ * sur la date de transmission connue.
+ */
+db.prepare(
+  `UPDATE fiches SET premiere_soumission_le = COALESCE(
+     (SELECT MIN(j.horodatage) FROM journal j
+       WHERE j.fiche_id = fiches.id AND j.action = 'soumission'),
+     soumise_le)
+    WHERE premiere_soumission_le IS NULL AND soumise_le IS NOT NULL`
+).run();
 
 if (db.prepare('SELECT COUNT(*) AS n FROM vehicules').get().n === 0) {
   const inserer = db.prepare(

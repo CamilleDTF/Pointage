@@ -427,9 +427,14 @@ function afficher() {
   afficherAnomalies(fiche.anomalies || []);
 
   $('btn-transmettre').disabled = !modifiable;
-  $('btn-transmettre').textContent = modifiable
-    ? 'Contrôler et transmettre au directeur'
-    : 'Fiche déjà transmise';
+  // Sans conducteur enregistre, l'etape du visa n'existe pas : la fiche part
+  // directement au directeur et le bouton doit dire ou elle va vraiment.
+  const versConducteur = (reference.conducteurs || []).length > 0;
+  $('btn-transmettre').textContent = !modifiable
+    ? 'Fiche déjà transmise'
+    : versConducteur
+      ? 'Contrôler et transmettre au conducteur de travaux'
+      : 'Contrôler et transmettre au directeur';
 }
 
 /* --------------------------- Fragments de formulaire ---------------------- */

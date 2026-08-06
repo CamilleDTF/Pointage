@@ -139,6 +139,31 @@
   const DUREE_JOURNEE_REFERENCE_MINUTES = BASE_HEBDOMADAIRE_MINUTES / 5;
 
   /**
+   * Nombre de jours ouvres d'un mois civil : les lundis au vendredis, du 1er au
+   * dernier jour. Les jours feries ne sont pas deduits — la consigne est bien
+   * « nombre de jours ouvres x 7 heures », et un ferie tombant un mardi reste un
+   * jour ouvre. `mois` va de 1 a 12.
+   */
+  function joursOuvresDuMois(annee, mois) {
+    const dernier = new Date(Date.UTC(Number(annee), Number(mois), 0)).getUTCDate();
+    let ouvres = 0;
+    for (let jour = 1; jour <= dernier; jour += 1) {
+      const semaine = new Date(Date.UTC(Number(annee), Number(mois) - 1, jour)).getUTCDay();
+      if (semaine !== 0 && semaine !== 6) ouvres += 1;
+    }
+    return ouvres;
+  }
+
+  /**
+   * La case « Mois » du tableau de paie : l'horaire de reference du mois, en
+   * heures. Il sert de denominateur a la retenue pour absence, d'ou l'interet
+   * qu'il soit calcule et non ressaisi.
+   */
+  function heuresReferenceMois(annee, mois) {
+    return (joursOuvresDuMois(annee, mois) * DUREE_JOURNEE_REFERENCE_MINUTES) / 60;
+  }
+
+  /**
    * Repartit les heures supplementaires d'UNE semaine : les 8 premieres sont
    * majorees a 25 %, les suivantes a 50 %. Le calcul est hebdomadaire, jamais
    * mensuel — c'est pour cela que le tableau mensuel raisonne par semaine.
@@ -457,6 +482,8 @@
     BASE_HEBDOMADAIRE_MINUTES,
     SEUIL_MAJORATION_25_MINUTES,
     DUREE_JOURNEE_REFERENCE_MINUTES,
+    joursOuvresDuMois,
+    heuresReferenceMois,
     VILLES_GRAND_DEPLACEMENT_80,
     heuresSupplementaires,
     estGrandDeplacement80,

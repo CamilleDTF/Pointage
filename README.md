@@ -321,10 +321,18 @@ taux horaire remonté vers les feuilles individuelles).
 | `PANIER` | Jours de déplacement |
 | `GD 72` / `GD 80` | Ces mêmes jours, ventilés selon la ville du chantier |
 | `Contrôle` | `total − 25 % − 50 % − 100 % − 35` : ce qui reste à redistribuer |
+| `Mois` | Horaire de référence du mois : **jours ouvrés × 7 h** |
 
 Restent à la main du directeur : `NUIT`, `DIMANCHE`, la colonne `1` (100 %),
-`PERFO`, `EDEN RED`, `GD AUTRES`, les heures d'absence, le nombre d'heures du mois
-et le taux horaire.
+`PERFO`, `EDEN RED`, `GD AUTRES`, les heures d'absence et le taux horaire.
+
+La case `Mois`, elle, n'est plus saisie : elle vaut le nombre de jours ouvrés du
+mois (les lundis au vendredis, jours fériés non déduits) multiplié par 7 h — 21
+jours ouvrés en août 2026 donnent 147 h. C'est un fait de calendrier, et elle sert
+de dénominateur à la retenue pour absence : une saisie approximative faussait
+toutes les paies du mois. Elle apparaît en vert pâle dans le classeur, et au-dessus
+du tableau mensuel à l'écran. Le calcul est dans `public/js/regles.js`
+(`joursOuvresDuMois`, `heuresReferenceMois`).
 
 **Code couleur** — une case attendue de la direction s'affiche en **orange** tant
 qu'elle est vide, et revient au **jaune** dès qu'elle est saisie. C'est une mise en
@@ -433,8 +441,11 @@ est à l'heure, à partir du mardi elle est hors délai. Le seuil se règle par
 `DELAI_TRANSMISSION_JOURS` si la consigne change.
 
 Le retard se compte en jours calendaires, sans tenir compte des week-ends ni des jours
-fériés, et la date retenue est celle de la **dernière** transmission : une fiche
-renvoyée puis corrigée n'est complète qu'au second envoi.
+fériés, et la date retenue est celle de la **première demande de validation** : un chef
+qui envoie le lundi est à l'heure, même si sa fiche lui revient ensuite pour correction.
+Les allers-retours se comptent dans la colonne *Renvoyées*, pour qu'un même incident ne
+soit pas facturé deux fois. Cette date est figée au premier envoi dans
+`fiches.premiere_soumission_le` ; `soumise_le`, lui, suit les retransmissions.
 
 Rien n'est compté avant la date de mise en service, ni sur la semaine en cours :
 une semaine pointée sur papier n'est pas un oubli, une semaine en cours n'est pas
