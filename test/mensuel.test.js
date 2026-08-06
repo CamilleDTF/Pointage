@@ -54,11 +54,11 @@ function poserFiche({ semaine, chantier = 'Chantier', ville = 'Toulouse', statut
     const ligne = db
       .prepare(
         `INSERT INTO fiche_lignes (fiche_id, salarie_id, nom_affiche, ordre, minutes_route,
-           minutes_trajet, jours_zone, type_masque, nb_deplacement)
-         VALUES (?,?,?,?,?,?,?,?,?)`
+           minutes_trajet, jours_zone, type_masque, nb_deplacement, nb_gd72, nb_gd80)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`
       )
       .run(fiche, l.salarie_id ?? null, l.nom, i, l.route ?? 0, l.trajet ?? 0,
-        l.zone ?? 0, l.masque ?? '', l.depl ?? 0).lastInsertRowid;
+        l.zone ?? 0, l.masque ?? '', l.depl ?? 0, l.gd72 ?? 0, l.gd80 ?? 0).lastInsertRowid;
     for (let j = 0; j < 7; j += 1) {
       db.prepare('INSERT INTO fiche_jours (ligne_id, jour, minutes, code_absence) VALUES (?,?,?,?)')
         .run(ligne, j, Math.round((l.heures?.[j] ?? 0) * 60), l.codes?.[j] ?? '');
@@ -143,6 +143,31 @@ test('les jours en zone se ventilent entre Amiante 1 (VA) et Amiante 2 (AA)', ()
   assert.equal(trouver(mois, 'BERTIN_Bruno').semaines[IDX_PLEINE].joursAmiante1, 0);
 });
 
+/*
+ * Les jours de grand deplacement sont desormais comptes par le chef d'equipe,
+ * ligne par ligne. Un meme chantier peut relever des deux taux selon les jours :
+ * la ville ne pouvait pas le dire.
+ */
+test('les jours de grand deplacement declares par le chef font foi', () => {
+  db.exec('DELETE FROM fiches');
+  poserFiche({
+    semaine: PLEINE,
+    ville: 'Toulouse', // une ville « GD 72 » a l'ancienne : elle ne decide plus
+    lignes: [{ salarie_id: salaries[0], nom: 'ANDRE Alain', heures: [7, 7, 7, 7, 7], depl: 5, gd72: 2, gd80: 3 }],
+  });
+
+  const semaine = trouver(agregerMois(ANNEE, MOIS), 'ANDRE_Alain').semaines[IDX_PLEINE];
+  assert.equal(semaine.joursGD72, 2);
+  assert.equal(semaine.joursGD80, 3);
+  // Le panier reste compte a part : il suit les jours de deplacement.
+  assert.equal(semaine.joursPanier, 5);
+});
+
+/*
+ * Les fiches d'avant ces deux colonnes n'en portent pas. Elles gardent la
+ * repartition deduite de la ville : sans cela, un mois deja pointe changerait
+ * de montant apres coup.
+ */
 test('la ville du chantier repartit les deplacements entre GD 72 et GD 80', () => {
   db.exec('DELETE FROM fiches');
   poserFiche({

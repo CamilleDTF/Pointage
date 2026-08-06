@@ -130,6 +130,27 @@ CREATE TABLE IF NOT EXISTS vehicules (
   actif          INTEGER NOT NULL DEFAULT 1
 );
 
+/*
+ * Registre des conges et absences longues, tenu par la direction.
+ *
+ * Les codes d'absence de la fiche expliquent un jour sans heures, mais ils
+ * supposent qu'une fiche existe. Une semaine entiere de conges ne produit
+ * aucune ligne : sur le calendrier, le salarie apparaissait simplement « non
+ * pointe », comme un oubli. Ce registre repond a la question « pourquoi
+ * celui-la n'est-il nulle part cette semaine ? » sans avoir a la poser.
+ *
+ * Les bornes sont incluses : un conge du 3 au 7 couvre les cinq jours.
+ */
+CREATE TABLE IF NOT EXISTS conges (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  salarie_id INTEGER NOT NULL REFERENCES salaries(id) ON DELETE CASCADE,
+  debut      TEXT    NOT NULL,
+  fin        TEXT    NOT NULL,
+  motif      TEXT    NOT NULL DEFAULT 'CP',
+  commentaire TEXT   NOT NULL DEFAULT '',
+  cree_le    TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS journal (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
   fiche_id  INTEGER REFERENCES fiches(id) ON DELETE CASCADE,
@@ -144,6 +165,7 @@ CREATE INDEX IF NOT EXISTS idx_fiches_statut  ON fiches(statut);
 CREATE INDEX IF NOT EXISTS idx_lignes_fiche   ON fiche_lignes(fiche_id);
 CREATE INDEX IF NOT EXISTS idx_jours_ligne    ON fiche_jours(ligne_id);
 CREATE INDEX IF NOT EXISTS idx_journal_fiche  ON journal(fiche_id);
+CREATE INDEX IF NOT EXISTS idx_conges_salarie ON conges(salarie_id, debut, fin);
 `);
 
 /*
@@ -241,6 +263,22 @@ ajouterColonne('fiches', 'conducteur_id', 'INTEGER REFERENCES conducteurs(id) ON
  * Il n'ouvre que cela : la liste de ses fiches en attente, sans aucun montant.
  */
 ajouterColonne('conducteurs', 'jeton', 'TEXT');
+
+/*
+ * Jours de grand deplacement, saisis par le chef d'equipe, ligne par ligne.
+ *
+ * Le taux se deduisait de la ville du chantier : Paris et Nice au taux 80, le
+ * reste au taux 72. C'etait faux dans les deux sens — un meme chantier peut
+ * relever des deux selon les jours, et la ville ne dit pas tout. Le chef sait,
+ * lui, combien de jours chaque salarie a passes sous l'un et sous l'autre : il
+ * les compte, comme sur la fiche papier.
+ *
+ * Les fiches d'avant gardent leur repartition calculee depuis la ville : voir
+ * server/mensuel.js, qui ne bascule sur ces colonnes que si elles sont
+ * renseignees.
+ */
+ajouterColonne('fiche_lignes', 'nb_gd72', 'INTEGER NOT NULL DEFAULT 0');
+ajouterColonne('fiche_lignes', 'nb_gd80', 'INTEGER NOT NULL DEFAULT 0');
 
 // Les conducteurs deja enregistres n'en avaient pas : on leur en pose un.
 {

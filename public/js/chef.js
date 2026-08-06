@@ -77,7 +77,6 @@ async function demarrer() {
   // le chef de sa fiche.
   poser('bloc-calendrier', (e) => { e.open = grandEcran; });
 
-  construireChoixZone();
   construireListeVehicules();
   construireLegendeCodes();
   construireChoixConducteur();
@@ -90,81 +89,27 @@ async function demarrer() {
 
 if ($('annee-calendrier')) $('annee-calendrier').addEventListener('change', chargerCalendrier);
 
-/* ---------------------- Chantier, zone et vehicule ------------------------ */
+/* -------------------------- Chantier et vehicule -------------------------- */
 
 /*
- * La zone se coche, elle ne se redige pas. C'est elle qui decide du taux de
- * grand deplacement — 80 pour Paris et Nice, 72 ailleurs. Avant, le taux se
- * devinait en cherchant « paris » ou « nice » dans le nom de la ville, ce
- * qu'une orthographe inattendue suffisait a fausser.
+ * La ville du chantier reste saisie, mais elle ne decide plus de rien.
+ *
+ * Le taux de grand deplacement se deduisait d'elle — Paris et Nice au taux 80,
+ * le reste au taux 72. C'etait faux dans les deux sens : un meme chantier peut
+ * relever des deux selon les jours, et la ville ne dit pas sous quel taux
+ * chaque salarie a dormi. Ce sont maintenant deux colonnes du tableau, comptees
+ * en jours par le chef d'equipe, qui le disent.
  */
-function construireChoixZone() {
-  poser('zone-deplacement', (zone) => {
-    zone.innerHTML = (reference.zonesDeplacement || Regles.ZONES_DEPLACEMENT)
-      .map(
-        (z) => `
-        <label class="option-zone">
-          <input type="radio" name="zone" value="${z.code}">
-          <span>${echapper(z.libelle)}</span>
-          <small>GD ${z.taux}</small>
-        </label>`
-      )
-      .join('');
-
-    zone.querySelectorAll('input[name="zone"]').forEach((radio) => {
-      radio.addEventListener('change', () => {
-        appliquerZone(radio.value);
-        enregistrerPlusTard();
-      });
-    });
-  });
-}
-
-/**
- * Paris et Nice remplissent la ville d'eux-memes : le chef n'a rien a taper, et
- * le nom enregistre est toujours le meme. « Autre » rend la main.
- */
-function appliquerZone(code) {
-  const zone = String(code || '').toUpperCase();
-  const ville = $('ville');
-  const bloc = $('bloc-ville');
-  if (!ville) return;
-
-  const libre = zone === 'AUTRE' || zone === '';
-  ville.disabled = !libre || !modifiable;
-  if (bloc) bloc.classList.toggle('masque', zone === 'PARIS' || zone === 'NICE');
-  if (zone === 'PARIS') ville.value = 'Paris';
-  if (zone === 'NICE') ville.value = 'Nice';
-  if (zone === 'AUTRE' && ['Paris', 'Nice'].includes(ville.value)) ville.value = '';
-
-  poser('aide-zone', (aide) => {
-    aide.textContent = {
-      PARIS: 'Grand déplacement au taux 80.',
-      NICE: 'Grand déplacement au taux 80.',
-      AUTRE: 'Grand déplacement au taux 72 — indiquez la ville ci-dessous.',
-    }[zone] || 'À cocher : la zone détermine le montant du grand déplacement.';
-  });
-}
-
-function zoneCochee() {
-  const choisi = document.querySelector('input[name="zone"]:checked');
-  return choisi ? choisi.value : '';
-}
 
 /** Le parc en liste : le type de vehicule se deduit de l'immatriculation. */
 function construireListeVehicules() {
   poser('immatriculation', (select) => {
     const parc = reference.vehicules || [];
+    // L'immatriculation seule : le type de vehicule s'affiche juste a cote, dans
+    // son propre champ. Le repeter ici ne ferait qu'allonger la liste.
     select.innerHTML =
       '<option value="">—</option>' +
-      parc
-        .map(
-          (v) =>
-            `<option value="${echapper(v.immatriculation)}">${echapper(v.immatriculation)} · ${echapper(
-              `${v.marque} ${v.modele}`.trim()
-            )}</option>`
-        )
-        .join('');
+      parc.map((v) => `<option value="${echapper(v.immatriculation)}">${echapper(v.immatriculation)}</option>`).join('');
     select.addEventListener('change', () => {
       appliquerVehicule(select.value);
       enregistrerPlusTard();
@@ -308,6 +253,7 @@ surClic('btn-ouvrir', () => ouvrirFiche());
 surClic('btn-quitter', deconnexion);
 surClic('btn-code', changerCode);
 surClic('btn-transmettre', transmettre);
+surClic('btn-reprendre', reprendre);
 surClic('btn-presentation', () => {
   presentation = presentation === 'tableau' ? 'cartes' : 'tableau';
   majBoutonPresentation();
@@ -406,14 +352,6 @@ function afficher() {
     champ.oninput = enregistrerPlusTard;
   }
 
-  // Les fiches anterieures a la zone n'en portent pas : on propose celle que
-  // leur ville laisse deduire, plutot que de les renvoyer a un choix vide.
-  const zone = fiche.zone_deplacement || Regles.zoneDepuisVille(fiche.ville);
-  document.querySelectorAll('input[name="zone"]').forEach((radio) => {
-    radio.checked = radio.value === zone;
-    radio.disabled = !modifiable;
-  });
-  appliquerZone(zone);
   if (!fiche.type_vehicule) appliquerVehicule(fiche.immatriculation);
 
   // A defaut de choix deja fait, on propose le conducteur habituel du chef.
@@ -435,6 +373,12 @@ function afficher() {
     : versConducteur
       ? 'Contrôler et transmettre au conducteur de travaux'
       : 'Contrôler et transmettre au directeur';
+
+  // Une fiche transmise mais pas encore validee se reprend d'un clic : il ne
+  // faut plus attendre une reouverture de la direction pour une virgule.
+  poser('btn-reprendre', (bouton) => {
+    bouton.classList.toggle('masque', fiche.statut !== 'soumise');
+  });
 }
 
 /* --------------------------- Fragments de formulaire ---------------------- */
@@ -602,6 +546,8 @@ function carteSalarie(ligne, index) {
         <div><label>Jours en zone</label><input class="zone" type="number" min="0" max="7" step="0.5" value="${ligne.jours_zone || ''}"></div>
         <div><label>Type de masque</label><select class="masque-type">${optionsMasque(ligne.type_masque)}</select></div>
         <div><label>Nb déplacements</label><input class="deplacement" type="number" min="0" step="1" value="${ligne.nb_deplacement || ''}"></div>
+        <div><label>Jours GD 72</label><input class="gd72" type="number" min="0" max="7" step="1" value="${ligne.nb_gd72 || ''}"></div>
+        <div><label>Jours GD 80</label><input class="gd80" type="number" min="0" max="7" step="1" value="${ligne.nb_gd80 || ''}"></div>
       </div>
 
       <div style="margin-top:12px">
@@ -653,6 +599,8 @@ function gabaritTableau() {
           <td class="num"><input class="cellule zone" type="number" min="0" max="7" step="0.5" value="${ligne.jours_zone || ''}"></td>
           <td class="num"><select class="cellule masque-type">${optionsMasque(ligne.type_masque)}</select></td>
           <td class="num"><input class="cellule deplacement" type="number" min="0" step="1" value="${ligne.nb_deplacement || ''}"></td>
+          <td class="num"><input class="cellule gd72" type="number" min="0" max="7" step="1" value="${ligne.nb_gd72 || ''}"></td>
+          <td class="num"><input class="cellule gd80" type="number" min="0" max="7" step="1" value="${ligne.nb_gd80 || ''}"></td>
           <td><input class="cellule observation" value="${echapper(ligne.observation)}"></td>
           <td class="num"><button type="button" class="petit signer">Signer</button></td>
         </tr>`;
@@ -666,6 +614,8 @@ function gabaritTableau() {
         <th style="min-width:165px">Nom - Prénom</th>${entetesJours}
         <th class="num">Total<br>semaine</th><th class="num">Route<br>100%</th><th class="num">Trajet<br>50%</th>
         <th class="num">Jours<br>zone</th><th class="num">Masque</th><th class="num">Nb<br>dépl.</th>
+        <th class="num">GD 72<br><small style="font-weight:400">jours</small></th>
+        <th class="num">GD 80<br><small style="font-weight:400">jours</small></th>
         <th style="min-width:110px">Observations</th><th class="num">Signature</th>
       </tr></thead>
       <tbody>${rangs}</tbody>
@@ -833,7 +783,6 @@ function construireSignatureResponsable() {
 function collecter() {
   const corps = { lignes: [] };
   for (const champ of document.querySelectorAll('[data-entete]')) corps[champ.dataset.entete] = champ.value;
-  corps.zone_deplacement = zoneCochee();
   if (fiche.signature_responsable !== undefined) corps.signature_responsable = fiche.signature_responsable;
 
   document.querySelectorAll('[data-ligne]').forEach((conteneur) => {
@@ -859,6 +808,8 @@ function collecter() {
       jours_zone: Number(conteneur.querySelector('.zone').value) || 0,
       type_masque: conteneur.querySelector('.masque-type').value,
       nb_deplacement: Number(conteneur.querySelector('.deplacement').value) || 0,
+      nb_gd72: Number(conteneur.querySelector('.gd72').value) || 0,
+      nb_gd80: Number(conteneur.querySelector('.gd80').value) || 0,
       observation: conteneur.querySelector('.observation').value,
       signature: signaturesLignes[index] ?? null,
       jours,
@@ -985,6 +936,36 @@ function designerChamps(anomalies, deplier) {
         if (deplier) carte.open = true;
       }
     }
+  }
+}
+
+/*
+ * Reprendre sa fiche pour la corriger.
+ *
+ * Le visa en cours est annule : un conducteur qui a vise une version ne doit
+ * pas se retrouver signataire d'une autre. On le dit avant, pas apres.
+ */
+async function reprendre() {
+  const attendVisa = fiche.visa_statut === 'attente' || fiche.visa_statut === 'vise';
+  const question = attendVisa
+    ? 'Reprendre cette fiche pour la modifier ?\n\nLe visa du conducteur de travaux sera annulé : il devra la viser à nouveau après votre correction.'
+    : 'Reprendre cette fiche pour la modifier ?';
+  if (!confirm(question)) return;
+
+  try {
+    const reponse = await API.post(`/api/fiches/${fiche.id}/reprendre`);
+    fiche = reponse.fiche;
+    afficher();
+    await chargerCalendrier();
+    message(
+      reponse.visaAnnule
+        ? 'Fiche reprise. Le visa précédent est annulé : retransmettez-la une fois corrigée.'
+        : 'Fiche reprise. Vous pouvez la modifier, puis la retransmettre.',
+      'succes',
+      7000
+    );
+  } catch (e) {
+    message(e.message, 'erreur');
   }
 }
 

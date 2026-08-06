@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10416b">
+  <title>Pointage — Calendrier du mois</title>
+  <link rel="icon" href="/icone.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="appbar">
+    <div class="titre">
+      Calendrier du mois — Direction
+      <small id="entete-nom">…</small>
+    </div>
+    <button class="petit" id="btn-retour" type="button">◀ Tableau de bord</button>
+    <button class="petit" id="btn-quitter" type="button">Quitter</button>
+  </header>
+
+  <main>
+    <section class="carte">
+      <div class="rangee">
+        <div style="width:150px">
+          <label for="mois">Mois</label>
+          <select id="mois"></select>
+        </div>
+        <div style="width:110px">
+          <label for="annee">Année</label>
+          <input id="annee" type="number" min="2020" max="2100" step="1">
+        </div>
+        <button class="petit" id="btn-precedent" type="button">◀ Précédent</button>
+        <button class="petit" id="btn-suivant" type="button">Suivant ▶</button>
+        <span class="pousse"></span>
+        <div style="width:190px">
+          <label for="filtre-equipe">Équipe</label>
+          <select id="filtre-equipe"></select>
+        </div>
+        <button class="principal" id="btn-conge" type="button">Enregistrer un congé</button>
+      </div>
+      <p class="aide" id="resume-mois"></p>
+    </section>
+
+    <section class="carte">
+      <div id="calendrier-mensuel"></div>
+      <div class="legende-annee" id="legende-calendrier"></div>
+      <p class="aide" style="margin-top:10px">
+        Une ligne par personne, une colonne par jour. Une case vide en semaine est un
+        <strong>jour sans pointage et sans justification</strong> : c'est ce qu'il faut aller
+        chercher. Un congé enregistré ici explique l'absence de fiche ; des heures pointées
+        l'emportent toujours sur un congé prévu.
+      </p>
+    </section>
+
+    <section class="carte" id="bloc-conges">
+      <h2>Congés et absences enregistrés</h2>
+      <p class="aide">
+        Ce registre ne sert qu'à expliquer les jours sans pointage : il n'entre dans aucun
+        calcul de paie. Les bornes sont incluses — un congé du 3 au 7 couvre les cinq jours.
+      </p>
+      <div class="enveloppe-table"><table id="table-conges">
+        <thead><tr><th>Salarié</th><th>Du</th><th>Au</th><th>Motif</th><th>Commentaire</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </section>
+  </main>
+
+  <div class="fenetre masque" id="fenetre-conge">
+    <div class="fenetre-corps">
+      <h2>Enregistrer un congé ou une absence</h2>
+      <div class="grille deux">
+        <div>
+          <label for="conge-salarie">Salarié</label>
+          <select id="conge-salarie"></select>
+        </div>
+        <div>
+          <label for="conge-motif">Motif</label>
+          <select id="conge-motif"></select>
+        </div>
+        <div>
+          <label for="conge-debut">Du (inclus)</label>
+          <input id="conge-debut" type="date">
+        </div>
+        <div>
+          <label for="conge-fin">Au (inclus)</label>
+          <input id="conge-fin" type="date">
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <label for="conge-commentaire">Commentaire (facultatif)</label>
+        <input id="conge-commentaire" placeholder="précision utile au suivi">
+      </div>
+      <div class="rangee" style="margin-top:16px">
+        <span class="pousse"></span>
+        <button class="petit" id="btn-annuler-conge" type="button">Annuler</button>
+        <button class="principal" id="btn-valider-conge" type="button">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/regles.js"></script>
+  <script src="/js/commun.js"></script>
+  <script src="/js/calendrier.js"></script>
+</body>
+</html>

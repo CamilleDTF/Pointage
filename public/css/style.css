@@ -240,25 +240,6 @@ td.weekend { background: #f5f7fa; }
 
 /* ------------------------ Zone du chantier, codes ------------------------- */
 
-.choix-zone { display: flex; gap: 8px; flex-wrap: wrap; }
-.option-zone {
-  flex: 1 1 110px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 11px;
-  border: 1px solid var(--gris-bord);
-  border-radius: 8px;
-  background: #fff;
-  cursor: pointer;
-  font-weight: 600;
-  margin: 0;
-}
-.option-zone input { width: auto; margin: 0; }
-.option-zone small { margin-left: auto; color: var(--gris-texte); font-weight: 500; }
-.option-zone:has(input:checked) { border-color: var(--bleu); background: #eef4fa; }
-.option-zone:has(input:checked) small { color: var(--bleu); }
-.choix-zone.champ-bloquant { border-radius: 8px; padding: 4px; }
 
 .aide-codes { margin-bottom: 14px; }
 .aide-codes > summary {
@@ -421,73 +402,10 @@ input[readonly] { background: #f7f9fc; color: var(--gris-texte); }
   .etats-resume { margin-left: 0; }
 }
 
-/* ------------------- Vue de l'année, tous les chefs ----------------------- */
-
-/* Une ligne par chef, une colonne par semaine. Cinquante-deux colonnes ne
-   tiennent sur aucun écran : la grille défile, la colonne des noms reste. */
-.calendrier-general { overflow-x: auto; padding-bottom: 4px; }
-.calendrier-general table { border-collapse: separate; border-spacing: 0; }
-.calendrier-general th,
-.calendrier-general td { padding: 0; border: none; }
-
-.calendrier-general .nom-chef {
-  position: sticky;
-  left: 0;
-  z-index: 2;
-  background: #fff;
-  padding: 3px 12px 3px 2px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  white-space: nowrap;
-  text-align: left;
-  box-shadow: 1px 0 0 var(--gris-bord);
-}
-.calendrier-general thead .nom-chef { background: #fff; }
-
-.calendrier-general .entete-mois {
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--gris-texte);
-  font-weight: 700;
-  text-align: left;
-  padding: 0 0 3px 2px;
-  border-bottom: 1px solid var(--gris-bord);
-}
-.calendrier-general .entete-semaine {
-  font-size: 0.6rem;
-  color: var(--gris-texte);
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-  padding-bottom: 3px;
-}
-
-/* Chaque case est un bouton : la couleur dit l'état, l'infobulle le détaille. */
-.case-annee {
-  width: 17px;
-  height: 17px;
-  margin: 1px;
-  padding: 0;
-  border: 1px solid var(--gris-bord);
-  border-radius: 3px;
-  background: #fff;
-  cursor: pointer;
-}
-.case-annee:hover { outline: 2px solid var(--bleu-clair); outline-offset: 1px; }
-.case-annee.avenir       { background: #fbfcfd; border-style: dotted; opacity: 0.55; }
-.case-annee.horsPerimetre { background: #fbfcfd; border-style: dotted; opacity: 0.3; }
-.case-annee.manquante    { background: #fff; border-style: dashed; border-color: #b7c0cc; }
-.case-annee.brouillon    { background: var(--orange); border-color: var(--orange); }
-.case-annee.soumise      { background: var(--bleu-clair); border-color: var(--bleu-clair); }
-.case-annee.attenteVisa  { background: #7d5bbe; border-color: #7d5bbe; }
-.case-annee.visee        { background: #a9c9e4; border-color: var(--bleu-clair); }
-.case-annee.rejetee      { background: var(--rouge); border-color: var(--rouge); }
-.case-annee.validee      { background: var(--vert); border-color: var(--vert); }
-.case-annee.courante     { box-shadow: 0 0 0 2px var(--orange); }
-
+/* Légende d'un calendrier : une pastille de la même forme que ses cases. */
 .legende-annee { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; align-items: center; }
 .legende-annee span { display: flex; align-items: center; gap: 5px; font-size: 0.76rem; color: var(--gris-texte); }
-.legende-annee .case-annee { cursor: default; }
+.legende-annee .case-jour { display: inline-block; width: 20px; height: 18px; border-radius: 3px; }
 
 /* ------------------- Grille de saisie (PC portable) ---------------------- */
 
@@ -643,4 +561,92 @@ input[readonly] { background: #f7f9fc; color: var(--gris-texte); }
   font-size: 0.78rem;
   font-family: ui-monospace, Menlo, Consolas, monospace;
   background: #f7f9fb;
+}
+
+/* ------------------- Calendrier mensuel de la direction ------------------- */
+
+/* Trente-et-une colonnes ne tiennent sur aucun écran : la grille défile, et la
+   colonne des noms reste en vue — sans elle, une case ne veut plus rien dire. */
+.calendrier-mois { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.calendrier-mois table { border-collapse: collapse; width: auto; }
+
+.calendrier-mois .nom-personne {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #fff;
+  min-width: 190px;
+  text-align: left;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 4px 10px 4px 6px;
+  box-shadow: 1px 0 0 var(--gris-bord);
+}
+.calendrier-mois thead .nom-personne { background: #f4f6f9; }
+
+.calendrier-mois .marque-chef {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bleu-clair);
+  border: 1px solid var(--bleu-clair);
+  border-radius: 999px;
+  padding: 0 5px;
+}
+
+.calendrier-mois .separateur-equipe th,
+.calendrier-mois .separateur-equipe td {
+  background: #eef2f7;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gris-texte);
+  border-top: 2px solid var(--gris-bord);
+  padding: 5px 6px;
+}
+
+.calendrier-mois .jour-entete {
+  padding: 3px 0;
+  min-width: 30px;
+  background: #f4f6f9;
+  font-size: 0.66rem;
+  line-height: 1.15;
+  text-align: center;
+}
+.calendrier-mois .jour-entete.weekend { background: #e6eaef; }
+.calendrier-mois .jour-entete .lettre { display: block; color: var(--gris-texte); }
+.calendrier-mois .jour-entete .numero { display: block; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Chaque case porte peu de chose : l'état se lit d'abord à la couleur, le
+   détail vient de l'infobulle. */
+.case-jour {
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid #e4e9ef;
+}
+.case-jour.travaille   { background: #e2f4ea; color: #14653a; }
+.case-jour.absence     { background: #fdf3e2; color: #96590a; }
+.case-jour.conge       { background: #e3effa; color: #10416b; }
+.case-jour.nonPointe   { background: #fff; }
+.case-jour.weekend     { background: #f0f2f5; }
+.case-jour.horsService { background: #fafbfc; }
+
+.calendrier-mois .total-mois {
+  position: sticky;
+  right: 0;
+  background: #f4f6f9;
+  font-weight: 700;
+  font-size: 0.76rem;
+  text-align: right;
+  padding: 4px 8px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  box-shadow: -1px 0 0 var(--gris-bord);
 }

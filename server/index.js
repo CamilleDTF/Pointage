@@ -16,6 +16,7 @@ const XM = require('./export-mensuel');
 const M = require('./mensuel');
 const I = require('./indicateurs');
 const V = require('./visa');
+const CAL = require('./calendrier');
 const C = require('./courriel');
 
 const app = express();
@@ -194,102 +195,44 @@ app.get('/api/calendrier', A.exigerConnexion, (req, res) => {
   });
 });
 
+/* --------------------- Calendrier mensuel de la direction ------------------ */
+
 /**
- * La meme lecture de l'annee, mais pour les huit chefs d'equipe a la fois : une
- * ligne par chef, une colonne par semaine.
+ * Le mois, personne par personne et jour par jour.
  *
- * Le tableau de bord montre une semaine a la fois, ce qui repond a « qui doit
- * encore rendre sa fiche cette semaine » mais jamais a « qui traine depuis un
- * mois ». Un trou de trois semaines chez un chef ne se voit qu'en changeant
- * trois fois de semaine ; ici il se lit d'un coup d'oeil.
+ * Reserve a la direction : chaque ligne dit ou etait chaque salarie, ce qu'aucun
+ * chef d'equipe n'a a savoir de l'equipe d'un autre.
  */
-app.get('/api/calendrier-general', A.exigerDirecteur, (req, res) => {
-  const courante = D.semaineISO(new Date());
-  const annee = Number(req.query.annee) || courante.annee;
+app.get('/api/calendrier-mensuel', A.exigerDirecteur, (req, res) => {
+  const annee = Number(req.query.annee);
+  const mois = Number(req.query.mois);
   if (!Number.isInteger(annee) || annee < 2020 || annee > 2100) {
     return res.status(400).json({ erreur: 'Annee invalide.' });
   }
-
-  const chefs = db
-    .prepare("SELECT id, nom FROM utilisateurs WHERE role = 'chef' AND actif = 1 ORDER BY nom")
-    .all();
-
-  // Une seule lecture des fiches de l'annee, rangee par chef puis par semaine :
-  // huit chefs sur cinquante-deux semaines feraient sinon autant de requetes.
-  const parChef = new Map(chefs.map((c) => [c.id, new Map()]));
-  for (const fiche of F.listerFiches({ annee })) {
-    const semaines = parChef.get(fiche.chef_id);
-    if (!semaines) continue; // fiche d'un chef desactive depuis
-    // Un chef peut avoir deux chantiers la meme semaine : la case retient l'etat
-    // le moins avance, celui qui reclame encore quelque chose.
-    const dejaLa = semaines.get(fiche.semaine);
-    semaines.set(fiche.semaine, dejaLa ? [...dejaLa, fiche] : [fiche]);
+  if (!Number.isInteger(mois) || mois < 1 || mois > 12) {
+    return res.status(400).json({ erreur: 'Mois invalide (1 a 12).' });
   }
-
-  const semaines = [];
-  for (let s = 1; s <= D.nombreSemainesISO(annee); s += 1) {
-    const dates = D.datesDeLaSemaine(annee, s);
-    semaines.push({
-      semaine: s,
-      debut: dates[0],
-      fin: dates[6],
-      mois: Number(dates[3].slice(5, 7)),
-      courante: annee === courante.annee && s === courante.semaine,
-      future: annee > courante.annee || (annee === courante.annee && s > courante.semaine),
-      avantService: D.semaineAvantService(dates[6], DEBUT_SERVICE),
-    });
-  }
-
-  // Ordre de priorite : ce qui reclame une action passe devant ce qui est fait.
-  const RANG = ['rejetee', 'brouillon', 'soumise', 'validee'];
-  const moinsAvance = (fiches) =>
-    fiches.map((f) => D.etatAffiche(f)).sort((a, b) => {
-      const ra = RANG.indexOf(a) === -1 ? RANG.indexOf('soumise') : RANG.indexOf(a);
-      const rb = RANG.indexOf(b) === -1 ? RANG.indexOf('soumise') : RANG.indexOf(b);
-      return ra - rb;
-    })[0];
-
-  const lignes = chefs.map((chef) => {
-    const sesFiches = parChef.get(chef.id);
-    const cases = semaines.map((s) => {
-      const fiches = sesFiches.get(s.semaine);
-      if (!fiches) {
-        return {
-          semaine: s.semaine,
-          etat: s.avantService ? 'horsPerimetre' : s.future ? 'avenir' : 'manquante',
-        };
-      }
-      return {
-        semaine: s.semaine,
-        etat: moinsAvance(fiches),
-        chantiers: fiches.map((f) => f.chantier).filter(Boolean),
-        minutes: fiches.reduce((t, f) => t + (Number(f.total_minutes) || 0), 0),
-      };
-    });
-
-    const compter = (etat) => cases.filter((c) => c.etat === etat).length;
-    return {
-      chef_id: chef.id,
-      nom: chef.nom,
-      cases,
-      totaux: {
-        manquante: compter('manquante'),
-        brouillon: compter('brouillon'),
-        soumise: compter('soumise') + compter('attenteVisa') + compter('visee'),
-        rejetee: compter('rejetee'),
-        validee: compter('validee'),
-      },
-    };
-  });
-
   res.json({
-    annee,
-    semaineCourante: courante,
-    debutService: DEBUT_SERVICE,
-    delaiJours: I.DELAI_ATTENDU_JOURS,
-    semaines,
-    chefs: lignes,
+    ...CAL.moisComplet(annee, mois, { debutService: DEBUT_SERVICE }),
+    codesAbsence: D.CODES_ABSENCE,
+    motifsConge: CAL.MOTIFS_CONGE,
   });
+});
+
+app.get('/api/conges', A.exigerDirecteur, (req, res) => {
+  res.json({ conges: CAL.listerConges({ depuis: req.query.depuis || null }), motifs: CAL.MOTIFS_CONGE });
+});
+
+app.post('/api/conges', A.exigerDirecteur, (req, res) => {
+  const resultat = CAL.enregistrerConge(req.body || {});
+  if (!resultat.erreur) {
+    journaliser(null, req.utilisateur.id, 'conge_ajoute', `${req.body.salarie_id} ${req.body.debut}->${req.body.fin}`);
+  }
+  repondre(res, resultat);
+});
+
+app.delete('/api/conges/:id', A.exigerDirecteur, (req, res) => {
+  repondre(res, CAL.supprimerConge(req.params.id));
 });
 
 /* --------------------------------- Fiches --------------------------------- */
@@ -399,6 +342,14 @@ app.post(
     res.json({ visa: resumeVisa(visa, { avecLien: true }), fiche: F.obtenirFiche(Number(req.params.id)) });
   })
 );
+
+/*
+ * Le chef reprend sa fiche pour la corriger, sans passer par la direction.
+ * Le visa en cours est annule : voir F.reprendre.
+ */
+app.post('/api/fiches/:id/reprendre', A.exigerConnexion, (req, res) => {
+  repondre(res, F.reprendre(Number(req.params.id), req.utilisateur));
+});
 
 app.post('/api/fiches/:id/decision', A.exigerDirecteur, (req, res) => {
   repondre(res, F.statuer(Number(req.params.id), req.utilisateur, req.body.decision, req.body.motif));
@@ -759,6 +710,48 @@ app.post('/api/admin/utilisateurs', A.exigerDirecteur, (req, res) => {
   } catch (e) {
     res.status(409).json({ erreur: 'Cet identifiant existe deja.' });
   }
+});
+
+/*
+ * Correction du nom ou de l'identifiant d'un compte.
+ *
+ * Un nom mal orthographie a l'import, un identifiant choisi trop vite : sans
+ * cette route, il fallait desactiver le compte et en creer un autre, ce qui
+ * detachait ses fiches de leur auteur. Le nom du chef d'equipe sert aussi a le
+ * rapprocher de sa fiche salarie : le corriger ici corrige donc l'affichage
+ * partout.
+ */
+app.put('/api/admin/utilisateurs/:id', A.exigerDirecteur, (req, res) => {
+  const id = Number(req.params.id);
+  const compte = db.prepare('SELECT * FROM utilisateurs WHERE id = ?').get(id);
+  if (!compte) return res.status(404).json({ erreur: 'Compte introuvable.' });
+
+  const maj = {};
+  if (req.body.nom !== undefined) {
+    const nom = String(req.body.nom).trim();
+    if (!nom) return res.status(400).json({ erreur: 'Le nom ne peut pas etre vide.' });
+    maj.nom = nom;
+  }
+  if (req.body.identifiant !== undefined) {
+    const identifiant = String(req.body.identifiant).trim().toLowerCase();
+    if (!/^[a-z0-9._-]{3,32}$/.test(identifiant)) {
+      return res.status(400).json({
+        erreur: 'Identifiant invalide : 3 a 32 caracteres, lettres, chiffres, point, tiret ou soulignement.',
+      });
+    }
+    maj.identifiant = identifiant;
+  }
+  if (!Object.keys(maj).length) return res.json({ ok: true });
+
+  try {
+    const set = Object.keys(maj).map((c) => `${c} = @${c}`).join(', ');
+    db.prepare(`UPDATE utilisateurs SET ${set} WHERE id = @id`).run({ ...maj, id });
+  } catch {
+    return res.status(409).json({ erreur: 'Cet identifiant est deja pris par un autre compte.' });
+  }
+
+  journaliser(null, req.utilisateur.id, 'compte_modifie', `${compte.identifiant} -> ${JSON.stringify(maj)}`);
+  res.json({ ok: true, utilisateur: db.prepare('SELECT id, nom, identifiant, role, actif FROM utilisateurs WHERE id = ?').get(id) });
 });
 
 app.post('/api/admin/utilisateurs/:id/code', A.exigerDirecteur, (req, res) => {

@@ -169,6 +169,35 @@ async function chargerConducteurs() {
 }
 
 /*
+ * Correction du nom ou de l'identifiant d'un compte.
+ *
+ * Un nom mal orthographie a l'import, un identifiant choisi trop vite : il
+ * fallait auparavant desactiver le compte et en creer un autre, ce qui
+ * detachait ses fiches de leur auteur.
+ */
+window.corrigerCompte = async (id, champ, valeur, element) => {
+  const ancienne = element.defaultValue;
+  const propre = valeur.trim();
+  if (propre === ancienne) return;
+  try {
+    await API.put(`/api/admin/utilisateurs/${id}`, { [champ]: propre });
+    await chargerAdmin();
+    message(
+      champ === 'identifiant'
+        ? 'Identifiant modifié. Prévenez l’intéressé : c’est avec celui-là qu’il se connectera.'
+        : 'Nom du compte mis à jour.',
+      'succes',
+      champ === 'identifiant' ? 7000 : 3000
+    );
+  } catch (e) {
+    // On remet la valeur d'avant : laisser a l'ecran une correction refusee
+    // ferait croire qu'elle a ete prise en compte.
+    element.value = ancienne;
+    message(e.message, 'erreur');
+  }
+};
+
+/*
  * Copier plutot que faire recopier : ce lien fait une centaine de caracteres,
  * et une seule lettre fausse le rend inutilisable sans dire pourquoi.
  */
@@ -310,7 +339,11 @@ async function chargerAdmin() {
   $('table-utilisateurs').querySelector('tbody').innerHTML = utilisateurs
     .map(
       (u) => `<tr style="${u.actif ? '' : 'opacity:.5'}">
-        <td>${echapper(u.nom)}</td><td>${echapper(u.identifiant)}</td><td>${u.role}</td>
+        <td><input value="${echapper(u.nom)}" style="width:180px"
+                   onchange="corrigerCompte(${u.id}, 'nom', this.value, this)"></td>
+        <td><input value="${echapper(u.identifiant)}" style="width:130px"
+                   onchange="corrigerCompte(${u.id}, 'identifiant', this.value, this)"></td>
+        <td>${u.role}</td>
         <td>
           <button class="petit" onclick="reinitialiserCode(${u.id})">Nouveau code</button>
           <button class="petit" onclick="basculerActif(${u.id}, ${u.actif ? 0 : 1})">${u.actif ? 'Désactiver' : 'Réactiver'}</button>

@@ -115,6 +115,12 @@ function preparerDirecteur() {
     "  surClic(bouton, () => Demo.aller('mensuel'));",
     'accès au tableau mensuel'
   );
+  source = adapter(
+    source,
+    "  surClic(bouton, () => { location.href = '/calendrier.html'; });",
+    "  surClic(bouton, () => Demo.aller('calendrier'));",
+    'accès au calendrier du mois'
+  );
   return source;
 }
 
@@ -132,6 +138,18 @@ function preparerMensuel() {
     '  window.location.href = `/api/export/mois.xlsx?${parametres}`;',
     "  Demo.indisponible(`Tableau mensuel (version ${version})`);",
     'téléchargement du tableau mensuel'
+  );
+  return source;
+}
+
+function preparerCalendrier() {
+  let source = lire('public', 'js', 'calendrier.js');
+  source = adapter(source, "location.href = '/chef.html';", "Demo.aller('chef');", 'redirection chef');
+  source = adapter(
+    source,
+    "surClic('btn-retour', () => { location.href = '/directeur.html'; });",
+    "surClic('btn-retour', () => Demo.aller('directeur'));",
+    'retour au tableau de bord'
   );
   return source;
 }
@@ -167,10 +185,12 @@ const remplacements = {
   GABARIT_DIRECTEUR: JSON.stringify(corpsDePage('directeur.html')),
   GABARIT_PARAMETRES: JSON.stringify(corpsDePage('parametres.html')),
   GABARIT_MENSUEL: JSON.stringify(corpsDePage('mensuel.html')),
+  GABARIT_CALENDRIER: JSON.stringify(corpsDePage('calendrier.html')),
   SCRIPT_CHEF: JSON.stringify(preparerChef()),
   SCRIPT_DIRECTEUR: JSON.stringify(preparerDirecteur()),
   SCRIPT_PARAMETRES: JSON.stringify(preparerParametres()),
   SCRIPT_MENSUEL: JSON.stringify(preparerMensuel()),
+  SCRIPT_CALENDRIER: JSON.stringify(preparerCalendrier()),
 };
 
 let page = lire('demo', 'coquille.html');

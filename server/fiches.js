@@ -41,6 +41,10 @@ function normaliserLigne(brut, ordre) {
       ? String(brut.type_masque || '').toUpperCase()
       : '',
     nb_deplacement: Math.max(0, Math.round(Number(brut.nb_deplacement) || 0)),
+    // Jours de grand deplacement, comptes par le chef : c'est lui qui sait sous
+    // quel taux chaque journee est tombee.
+    nb_gd72: Math.max(0, Math.round(Number(brut.nb_gd72) || 0)),
+    nb_gd80: Math.max(0, Math.round(Number(brut.nb_gd80) || 0)),
     observation: String(brut.observation || '').trim().slice(0, 500),
     signature: typeof brut.signature === 'string' && brut.signature.startsWith('data:image/')
       ? brut.signature.slice(0, 200000)
@@ -249,9 +253,9 @@ function enregistrerFiche(ficheId, corps, utilisateur) {
       const insLigne = db.prepare(
         `INSERT INTO fiche_lignes
            (fiche_id, salarie_id, nom_affiche, ordre, minutes_route, minutes_trajet,
-            jours_zone, type_masque, nb_deplacement, observation, signature)
+            jours_zone, type_masque, nb_deplacement, nb_gd72, nb_gd80, observation, signature)
          VALUES (@fiche_id, @salarie_id, @nom_affiche, @ordre, @minutes_route, @minutes_trajet,
-                 @jours_zone, @type_masque, @nb_deplacement, @observation, @signature)`
+                 @jours_zone, @type_masque, @nb_deplacement, @nb_gd72, @nb_gd80, @observation, @signature)`
       );
       const insJour = db.prepare(
         'INSERT INTO fiche_jours (ligne_id, jour, minutes, code_absence, saisi) VALUES (?, ?, ?, ?, ?)'
@@ -300,6 +304,47 @@ function soumettre(ficheId, utilisateur) {
   ).run(ficheId);
   journaliser(ficheId, utilisateur.id, 'soumission', `Semaine ${fiche.semaine}/${fiche.annee}`);
   return { fiche: obtenirFiche(ficheId), anomalies };
+}
+
+/**
+ * Le chef reprend sa fiche pour la corriger.
+ *
+ * Une fiche transmise n'etait plus modifiable, et il fallait demander sa
+ * reouverture au directeur pour une virgule. Le chef peut desormais la
+ * reprendre lui-meme — tant qu'elle n'est pas validee : apres validation, elle
+ * est partie en paie, et la rouvrir devient une decision de la direction.
+ *
+ * Reprendre annule le visa en cours. C'est indispensable, pas un effet de bord :
+ * un conducteur qui a vise une version ne doit pas se retrouver signataire d'une
+ * autre. Le secret de la fiche est efface, ce qui condamne les liens deja
+ * envoyes, et la fiche disparait de la liste du conducteur.
+ */
+function reprendre(ficheId, utilisateur) {
+  const fiche = db.prepare('SELECT * FROM fiches WHERE id = ?').get(ficheId);
+  if (!fiche) return { erreur: 'Fiche introuvable.', code: 404 };
+  if (utilisateur.role !== 'directeur' && fiche.chef_id !== utilisateur.id) {
+    return { erreur: 'Cette fiche appartient a un autre chef d equipe.', code: 403 };
+  }
+  if (fiche.statut === 'validee') {
+    return {
+      erreur: 'Cette fiche est deja validee par la direction : demandez sa reouverture.',
+      code: 409,
+    };
+  }
+  if (['brouillon', 'rejetee'].includes(fiche.statut)) {
+    return { fiche: obtenirFiche(ficheId), deja: true };
+  }
+
+  const visaEnCours = fiche.visa_statut === 'attente' || fiche.visa_statut === 'vise';
+  db.prepare(
+    `UPDATE fiches SET statut = 'brouillon', soumise_le = NULL,
+            visa_statut = '', visa_jeton = NULL, visa_le = NULL, visa_conducteur = '',
+            maj_le = datetime('now')
+      WHERE id = ?`
+  ).run(ficheId);
+
+  journaliser(ficheId, utilisateur.id, 'reprise_chef', visaEnCours ? 'visa en cours annule' : '');
+  return { fiche: obtenirFiche(ficheId), visaAnnule: visaEnCours };
 }
 
 function statuer(ficheId, utilisateur, decision, motif = '') {
@@ -404,6 +449,7 @@ module.exports = {
   obtenirOuCreerFicheSemaine,
   enregistrerFiche,
   soumettre,
+  reprendre,
   statuer,
   listerFiches,
   lignesPourExport,

@@ -120,8 +120,8 @@ Le cloisonnement est appliqué côté serveur, pas seulement à l'affichage : un
 qui ouvrirait directement l'adresse de la fiche d'un collègue reçoit un refus.
 `test/cloisonnement.test.js` le vérifie à chaque modification du code.
 
-Une fiche transmise n'est plus modifiable par son chef ; seul le directeur peut la
-corriger, la valider, ou la lui renvoyer pour correction avec un motif.
+Une fiche transmise se reprend d'un clic tant qu'elle n'est pas validée ; le directeur
+peut la corriger, la valider, ou la renvoyer au chef avec un motif.
 
 ## Le circuit d'une fiche
 
@@ -329,14 +329,8 @@ le directeur qui doit s'en occuper. Les libellés suivent le rôle
 - Indicateurs de la semaine : fiches validées, à vérifier, manquantes, salariés
   pointés, total des heures.
 - Suivi des 8 chefs : qui a rendu, qui reste à relancer.
-- **Vue de l'année**, dépliable : une ligne par chef, une case par semaine.
-  Le tableau de bord montre une semaine à la fois — il répond à *qui doit encore
-  rendre sa fiche cette semaine*, jamais à *qui traîne depuis un mois*. Un trou de
-  trois semaines chez un chef ne se voyait qu'en changeant trois fois de semaine ;
-  ici il se lit d'un coup d'œil. La couleur donne l'état, l'infobulle le chantier
-  et le total, un clic ouvre la semaine dans le tableau de bord. Le bloc s'ouvre
-  de lui-même sur grand écran et reste replié ailleurs : c'est un complément, pas
-  un passage obligé.
+- Boutons **Calendrier du mois**, **Tableau mensuel** et **Paramètres** vers les
+  trois pages dédiées.
 - Chaque fiche s'ouvre dans une **grille modifiable** (jour par jour, primes,
   observations) enregistrée automatiquement à chaque frappe.
 - Actions : **Valider**, **Renvoyer au chef** (avec motif), **Rouvrir**,
@@ -361,6 +355,37 @@ une adresse propre se met en favori. Quatre volets :
 Comme les deux autres écrans, elle est fermée aux chefs d'équipe côté serveur : un
 chef qui ouvrirait l'adresse directement est renvoyé vers sa fiche, et les routes
 `/api/admin/*` lui répondent un refus.
+
+## Le calendrier du mois — `/calendrier.html`
+
+Une ligne par personne — opérateurs **et** chefs d'équipe, puisqu'un chef travaille
+lui aussi sur le chantier — et une colonne par jour du mois.
+
+Le tableau de bord répond à « qui doit rendre sa fiche cette semaine ». Il ne répond
+pas à « pourquoi Untel n'apparaît nulle part depuis quinze jours », qui est pourtant
+la question coûteuse : c'est celle qui déclenche les appels téléphoniques. Chaque case
+dit donc ce qui s'est passé ce jour-là, **ou pourquoi il ne s'est rien passé**.
+
+| Couleur | Ce qu'elle dit |
+|---|---|
+| Vert, avec les heures | Journée pointée |
+| Orange, avec le code | Absence justifiée sur la fiche (`AT`, `F`, `CP`…) |
+| Bleu | Congé enregistré dans le registre |
+| Blanc, en semaine | **Aucun pointage, aucune justification** — c'est ce qu'il faut aller chercher |
+| Gris | Week-end, ou semaine antérieure à la mise en service |
+
+L'ordre de lecture va du constaté au supposé : des heures pointées un samedi restent
+des heures pointées, et une journée travaillée avant la mise en service reste
+travaillée. Une convention de calendrier n'efface jamais un fait saisi par un chef.
+
+### Le registre des congés
+
+Les codes d'absence de la fiche expliquent un jour sans heures, mais ils supposent
+qu'une fiche existe. **Une semaine entière de congés ne produit aucune ligne** : le
+salarié apparaissait simplement absent, comme un oubli. Le registre — `CP`, `RTT`,
+arrêt maladie, formation, congé sans solde — répond à la question sans qu'on ait à la
+poser. Il n'entre dans **aucun calcul de paie** : il ne sert qu'à expliquer les trous.
+Les bornes sont incluses : un congé du 3 au 7 couvre les cinq jours.
 
 ## Le tableau mensuel pour la paie — `/mensuel.html`
 
@@ -421,9 +446,13 @@ inutilisé ne réclame rien. La légende figure en haut de chaque feuille.
 
 ### Conventions retenues
 
-- **Grand déplacement** *(validé)* — dès que la ville du chantier contient `Nice`
-  ou `Paris`, le déplacement passe en GD 80 ; toute autre ville relève du GD 72.
-  La liste est dans `public/js/regles.js` (`VILLES_GRAND_DEPLACEMENT_80`).
+- **Grand déplacement** *(validé)* — le chef d'équipe compte lui-même, ligne par
+  ligne, les **jours passés sous chacun des deux taux** (colonnes `GD 72` et
+  `GD 80`). Le taux se déduisait auparavant de la ville du chantier : c'était faux
+  dans les deux sens, puisqu'un même chantier peut relever des deux selon les jours,
+  et que la ville ne dit pas où le salarié a dormi. Les fiches antérieures à ces deux
+  colonnes gardent leur répartition calculée depuis la ville — sans quoi un mois déjà
+  pointé changerait de montant après coup.
 - **Semaines à cheval sur deux mois** *(validé)* — chaque tableau ne retient que
   ses propres jours, comme dans le classeur d'origine où le 29 et le 30 juin
   restent vides sur la feuille de juillet. Les primes suivent au prorata des jours
@@ -460,6 +489,7 @@ server/
   mensuel.js    Agrégation d'un mois et valorisation de la paie
   export-mensuel.js  Le classeur mensuel, versions publique et direction
   indicateurs.js Suivi des chefs : assiduité, retards, fiches renvoyées
+  calendrier.js Vue mensuelle par personne, et registre des congés
   visa.js       Liens signés du conducteur de travaux, visa et renvoi
   courriel.js   Envoi SMTP, et dépôt sur disque à défaut de serveur d'envoi
   fournisseurs-courriel.js  Réglages SMTP devinés depuis les MX du domaine
@@ -471,6 +501,7 @@ public/
   directeur.html  Tableau de bord      + js/directeur.js
   parametres.html Paramètres direction + js/parametres.js
   mensuel.html    Tableau mensuel      + js/mensuel.js
+  calendrier.html Calendrier du mois   + js/calendrier.js
   visa.html       Visa du conducteur   + js/visa.js  (sans compte, par lien signé)
   js/regles.js  Règles métier partagées avec le serveur (heures, semaines, contrôles)
   js/commun.js  API, signature tactile, file d'attente en cas de coupure réseau
@@ -506,9 +537,15 @@ brouillon ──transmettre──► soumise ──valider──► validée
     └──────────────── rouvrir ─────────────────────┘
 ```
 
-Un chef ne modifie que ses propres fiches, et seulement en `brouillon` ou
-`rejetée`. Le directeur peut corriger n'importe quelle fiche à tout moment ;
-chaque correction est tracée dans le journal.
+Un chef ne modifie que ses propres fiches. Une fiche transmise se **reprend d'un
+clic** tant qu'elle n'est pas validée : il ne faut plus attendre une réouverture de
+la direction pour une virgule. La reprise **annule le visa en cours** — un conducteur
+qui a visé une version ne doit pas se retrouver signataire d'une autre — et le secret
+de la fiche tombe avec lui, ce qui condamne les liens déjà envoyés. Une fois validée,
+la fiche est partie en paie : la rouvrir redevient une décision de la direction.
+
+Le directeur peut corriger n'importe quelle fiche à tout moment ; chaque correction
+est tracée dans le journal.
 
 ## Indicateurs de suivi
 

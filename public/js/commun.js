@@ -23,6 +23,7 @@ const API = {
   get: (url) => API.appel('GET', url),
   post: (url, corps) => API.appel('POST', url, corps),
   put: (url, corps) => API.appel('PUT', url, corps),
+  supprimer: (url) => API.appel('DELETE', url),
 };
 
 function message(texte, type = 'info', duree = 4000) {

@@ -360,7 +360,7 @@ test('un operateur d une autre equipe se pointe et se rattache correctement', as
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
 
-  const bertin = db.prepare("SELECT id FROM salaries WHERE nom = 'BERTIN'").get();
+  const bertin = db.prepare("SELECT id FROM salaries WHERE nom = 'BERTIN' ORDER BY id LIMIT 1").get();
   const fiche = (await a('POST', '/api/fiches/semaine', { annee: 2026, semaine: 39 })).corps.fiche;
   const lignes = fiche.lignes.map((ligne, i) => ({
     ...ligne,
@@ -495,8 +495,12 @@ test('la page Parametres est servie, mais ses donnees restent reservees au direc
 
 async function ficheTransmise(chef, semaine, conducteurId) {
   const fiche = (await chef('POST', '/api/fiches/semaine', { annee: 2026, semaine })).corps.fiche;
+  // Comme l'ecran du chef : l'identifiant du salarie suit le nom saisi, sinon
+  // les heures se poseraient sur quelqu'un d'autre que celui qu'on nomme.
+  const andre = db.prepare("SELECT id FROM salaries WHERE nom = 'ANDRE' ORDER BY id LIMIT 1").get();
   const lignes = fiche.lignes.map((ligne, i) => ({
     ...ligne,
+    salarie_id: i === 0 ? andre.id : ligne.salarie_id,
     nom_affiche: i === 0 ? 'ANDRE Alain' : '',
     signature: i === 0 ? 'data:image/png;base64,xxx' : null,
     jours: ligne.jours.map((j) => ({ ...j, minutes: i === 0 && j.jour <= 4 ? 450 : 0, saisi: i === 0 && j.jour <= 4 ? 1 : 0 })),
@@ -709,46 +713,92 @@ test('le chef choisit lui-meme le conducteur, et son choix l emporte', async () 
 });
 
 /*
- * Vue de l'annee du directeur : une ligne par chef, une case par semaine. Elle
- * repond a une question que le tableau de bord ne pose jamais — qui traine
- * depuis un mois — et elle ne doit s'ouvrir qu'a la direction.
+ * Calendrier mensuel de la direction : une ligne par personne, une colonne par
+ * jour. Il repond a une question que le tableau de bord ne pose jamais —
+ * pourquoi Untel n'apparait nulle part cette semaine — et il ne s'ouvre qu'a la
+ * direction, qui seule a vocation a voir tout l'effectif.
  */
-test('la vue de l annee montre tous les chefs, et reste fermee aux chefs', async () => {
+test('le calendrier du mois montre tout l effectif, jour par jour', async () => {
   const d = await connexion('dir', '9999');
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
+  db.exec('DELETE FROM conges');
   db.exec('DELETE FROM conducteurs');
 
-  await ficheTransmise(a, 26);
-  const validee = await ficheTransmise(a, 27);
-  await d('POST', `/api/fiches/${validee.id}/decision`, { decision: 'valider' });
+  // Semaine 27 de 2026 : du lundi 29 juin au dimanche 5 juillet.
+  await ficheTransmise(a, 27);
 
-  const vue = (await d('GET', '/api/calendrier-general?annee=2026')).corps;
-  assert.equal(vue.annee, 2026);
-  assert.equal(vue.semaines.length, 53); // 2026 compte 53 semaines ISO
-  assert.deepEqual(vue.chefs.map((c) => c.nom), ['CHEF A', 'CHEF B']);
+  const vue = (await d('GET', '/api/calendrier-mensuel?annee=2026&mois=7')).corps;
+  assert.equal(vue.jours.length, 31);
+  assert.equal(vue.jours[0].date, '2026-07-01');
+  assert.ok(vue.lignes.length >= 2, "les deux equipes doivent apparaitre");
 
-  const ligneA = vue.chefs.find((c) => c.nom === 'CHEF A');
-  const etat = (semaine) => ligneA.cases.find((c) => c.semaine === semaine).etat;
-  assert.equal(etat(26), 'soumise');
-  assert.equal(etat(27), 'validee');
-  assert.equal(ligneA.cases.find((c) => c.semaine === 27).chantiers[0], 'Chantier visa');
-  assert.equal(ligneA.totaux.validee, 1);
+  // On vise la personne que la fiche pointe reellement : des tests anterieurs
+  // ont pu laisser un homonyme dans l'effectif, et « le premier ANDRE Alain
+  // venu » n'est pas une designation.
+  const pointe = db
+    .prepare("SELECT salarie_id FROM fiche_lignes WHERE nom_affiche = 'ANDRE Alain' LIMIT 1")
+    .get().salarie_id;
+  const andre = vue.lignes.find((l) => l.salarie_id === pointe);
+  assert.ok(andre, "l operateur pointe doit avoir sa ligne");
+  assert.equal(andre.nom, 'ANDRE Alain');
 
-  // Le chef B n'a rien rendu : ses semaines echues sont manquantes, jamais nulles.
-  const ligneB = vue.chefs.find((c) => c.nom === 'CHEF B');
-  assert.equal(ligneB.cases.length, 53);
-  assert.ok(ligneB.cases.every((c) => c.etat));
+  // Mercredi 1er juillet : pointe a 7h30 sur la fiche de la semaine 27.
+  const mercredi = andre.cases[0];
+  assert.equal(mercredi.etat, 'travaille');
+  assert.equal(mercredi.minutes, 450);
 
-  // Une case ne porte aucun montant : cette vue sert au suivi, pas a la paie.
-  assert.deepEqual(
-    Object.keys(ligneA.cases.find((c) => c.semaine === 27)).sort(),
-    ['chantiers', 'etat', 'minutes', 'semaine']
+  // Samedi 4 juillet : un week-end n'est pas un oubli.
+  assert.equal(andre.cases[3].etat, 'weekend');
+
+  /*
+   * Lundi 6 juillet : rien de pointe. Juillet 2026 precede la mise en service —
+   * ces semaines-la se pointaient sur papier — donc « hors service » et non
+   * « oubli ». Un jour reellement inexplique se verifie plus bas, sur un mois
+   * posterieur.
+   */
+  assert.equal(andre.cases[5].etat, 'horsService');
+
+  // Un conge enregistre explique les jours sans fiche.
+  const bertin = db.prepare("SELECT id FROM salaries WHERE nom = 'BERTIN' ORDER BY id LIMIT 1").get();
+  assert.equal(
+    (await d('POST', '/api/conges', {
+      salarie_id: bertin.id, debut: '2026-07-06', fin: '2026-07-10', motif: 'CP',
+    })).statut,
+    200
   );
 
-  // Et un chef d'equipe n'y a pas acces : il verrait le travail de ses collegues.
-  assert.equal((await a('GET', '/api/calendrier-general?annee=2026')).statut, 403);
-  assert.equal((await d('GET', '/api/calendrier-general?annee=1999')).statut, 400);
+  const apres = (await d('GET', '/api/calendrier-mensuel?annee=2026&mois=7')).corps;
+  const bruno = apres.lignes.find((l) => l.salarie_id === bertin.id);
+  assert.equal(bruno.cases[5].etat, 'conge');
+  assert.equal(bruno.cases[5].code, 'CP');
+  assert.equal(bruno.totaux.conge, 5, 'les bornes sont incluses : cinq jours du 6 au 10');
+
+  // Des dates a l envers, ou un salarie inconnu, sont refuses.
+  assert.equal((await d('POST', '/api/conges', {
+    salarie_id: bertin.id, debut: '2026-07-10', fin: '2026-07-06',
+  })).statut, 400);
+  assert.equal((await d('POST', '/api/conges', {
+    salarie_id: 99999, debut: '2026-07-06', fin: '2026-07-10',
+  })).statut, 400);
+
+  // Rien de tout cela n'est accessible a un chef d'equipe.
+  assert.equal((await a('GET', '/api/calendrier-mensuel?annee=2026&mois=7')).statut, 403);
+  assert.equal((await a('GET', '/api/conges')).statut, 403);
+  assert.equal((await a('POST', '/api/conges', {
+    salarie_id: bertin.id, debut: '2026-07-06', fin: '2026-07-10',
+  })).statut, 403);
+
+  assert.equal((await d('GET', '/api/calendrier-mensuel?annee=2026&mois=13')).statut, 400);
+
+  /*
+   * Apres la mise en service, un jour de semaine sans pointage ni justification
+   * devient un trou — c'est exactement ce que cette page sert a reperer.
+   */
+  const septembre = (await d('GET', '/api/calendrier-mensuel?annee=2026&mois=9')).corps;
+  const enSeptembre = septembre.lignes.find((l) => l.salarie_id === pointe);
+  assert.equal(enSeptembre.cases[0].etat, 'nonPointe', 'mardi 1er septembre, rien de pointe');
+  assert.ok(enSeptembre.totaux.nonPointe > 15, 'un mois entier sans fiche se voit');
 });
 
 /*
@@ -814,4 +864,94 @@ test('le lien personnel montre au conducteur ses fiches, et rien d autre', async
   // Et un chef d'equipe ne peut pas se fabriquer un lien de conducteur.
   assert.equal((await a('POST', `/api/admin/conducteurs/${paul.id}/lien`)).statut, 403);
   assert.equal((await a('GET', '/api/admin/conducteurs')).statut, 403);
+});
+
+/*
+ * Le chef reprend sa fiche pour la corriger.
+ *
+ * Il fallait auparavant demander une reouverture au directeur pour une virgule.
+ * La reprise annule le visa en cours : un conducteur qui a vise une version ne
+ * doit pas se retrouver signataire d'une autre.
+ */
+test('un chef reprend sa fiche transmise, et le visa en cours tombe', async () => {
+  const d = await connexion('dir', '9999');
+  const a = await connexion('chefa', '1111');
+  const b = await connexion('chefb', '2222');
+  db.exec('DELETE FROM fiches');
+  db.exec('DELETE FROM conducteurs');
+
+  const paul = (await d('POST', '/api/admin/conducteurs', {
+    nom: 'MOREAU Paul', courriel: 'paul@exemple.fr',
+  })).corps;
+  const { id } = await ficheTransmise(a, 45, paul.id);
+
+  const avant = db.prepare('SELECT statut, visa_statut, visa_jeton FROM fiches WHERE id = ?').get(id);
+  assert.equal(avant.statut, 'soumise');
+  assert.equal(avant.visa_statut, 'attente');
+  const jetonAvant = avant.visa_jeton;
+
+  const reprise = await a('POST', `/api/fiches/${id}/reprendre`);
+  assert.equal(reprise.statut, 200);
+  assert.equal(reprise.corps.visaAnnule, true);
+
+  const apres = db.prepare('SELECT statut, visa_statut, visa_jeton FROM fiches WHERE id = ?').get(id);
+  assert.equal(apres.statut, 'brouillon');
+  assert.equal(apres.visa_statut, '');
+  assert.equal(apres.visa_jeton, null, 'le secret doit tomber avec le visa');
+  assert.notEqual(apres.visa_jeton, jetonAvant);
+
+  // Elle a quitte la liste du conducteur.
+  const cle = decodeURIComponent(paul.lien.split('cle=')[1]);
+  const vue = await (await fetch(`${base}/api/conducteur/${encodeURIComponent(cle)}`)).json();
+  assert.equal(vue.enAttente.length, 0);
+
+  // Et le chef peut de nouveau la modifier.
+  assert.equal((await a('PUT', `/api/fiches/${id}`, { chantier: 'Chantier corrige' })).statut, 200);
+
+  // Un autre chef ne reprend pas la fiche d'un collegue.
+  assert.equal((await b('POST', `/api/fiches/${id}/reprendre`)).statut, 403);
+
+  // Une fois validee, la reprise n'est plus a la main du chef.
+  await a('POST', `/api/fiches/${id}/soumettre`);
+  await d('POST', `/api/fiches/${id}/decision`, { decision: 'valider' });
+  const refus = await a('POST', `/api/fiches/${id}/reprendre`);
+  assert.equal(refus.statut, 409);
+  assert.match(refus.corps.erreur, /reouverture/i);
+});
+
+/*
+ * Un nom mal orthographie a l'import, un identifiant choisi trop vite : il
+ * fallait desactiver le compte et en creer un autre, ce qui detachait ses fiches
+ * de leur auteur.
+ */
+test('le directeur corrige le nom et l identifiant d un compte', async () => {
+  const d = await connexion('dir', '9999');
+  const chefB = db.prepare("SELECT id FROM utilisateurs WHERE identifiant = 'chefb'").get().id;
+
+  assert.equal((await d('PUT', `/api/admin/utilisateurs/${chefB}`, { nom: 'CHEF B corrige' })).statut, 200);
+  assert.equal(db.prepare('SELECT nom FROM utilisateurs WHERE id = ?').get(chefB).nom, 'CHEF B corrige');
+
+  // L'identifiant se corrige aussi, et c'est avec le nouveau qu'on se connecte.
+  assert.equal((await d('PUT', `/api/admin/utilisateurs/${chefB}`, { identifiant: 'chefbis' })).statut, 200);
+  const nouvelle = await fetch(`${base}/api/connexion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifiant: 'chefbis', pin: '2222' }),
+  });
+  assert.equal(nouvelle.status, 200);
+
+  // Un identifiant deja pris est refuse, et rien n'est ecrit.
+  const collision = await d('PUT', `/api/admin/utilisateurs/${chefB}`, { identifiant: 'chefa' });
+  assert.equal(collision.statut, 409);
+  assert.equal(db.prepare('SELECT identifiant FROM utilisateurs WHERE id = ?').get(chefB).identifiant, 'chefbis');
+
+  // Un nom vide, ou un identifiant impossible, sont refuses.
+  assert.equal((await d('PUT', `/api/admin/utilisateurs/${chefB}`, { nom: '  ' })).statut, 400);
+  assert.equal((await d('PUT', `/api/admin/utilisateurs/${chefB}`, { identifiant: 'a b' })).statut, 400);
+
+  // Et un chef ne se renomme pas lui-meme.
+  const a = await connexion('chefa', '1111');
+  assert.equal((await a('PUT', `/api/admin/utilisateurs/${chefB}`, { nom: 'X' })).statut, 403);
+
+  db.prepare("UPDATE utilisateurs SET identifiant = 'chefb', nom = 'CHEF B' WHERE id = ?").run(chefB);
 });

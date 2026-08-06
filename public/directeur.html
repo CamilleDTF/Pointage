@@ -15,6 +15,7 @@
       Pointage hebdomadaire — Direction
       <small id="entete-nom">…</small>
     </div>
+    <button class="petit" id="btn-calendrier" type="button">Calendrier du mois</button>
     <button class="petit" id="btn-mensuel-haut" type="button">Tableau mensuel</button>
     <button class="petit" id="btn-admin" type="button">Paramètres</button>
     <button class="petit" id="btn-quitter" type="button">Quitter</button>
@@ -60,22 +61,19 @@
       </div>
     </section>
 
-    <details class="carte" id="bloc-calendrier-general">
-      <summary class="titre-calendrier">
-        <span class="intitule">Vue de l'année, tous les chefs</span>
-        <span id="resume-calendrier-general" class="etats-resume"></span>
-      </summary>
-
-      <div class="rangee" style="margin-top:14px">
-        <div style="width:120px">
-          <label for="annee-calendrier">Année</label>
-          <input id="annee-calendrier" type="number" min="2020" max="2100" step="1">
+    <section class="carte">
+      <div class="rangee">
+        <div>
+          <h2 style="margin:0">Calendrier du mois</h2>
+          <p class="aide" style="margin:4px 0 0">
+            Tout l'effectif, jour par jour : qui a travaillé, qui était en congé, et les jours
+            sans pointage ni justification.
+          </p>
         </div>
+        <span class="pousse"></span>
+        <button class="principal" id="btn-calendrier-bas" type="button">Ouvrir le calendrier</button>
       </div>
-
-      <div id="calendrier-general" style="margin-top:16px"></div>
-      <p class="aide" id="note-calendrier-general"></p>
-    </details>
+    </section>
 
     <section class="indicateurs" id="indicateurs"></section>
 

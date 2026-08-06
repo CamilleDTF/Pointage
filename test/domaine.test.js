@@ -234,12 +234,18 @@ test('la zone se deduit d une ancienne fiche pour proposer un choix', () => {
   assert.equal(D.zoneDepuisVille(''), '');
 });
 
-test('une fiche sans zone ne peut pas etre transmise', () => {
-  const anomalies = D.controlerFiche(ficheType({ zone_deplacement: '' }), [ligneType()]);
-  assert.equal(anomalies.length, 1);
-  assert.equal(anomalies[0].niveau, 'bloquant');
-  assert.match(anomalies[0].message, /zone/);
-  assert.deepEqual(anomalies[0].cible, { champZone: true });
+/*
+ * La zone du chantier ne commande plus rien : les jours de grand deplacement
+ * sont comptes ligne par ligne par le chef, sous chacun des deux taux. Une
+ * fiche sans zone se transmet donc, du moment que la ville est renseignee.
+ */
+test('la zone du chantier n est plus exigee, la ville si', () => {
+  assert.deepEqual(D.controlerFiche(ficheType({ zone_deplacement: '' }), [ligneType()]), []);
+
+  const sansVille = D.controlerFiche(ficheType({ ville: '' }), [ligneType()]);
+  assert.equal(sansVille.length, 1);
+  assert.equal(sansVille[0].niveau, 'bloquant');
+  assert.match(sansVille[0].message, /ville/i);
 });
 
 test('un nom complet se separe en nom de famille et prenom', () => {

@@ -66,11 +66,6 @@
             <label for="chantier">Nom du chantier *</label>
             <input id="chantier" data-entete="chantier">
           </div>
-          <div>
-            <label>Zone du chantier *</label>
-            <div class="choix-zone" id="zone-deplacement"></div>
-            <p class="aide" id="aide-zone" style="margin-top:6px"></p>
-          </div>
           <div id="bloc-ville">
             <label for="ville">Ville *</label>
             <input id="ville" data-entete="ville">
@@ -98,6 +93,11 @@
           Hors temps de repas et de trajet. Pour un jour non travaillé, saisissez <strong>0</strong>
           ou choisissez un code d'absence : chaque jour du lundi au vendredi doit être renseigné.
           Ce qu'il reste à compléter apparaît <span style="color:var(--rouge);font-weight:600">encadré en rouge</span>.
+        </p>
+        <p class="aide" style="margin-bottom:12px">
+          Les colonnes <strong>GD 72</strong> et <strong>GD 80</strong> attendent le
+          <strong>nombre de jours</strong> passés par le salarié sous chacun des deux taux de
+          grand déplacement.
         </p>
 
         <details class="aide-codes">
@@ -167,6 +167,7 @@
           <span id="etat-sauvegarde" class="aide" style="margin:0"></span>
           <span class="pousse"></span>
           <button id="btn-excel" type="button">Télécharger en Excel</button>
+          <button id="btn-reprendre" class="masque" type="button">Reprendre pour modifier</button>
           <button class="principal" id="btn-transmettre" type="button">Contrôler et transmettre au conducteur de travaux</button>
         </div>
       </section>

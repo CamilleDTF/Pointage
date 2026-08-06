@@ -91,6 +91,20 @@
     u.conducteur_id = i % 2 === 0 ? CONDUCTEURS[(i / 2) % 2 | 0].id : null;
   });
 
+  const MOTIFS_CONGE = [
+    { code: 'CP', libelle: 'Congés payés' },
+    { code: 'RTT', libelle: 'RTT' },
+    { code: 'MAL', libelle: 'Arrêt maladie' },
+    { code: 'AT', libelle: 'Accident du travail' },
+    { code: 'FOR', libelle: 'Formation' },
+    { code: 'SS', libelle: 'Congé sans solde' },
+    { code: 'AUT', libelle: 'Autre absence' },
+  ];
+
+  /* Registre des conges : il explique les jours sans pointage. */
+  const conges = [];
+  let prochainConge = 1;
+
   let billetPaie = null; // billet a usage unique, comme sur l'application
 
   const maintenant = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -163,6 +177,27 @@
    */
   function amorcerDemonstration() {
     const { annee, semaine } = R.semaineISO(new Date());
+
+    /*
+     * Deux conges, pour que le calendrier du mois montre a quoi ils servent :
+     * sans eux, un salarie absent toute la semaine ressemble a un oubli.
+     */
+    // La semaine suivante, non pointee : c'est la que le conge se voit. Sur une
+    // semaine deja pointee, les heures l'emportent — a juste titre, mais on ne
+    // verrait rien.
+    const semaineConge = R.datesDeLaSemaine(annee, semaine + 1);
+    const debut = semaineConge[0];
+    const finConge = semaineConge[4];
+    for (const salarie of salaries.slice(3, 5)) {
+      conges.push({
+        id: prochainConge++,
+        salarie_id: salarie.id,
+        debut,
+        fin: finConge,
+        motif: 'CP',
+        commentaire: 'exemple de démonstration',
+      });
+    }
 
     // En cours — le vendredi reste a saisir, les controles le signalent.
     const brouillon = nouvelleFiche(2, annee, semaine);
@@ -513,70 +548,141 @@
       };
     }],
 
-    ['GET', /^\/api\/calendrier-general$/, (m, corps, params) => {
+    /*
+     * Calendrier du mois : une ligne par personne, une colonne par jour. Meme
+     * lecture que server/calendrier.js, rejouee sur les donnees en memoire.
+     */
+    ['GET', /^\/api\/calendrier-mensuel$/, (m, corps, params) => {
       exigerDirecteur();
-      const courante = R.semaineISO(new Date());
-      const annee = Number(params.get('annee')) || courante.annee;
+      const annee = Number(params.get('annee'));
+      const mois = Number(params.get('mois'));
 
-      const semaines = [];
-      for (let s = 1; s <= R.nombreSemainesISO(annee); s += 1) {
-        const dates = R.datesDeLaSemaine(annee, s);
-        semaines.push({
-          semaine: s,
-          debut: dates[0],
-          fin: dates[6],
-          mois: Number(dates[3].slice(5, 7)),
-          courante: annee === courante.annee && s === courante.semaine,
-          future: annee > courante.annee || (annee === courante.annee && s > courante.semaine),
-          avantService: R.semaineAvantService(dates[6], R.DEBUT_SERVICE_PAR_DEFAUT),
+      const dernier = new Date(Date.UTC(annee, mois, 0)).getUTCDate();
+      const jours = [];
+      for (let numero = 1; numero <= dernier; numero += 1) {
+        const date = new Date(Date.UTC(annee, mois - 1, numero));
+        const jourSemaine = date.getUTCDay();
+        jours.push({
+          date: date.toISOString().slice(0, 10),
+          numero,
+          jourSemaine,
+          weekend: jourSemaine === 0 || jourSemaine === 6,
+          semaine: R.semaineISO(new Date(annee, mois - 1, numero)).semaine,
         });
       }
 
-      const RANG = ['rejetee', 'brouillon', 'soumise', 'validee'];
-      const rang = (etat) => (RANG.indexOf(etat) === -1 ? RANG.indexOf('soumise') : RANG.indexOf(etat));
-
-      const chefs = utilisateurs
-        .filter((x) => x.role === 'chef' && x.actif)
-        .map((chef) => {
-          const siennes = fiches.filter((f) => f.chef_id === chef.id && f.annee === annee);
-          const cases = semaines.map((s) => {
-            const duJour = siennes.filter((f) => f.semaine === s.semaine);
-            if (!duJour.length) {
-              return {
-                semaine: s.semaine,
-                etat: s.avantService ? 'horsPerimetre' : s.future ? 'avenir' : 'manquante',
-              };
+      // Ce qui a ete pointe, range par personne et par jour.
+      const pointages = new Map();
+      for (const fiche of fiches) {
+        const dates = R.datesDeLaSemaine(fiche.annee, fiche.semaine);
+        for (const ligne of fiche.lignes.filter((l) => l.nom_affiche.trim())) {
+          for (const jour of ligne.jours) {
+            const date = dates[jour.jour];
+            if (!date || date < jours[0].date || date > jours[jours.length - 1].date) continue;
+            const cle = `${ligne.salarie_id}|${date}`;
+            const deja = pointages.get(cle);
+            if (deja) {
+              deja.minutes += jour.minutes;
+              deja.code = deja.code || jour.code_absence;
+              if (fiche.chantier && !deja.chantiers.includes(fiche.chantier)) deja.chantiers.push(fiche.chantier);
+            } else {
+              pointages.set(cle, {
+                minutes: jour.minutes,
+                code: jour.code_absence,
+                saisi: jour.saisi,
+                statut: fiche.statut,
+                chantiers: fiche.chantier ? [fiche.chantier] : [],
+              });
             }
-            const etats = duJour.map((f) => R.etatAffiche(f)).sort((a, b) => rang(a) - rang(b));
-            return {
-              semaine: s.semaine,
-              etat: etats[0],
-              chantiers: duJour.map((f) => f.chantier).filter(Boolean),
-              minutes: duJour.reduce((t, f) => t + (resumer(f).total_minutes || 0), 0),
-            };
+          }
+        }
+      }
+
+      const enConge = new Map();
+      for (const conge of conges) {
+        for (const jour of jours) {
+          if (jour.date >= conge.debut && jour.date <= conge.fin) enConge.set(`${conge.salarie_id}|${jour.date}`, conge);
+        }
+      }
+
+      const lignes = salaries
+        .filter((s) => s.actif)
+        .map((salarie) => {
+          const chef = utilisateurs.find((u) => u.id === salarie.chef_id);
+          const cases = jours.map((jour) => {
+            const pointage = pointages.get(`${salarie.id}|${jour.date}`);
+            if (pointage && pointage.minutes > 0) {
+              return { etat: 'travaille', minutes: pointage.minutes, chantiers: pointage.chantiers, statut: pointage.statut };
+            }
+            if (pointage && pointage.code) return { etat: 'absence', code: pointage.code, statut: pointage.statut };
+            if (jour.weekend) return { etat: 'weekend' };
+            const conge = enConge.get(`${salarie.id}|${jour.date}`);
+            if (conge) return { etat: 'conge', code: conge.motif, commentaire: conge.commentaire };
+            if (pointage && pointage.saisi) return { etat: 'absence', code: '0', statut: pointage.statut };
+            if (jour.date < R.DEBUT_SERVICE_PAR_DEFAUT) return { etat: 'horsService' };
+            return { etat: 'nonPointe' };
           });
           const compter = (etat) => cases.filter((c) => c.etat === etat).length;
           return {
-            chef_id: chef.id,
-            nom: chef.nom,
+            salarie_id: salarie.id,
+            nom: `${salarie.nom} ${salarie.prenom}`.trim(),
+            matricule: salarie.matricule || '',
+            chef_nom: chef ? chef.nom : '',
+            estChef: Boolean(chef && R.memePersonne(`${salarie.nom} ${salarie.prenom}`, chef.nom)),
             cases,
             totaux: {
-              manquante: compter('manquante'),
-              brouillon: compter('brouillon'),
-              soumise: compter('soumise') + compter('attenteVisa') + compter('visee'),
-              rejetee: compter('rejetee'),
-              validee: compter('validee'),
+              minutes: cases.reduce((t, c) => t + (c.minutes || 0), 0),
+              travaille: compter('travaille'),
+              absence: compter('absence'),
+              conge: compter('conge'),
+              nonPointe: compter('nonPointe'),
             },
           };
-        });
+        })
+        .sort((a, b) => (a.chef_nom || 'zzz').localeCompare(b.chef_nom || 'zzz', 'fr') || a.nom.localeCompare(b.nom, 'fr'));
 
       return {
-        annee,
-        semaineCourante: courante,
+        annee, mois, jours, lignes,
         debutService: R.DEBUT_SERVICE_PAR_DEFAUT,
-        semaines,
-        chefs,
+        codesAbsence: R.CODES_ABSENCE,
+        motifsConge: MOTIFS_CONGE,
       };
+    }],
+
+    ['GET', /^\/api\/conges$/, () => {
+      exigerDirecteur();
+      return {
+        conges: conges
+          .map((c) => {
+            const s = salaries.find((x) => x.id === c.salarie_id) || {};
+            return { ...c, nom: s.nom || '', prenom: s.prenom || '', matricule: s.matricule || '' };
+          })
+          .sort((a, b) => b.debut.localeCompare(a.debut)),
+        motifs: MOTIFS_CONGE,
+      };
+    }],
+
+    ['POST', /^\/api\/conges$/, (m, corps) => {
+      exigerDirecteur();
+      if (!corps.debut || !corps.fin) erreur(400, 'Dates attendues au format AAAA-MM-JJ.');
+      if (corps.fin < corps.debut) erreur(400, 'La date de fin precede la date de debut.');
+      conges.push({
+        id: prochainConge++,
+        salarie_id: Number(corps.salarie_id),
+        debut: corps.debut,
+        fin: corps.fin,
+        motif: MOTIFS_CONGE.some((x) => x.code === corps.motif) ? corps.motif : 'CP',
+        commentaire: String(corps.commentaire || '').trim(),
+      });
+      return { ok: true };
+    }],
+
+    ['DELETE', /^\/api\/conges\/(\d+)$/, (m) => {
+      exigerDirecteur();
+      const index = conges.findIndex((c) => c.id === Number(m[1]));
+      if (index === -1) erreur(404, 'Conge introuvable.');
+      conges.splice(index, 1);
+      return { ok: true };
     }],
 
     ['GET', /^\/api\/fiches$/, (m, corps, params) => {

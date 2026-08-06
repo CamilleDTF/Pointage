@@ -136,12 +136,28 @@ function agregerMois(annee, mois, { statut = 'validee' } = {}) {
     if (ligne.type_masque === 'VA') cible.joursAmiante1 += arrondiQuart(ligne.jours_zone * part);
     if (ligne.type_masque === 'AA') cible.joursAmiante2 += arrondiQuart(ligne.jours_zone * part);
 
-    // Le panier suit les jours de deplacement ; leur repartition entre GD 72 et
-    // GD 80 decoule de la ville du chantier (voir Regles.estGrandDeplacement80).
+    // Le panier suit les jours de deplacement, comptes a part.
     const deplacements = arrondiQuart(ligne.nb_deplacement * part);
     cible.joursPanier += deplacements;
-    if (D.estGrandDeplacement80(ligne.ville, ligne.zone_deplacement)) cible.joursGD80 += deplacements;
-    else cible.joursGD72 += deplacements;
+
+    /*
+     * Grands deplacements : le chef d'equipe compte lui-meme ses jours sous
+     * chacun des deux taux. C'est plus juste que de les deduire de la ville du
+     * chantier, comme on le faisait — un meme chantier peut relever des deux
+     * selon les jours.
+     *
+     * Les fiches anterieures a ces deux colonnes n'en portent pas : elles
+     * gardent l'ancienne repartition, sans quoi les mois deja pointes
+     * changeraient de montant apres coup.
+     */
+    const declares = (Number(ligne.nb_gd72) || 0) + (Number(ligne.nb_gd80) || 0);
+    if (declares > 0) {
+      cible.joursGD72 += arrondiQuart((Number(ligne.nb_gd72) || 0) * part);
+      cible.joursGD80 += arrondiQuart((Number(ligne.nb_gd80) || 0) * part);
+    } else if (deplacements > 0) {
+      if (D.estGrandDeplacement80(ligne.ville, ligne.zone_deplacement)) cible.joursGD80 += deplacements;
+      else cible.joursGD72 += deplacements;
+    }
 
     if (ligne.chantier && !cible.chantiers.includes(ligne.chantier)) cible.chantiers.push(ligne.chantier);
   }

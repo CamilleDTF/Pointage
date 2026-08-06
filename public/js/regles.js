@@ -387,12 +387,6 @@
     if (!String(fiche.ville || '').trim()) {
       bloquant('La ville est obligatoire.', { entete: 'ville' });
     }
-    // La zone commande le taux de grand deplacement (72 ou 80) : sans elle, la
-    // prime se calcule au jugé.
-    if (!ZONES_DEPLACEMENT.some((z) => z.code === String(fiche.zone_deplacement || '').toUpperCase())) {
-      bloquant('Indiquez la zone du chantier : Paris, Nice ou Autre.', { champZone: true });
-    }
-
     /*
      * Le conducteur de travaux qui doit viser. Exige seulement s'il y en a a
      * proposer : une organisation ou aucun conducteur n'est encore enregistre
