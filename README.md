@@ -211,6 +211,24 @@ passe n'est alors posé sur le poste, donc aucun n'est à protéger**, et rien n
 partir vers une adresse extérieure, et le pare-feu doit laisser sortir le port 25
 — souvent bloqué.
 
+### Quand l'essai échoue
+
+`TESTER-COURRIEL.bat` enregistre tout dans **`essai-courriel.txt`**, à côté de
+`DEMARRER.bat`, et ouvre ce fichier en cas d'échec. Une fenêtre de console qui se
+ferme emportait sinon la seule explication du problème.
+
+Le fichier donne quatre choses que le message résumé ne donne pas : le **code de
+refus** du serveur (550, 535, …), sa **réponse complète**, **la commande SMTP** à
+laquelle il a répondu — c'est elle qui situe l'échec : `AUTH` pour un problème de
+compte, `RCPT TO` pour un destinataire refusé, rien du tout pour un port bloqué —
+et le **dialogue complet** avec le serveur, ligne à ligne.
+
+Ce dialogue ne contient jamais le mot de passe : `nodemailer` le remplace par une
+marque dans la ligne d'authentification, qui est encodée mais pas chiffrée.
+`test/courriel.test.js` le vérifie, en clair et en base64 — c'est un fichier fait
+pour être envoyé à qui dépanne, et une mise à jour de la bibliothèque ne doit pas
+y glisser un mot de passe à notre insu.
+
 ### Un envoi ne fait jamais attendre le chef d'équipe
 
 `soumettre` attend l'envoi avant de répondre. Les délais de `nodemailer`
@@ -556,6 +574,7 @@ suivi par git.
 | `SMTP_HOTE`, `SMTP_PORT` | Serveur d'envoi des courriels | — (messages déposés sur disque) |
 | `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE` | Identifiants du serveur d'envoi (facultatifs) | — |
 | `SMTP_DELAI_MS` | Plafond de temps sur un envoi, en millisecondes | `20000` |
+| `SMTP_TRACE` | `1` : recopie le dialogue avec le serveur d'envoi | — |
 | `COURRIEL_EXPEDITEUR` | Adresse d'expédition | — |
 
 ### Mise à jour des fichiers de l'interface

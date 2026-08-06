@@ -66,3 +66,74 @@ test('un serveur muet ne fait pas attendre le chef d equipe indefiniment', async
 
   C.fermer();
 });
+
+/*
+ * Le detail du dialogue avec le serveur est enregistre dans essai-courriel.txt,
+ * et ce fichier est fait pour etre envoye a qui aide au depannage. Le mot de
+ * passe de la messagerie ne doit donc y apparaitre sous aucune forme — ni en
+ * clair, ni dans la ligne d'authentification, qui est encodee mais pas
+ * chiffree. La bibliotheque le remplace aujourd'hui par une marque ; ce test
+ * est la pour que sa prochaine version ne change pas cela dans notre dos.
+ */
+test('le detail du dialogue ne contient jamais le mot de passe', async () => {
+  const MOT_DE_PASSE = 'MotDePasseQuiNeDoitPasFuir42';
+
+  // Un serveur qui annonce l'authentification, l'accepte, puis prend le message.
+  const serveur = net.createServer((flux) => {
+    let dansLeMessage = false;
+    flux.write('220 essai\r\n');
+    flux.on('data', (donnees) => {
+      const texte = donnees.toString();
+      if (dansLeMessage) {
+        if (texte.includes('\r\n.\r\n')) { dansLeMessage = false; flux.write('250 OK\r\n'); }
+        return;
+      }
+      for (const ligne of texte.split('\r\n').filter(Boolean)) {
+        if (/^EHLO|^HELO/i.test(ligne)) flux.write('250-essai\r\n250 AUTH PLAIN LOGIN\r\n');
+        else if (/^AUTH/i.test(ligne)) flux.write('235 accepte\r\n');
+        else if (/^DATA/i.test(ligne)) { dansLeMessage = true; flux.write('354 allez-y\r\n'); }
+        else if (/^QUIT/i.test(ligne)) { flux.write('221 au revoir\r\n'); flux.end(); }
+        else flux.write('250 OK\r\n');
+      }
+    });
+  });
+  await new Promise((resoudre) => serveur.listen(0, '127.0.0.1', resoudre));
+
+  const journal = [];
+  const ecrire = console.log;
+  console.log = (...morceaux) => journal.push(morceaux.join(' '));
+
+  try {
+    // Le module lit sa configuration au chargement : on le recharge avec la
+    // trace allumee, comme le fait l'option --details.
+    delete require.cache[require.resolve('../server/courriel')];
+    process.env.SMTP_TRACE = '1';
+    process.env.SMTP_PORT = String(serveur.address().port);
+    process.env.SMTP_UTILISATEUR = 'camille@exemple.fr';
+    process.env.SMTP_MOT_DE_PASSE = MOT_DE_PASSE;
+    delete process.env.SMTP_DELAI_MS;
+
+    const C = require('../server/courriel');
+    const resultat = await C.envoyer({
+      destinataire: 'conducteur@exemple.fr', sujet: 'Essai', html: '<p>x</p>', texte: 'x',
+    });
+    assert.equal(resultat.envoye, true, 'le serveur d essai devait accepter le message');
+    C.fermer();
+  } finally {
+    console.log = ecrire;
+    serveur.close();
+    delete process.env.SMTP_TRACE;
+    delete process.env.SMTP_MOT_DE_PASSE;
+  }
+
+  const trace = journal.join('\n');
+  assert.ok(trace.includes('AUTH'), "la trace doit bien contenir le dialogue d'authentification");
+  assert.ok(!trace.includes(MOT_DE_PASSE), 'le mot de passe apparait en clair dans la trace');
+
+  // Et pas davantage dans les suites encodees, qui se lisent en une seconde.
+  for (const morceau of trace.match(/[A-Za-z0-9+/=]{16,}/g) || []) {
+    let decode = '';
+    try { decode = Buffer.from(morceau, 'base64').toString('utf8'); } catch { continue; }
+    assert.ok(!decode.includes(MOT_DE_PASSE), `le mot de passe apparait encode : ${morceau}`);
+  }
+});

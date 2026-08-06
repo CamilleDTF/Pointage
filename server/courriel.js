@@ -74,6 +74,17 @@ const DELAIS = {
 /* Plafond sur l'operation entiere : voir avecDelai() plus bas. */
 const DELAI_TOTAL_MS = Number(process.env.SMTP_DELAI_MS) || 20000;
 
+/*
+ * SMTP_TRACE=1 fait recopier le dialogue avec le serveur, ligne a ligne.
+ *
+ * C'est la seule facon de trancher quand un refus reste obscur : on voit ou la
+ * conversation s'arrete — a la connexion, au demarrage du chiffrement, a
+ * l'authentification, ou a l'annonce du destinataire. Eteint par defaut, parce
+ * que ce dialogue contient l'identite du compte et n'a rien a faire dans un
+ * journal de fonctionnement.
+ */
+const TRACE = process.env.SMTP_TRACE === '1';
+
 let transport = null;
 if (ACTIF) {
   transport = nodemailer.createTransport({
@@ -84,6 +95,8 @@ if (ACTIF) {
     // d'un relais interne, ou de l'envoi direct vers les boites d'un domaine.
     auth: CONFIG.utilisateur ? { user: CONFIG.utilisateur, pass: CONFIG.motDePasse } : undefined,
     ...DELAIS,
+    logger: TRACE,
+    debug: TRACE,
   });
 }
 
@@ -118,7 +131,21 @@ async function envoyer({ destinataire, sujet, html, texte }) {
     // fiche : on garde une trace lisible et on le dit a l'appelant.
     const fichier = deposer(destinataire, sujet, html);
     console.error(`Echec de l'envoi a ${destinataire} : ${erreur.message}. Message conserve dans ${fichier}`);
-    return { envoye: false, raison: erreur.message, fichier };
+    /*
+     * Le message de la bibliotheque est souvent un resume. Ce qui permet de
+     * trancher, c'est la reponse brute du serveur : son code numerique et sa
+     * phrase, et la commande a laquelle il a repondu. Sans ces trois-la, un
+     * refus reste une devinette.
+     */
+    return {
+      envoye: false,
+      raison: erreur.message,
+      fichier,
+      code: erreur.code || null,
+      codeReponse: erreur.responseCode || null,
+      reponse: erreur.response || null,
+      commande: erreur.command || null,
+    };
   }
 }
 

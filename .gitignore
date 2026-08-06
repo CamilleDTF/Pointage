@@ -4,3 +4,10 @@ data/
 .DS_Store
 demo/demonstration.html
 configuration.txt
+
+# Rapports produits par les lanceurs Windows, a cote de DEMARRER.bat.
+# Ils contiennent l'etat d'un poste particulier, pas du code.
+diagnostic.txt
+installation.txt
+essai-courriel.txt
+effectif.txt

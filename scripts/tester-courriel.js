@@ -17,6 +17,14 @@ require('../server/configuration'); // reglages de configuration.txt
 const fs = require('fs');
 const path = require('path');
 
+/*
+ * --details doit etre pris en compte avant de charger le module d'envoi : c'est
+ * a son chargement que la connexion est configuree, et donc que se decide
+ * l'enregistrement ou non du dialogue avec le serveur.
+ */
+const DETAILS = process.argv.includes('--details');
+if (DETAILS) process.env.SMTP_TRACE = '1';
+
 const C = require('../server/courriel');
 const Fournisseurs = require('../server/fournisseurs-courriel');
 
@@ -32,8 +40,33 @@ const REGLAGES = [
 ];
 
 /** Traduit les refus les plus courants des serveurs d'envoi. */
-function expliquer(raison, { avecCompte = true } = {}) {
+function expliquer(raison, { avecCompte = true, code = null, codeReponse = null, commande = null } = {}) {
   const texte = String(raison || '').toLowerCase();
+
+  /*
+   * Le code numerique du serveur est plus sur que sa phrase, qui change d'un
+   * editeur a l'autre et n'est jamais traduite. On le lit en premier.
+   */
+  if (codeReponse === 550 && commande === 'RCPT TO') {
+    return avecCompte
+      ? "Le serveur connait le compte mais refuse le destinataire : l'adresse n'existe pas, ou " +
+        "le compte n'a pas le droit d'ecrire a cette boite."
+      : "Le serveur refuse le destinataire. Sans compte, il n'accepte que les adresses de son " +
+        "propre domaine : verifiez que l'adresse d'essai se termine bien par le meme domaine " +
+        "que l'expediteur. Pour ecrire a l'exterieur, il faut l'option avec compte et mot de passe.";
+  }
+  if (codeReponse === 550 || codeReponse === 554) {
+    return "Le serveur a refuse le message lui-meme. Le plus souvent, l'adresse d'expedition " +
+      "n'est pas autorisee depuis cette machine : c'est le cas quand l'adresse publique de la " +
+      "connexion internet n'est pas declaree dans l'enregistrement SPF du domaine. Le service " +
+      'informatique peut le confirmer en une minute a partir de la reponse complete ci-dessus.';
+  }
+  if (codeReponse === 535 || codeReponse === 534 || commande === 'AUTH PLAIN' || commande === 'AUTH LOGIN') {
+    return "Le serveur a refuse le compte ou le mot de passe. Chez Microsoft 365, trois causes " +
+      "possibles : le mot de passe habituel du compte n'est pas accepte et il faut un mot de " +
+      "passe d'application ; l'authentification SMTP est desactivee sur la boite et " +
+      "l'administrateur doit l'autoriser ; ou le compte n'a pas de licence permettant l'envoi.";
+  }
 
   // Envoi sans compte : le refus le plus probable n'est pas le mot de passe,
   // c'est le destinataire, ou le port 25 ferme par le pare-feu.
@@ -255,9 +288,35 @@ async function principal() {
     return;
   }
 
-  console.log(`Le message n est pas parti. Refus du serveur : ${resultat.raison}\n`);
-  const explication = expliquer(resultat.raison, { avecCompte: Boolean(compte) });
+  console.log('=== LE MESSAGE N EST PAS PARTI ===\n');
+  console.log(`  Ce que dit le serveur : ${resultat.raison}`);
+
+  /*
+   * Le resume de la bibliotheque ne suffit pas toujours. La reponse brute du
+   * serveur — son code numerique et sa phrase — est ce qui permet de trancher,
+   * et c'est aussi ce qu'un service informatique demandera.
+   */
+  if (resultat.codeReponse) console.log(`  Code de refus         : ${resultat.codeReponse}`);
+  if (resultat.reponse) console.log(`  Reponse complete      : ${String(resultat.reponse).trim()}`);
+  if (resultat.commande) console.log(`  A quelle etape        : commande ${resultat.commande}`);
+  if (resultat.code) console.log(`  Nature du probleme    : ${resultat.code}`);
+  console.log('');
+
+  const explication = expliquer(resultat.raison, {
+    avecCompte: Boolean(compte),
+    code: resultat.code,
+    codeReponse: resultat.codeReponse,
+    commande: resultat.commande,
+  });
   if (explication) console.log(`${explication}\n`);
+  else {
+    console.log(
+      "Ce refus n'est pas dans la liste des causes connues. Relancez l essai avec le detail\n" +
+        'du dialogue avec le serveur, qui montre exactement ou la conversation s arrete :\n\n' +
+        '    TESTER-COURRIEL.bat votre.adresse@dtffrance.com --details\n'
+    );
+  }
+
   if (resultat.fichier) console.log(`Le message a ete conserve ici : ${resultat.fichier}`);
   process.exitCode = 1;
 }
