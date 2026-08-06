@@ -427,11 +427,28 @@ app.post('/api/visa/:jeton/decision', (req, res) => {
   res.status(400).json({ erreur: 'Decision inconnue.' });
 });
 
+/*
+ * Le lien personnel d'un conducteur : ses fiches en attente de visa.
+ *
+ * Sans compte, comme le reste de ce circuit, et sans courriel — c'etait le seul
+ * maillon qui dependait d'un serveur d'envoi, d'un port ouvert et d'une
+ * autorisation a demander. Le conducteur met cette adresse en favori une fois
+ * pour toutes.
+ */
+app.get('/api/conducteur/:cle', (req, res) => {
+  repondre(res, V.tableauConducteur(req.params.cle));
+});
+
 /* ------------------------ Conducteurs de travaux --------------------------- */
 
 app.get('/api/admin/conducteurs', A.exigerDirecteur, (req, res) => {
   res.json({
-    conducteurs: db.prepare('SELECT * FROM conducteurs ORDER BY nom').all(),
+    // Le lien personnel est monte ici : c'est au directeur de le transmettre,
+    // jamais au chef d'equipe, qui pourrait sinon viser ses propres fiches.
+    conducteurs: db
+      .prepare('SELECT * FROM conducteurs ORDER BY nom')
+      .all()
+      .map((c) => ({ ...c, lien: V.lienConducteur(c) })),
     // Qui depend de qui : le rattachement se regle dans le meme ecran.
     chefs: db
       .prepare(
@@ -452,8 +469,25 @@ app.post('/api/admin/conducteurs', A.exigerDirecteur, (req, res) => {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(courriel)) {
     return res.status(400).json({ erreur: 'Adresse de courriel invalide.' });
   }
-  const r = db.prepare('INSERT INTO conducteurs (nom, courriel) VALUES (?, ?)').run(nom, courriel);
-  res.json({ id: r.lastInsertRowid });
+  // Le lien personnel nait avec le conducteur : il n'y a pas d'etape « activer
+  // son acces », qui serait une occasion de plus de l'oublier.
+  const jeton = require('crypto').randomBytes(24).toString('base64url');
+  const r = db
+    .prepare('INSERT INTO conducteurs (nom, courriel, jeton) VALUES (?, ?, ?)')
+    .run(nom, courriel, jeton);
+  const conducteur = db.prepare('SELECT * FROM conducteurs WHERE id = ?').get(r.lastInsertRowid);
+  res.json({ id: r.lastInsertRowid, lien: V.lienConducteur(conducteur) });
+});
+
+/*
+ * Regenerer le lien d'un conducteur : un telephone perdu, un depart, un lien
+ * transmis a la mauvaise personne. L'ancien cesse aussitot de fonctionner.
+ */
+app.post('/api/admin/conducteurs/:id/lien', A.exigerDirecteur, (req, res) => {
+  const resultat = V.regenererJeton(Number(req.params.id));
+  if (resultat.erreur) return repondre(res, resultat);
+  journaliser(null, req.utilisateur.id, 'lien_conducteur', resultat.conducteur.nom);
+  res.json({ lien: V.lienConducteur(resultat.conducteur) });
 });
 
 app.put('/api/admin/conducteurs/:id', A.exigerDirecteur, (req, res) => {

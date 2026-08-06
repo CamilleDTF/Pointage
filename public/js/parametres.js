@@ -113,12 +113,15 @@ async function chargerConducteurs() {
   if (!table) return;
   const { conducteurs, chefs, envoiConfigure } = await API.get('/api/admin/conducteurs');
 
+  // L'envoi de courriels est devenu un confort : le lien personnel suffit a
+  // faire tourner le circuit. On le dit ainsi, plutot qu'en alarme.
   $('aide-envoi').innerHTML = envoiConfigure
-    ? '<span class="jauge bon">Envoi de courriels configuré</span>'
-    : '<span class="jauge moyen">Aucun serveur d’envoi configuré</span> — les messages sont conservés sur le serveur ' +
-      'et le lien de visa s’affiche sur la fiche, à transmettre à la main. Pour que les courriels partent ' +
-      'vraiment : copiez <code>configuration-exemple.txt</code> en <code>configuration.txt</code> à côté de ' +
-      'DEMARRER.bat, remplissez les lignes SMTP, puis relancez l’application.';
+    ? '<span class="jauge bon">Envoi de courriels configuré</span> — chaque transmission prévient ' +
+      'le conducteur par courriel, en plus de son lien personnel.'
+    : '<span class="jauge moyen">Pas d’envoi de courriels</span> — le circuit fonctionne quand même : ' +
+      'chaque conducteur passe par son lien personnel ci-dessous. Pour qu’ils reçoivent en plus un ' +
+      'message à chaque transmission, remplissez les lignes SMTP de <code>configuration.txt</code> ' +
+      '(voir <code>TESTER-COURRIEL.bat</code>).';
 
   const champ = (c, nom, largeur, type = 'text') =>
     `<input type="${type}" value="${echapper(c[nom])}" style="width:${largeur}"
@@ -130,13 +133,22 @@ async function chargerConducteurs() {
           (c) => `<tr style="${c.actif ? '' : 'opacity:.5'}">
             <td>${champ(c, 'nom', '190px')}</td>
             <td>${champ(c, 'courriel', '260px', 'email')}</td>
+            <td>
+              <div class="lien-conducteur">
+                <input readonly value="${echapper(c.lien)}" id="lien-${c.id}"
+                       onfocus="this.select()" title="Lien personnel de ${echapper(c.nom)}">
+                <button class="petit" onclick="copierLien(${c.id}, this)">Copier</button>
+                <button class="petit" onclick="regenererLien(${c.id}, '${echapper(c.nom)}')"
+                        title="Rend l’ancien lien inutilisable">Régénérer</button>
+              </div>
+            </td>
             <td><button class="petit" onclick="basculerConducteur(${c.id}, ${c.actif ? 0 : 1})">${
               c.actif ? 'Désactiver' : 'Réactiver'
             }</button></td>
           </tr>`
         )
         .join('')
-    : '<tr><td colspan="3" class="vide">Aucun conducteur de travaux enregistré.</td></tr>';
+    : '<tr><td colspan="4" class="vide">Aucun conducteur de travaux enregistré.</td></tr>';
 
   const options = (selectionne) =>
     `<option value="">— aucun, transmission directe à la direction</option>${conducteurs
@@ -155,6 +167,41 @@ async function chargerConducteurs() {
     )
     .join('');
 }
+
+/*
+ * Copier plutot que faire recopier : ce lien fait une centaine de caracteres,
+ * et une seule lettre fausse le rend inutilisable sans dire pourquoi.
+ */
+window.copierLien = async (id, bouton) => {
+  const champ = $(`lien-${id}`);
+  if (!champ) return;
+  try {
+    await navigator.clipboard.writeText(champ.value);
+  } catch {
+    // Presse-papiers refuse (page non securisee, navigateur ancien) : la
+    // selection permet au moins un Ctrl+C.
+    champ.focus();
+    champ.select();
+    message('Copiez le lien sélectionné avec Ctrl+C.', 'info');
+    return;
+  }
+  const libelle = bouton.textContent;
+  bouton.textContent = 'Copié';
+  setTimeout(() => { bouton.textContent = libelle; }, 1500);
+};
+
+window.regenererLien = async (id, nom) => {
+  if (!confirm(`Régénérer le lien de ${nom} ?\n\nL'ancien cessera aussitôt de fonctionner : il faudra lui transmettre le nouveau.`)) {
+    return;
+  }
+  try {
+    await API.post(`/api/admin/conducteurs/${id}/lien`);
+    message('Nouveau lien créé. Transmettez-le à l’intéressé.', 'succes', 6000);
+    await chargerConducteurs();
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
+};
 
 window.corrigerConducteur = async (id, champ, valeur, element) => {
   const ancienne = element.defaultValue;

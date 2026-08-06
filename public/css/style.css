@@ -583,3 +583,64 @@ input[readonly] { background: #f7f9fc; color: var(--gris-texte); }
   .carte { padding: 12px; }
   .jours { grid-template-columns: repeat(4, 1fr); }
 }
+
+/* ------------------ Page personnelle du conducteur ----------------------- */
+
+/* Une fiche à viser est une grande cible tactile : elle se lit et s'ouvre du
+   pouce, sur un chantier, souvent d'une seule main. */
+.fiche-a-viser {
+  display: block;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border: 1px solid var(--gris-bord);
+  border-left: 4px solid #7d5bbe;
+  border-radius: 9px;
+  background: #fff;
+  text-decoration: none;
+  color: inherit;
+}
+.fiche-a-viser:hover { background: #faf8fe; border-color: #7d5bbe; }
+.fiche-a-viser .entete-fiche { display: flex; align-items: baseline; gap: 10px; }
+.fiche-a-viser .semaine {
+  font-weight: 700;
+  color: var(--bleu);
+  font-variant-numeric: tabular-nums;
+}
+.fiche-a-viser .chef { font-weight: 600; }
+.fiche-a-viser .chantier { margin-top: 3px; }
+.fiche-a-viser .aide { margin: 4px 0 0; }
+.fiche-a-viser .ouvrir {
+  display: inline-block;
+  margin-top: 9px;
+  font-weight: 700;
+  font-size: 0.86rem;
+  color: var(--bleu);
+}
+
+.visa-passe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--gris-bord);
+  font-size: 0.88rem;
+}
+.visa-passe:last-child { border-bottom: none; }
+.visa-passe .semaine { font-weight: 700; color: var(--vert); font-variant-numeric: tabular-nums; }
+.visa-passe .aide { margin: 0 0 0 auto; }
+
+/* Le lien personnel, dans l'écran Paramètres du directeur. */
+.lien-conducteur {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.lien-conducteur input {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: 0.78rem;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  background: #f7f9fb;
+}

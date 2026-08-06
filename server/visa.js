@@ -242,6 +242,97 @@ function renvoyer(jeton, commentaire) {
   return { renvoyee: true, fiche: vueConducteur(F.obtenirFiche(fiche.id)) };
 }
 
+/* ------------------- Lien personnel d'un conducteur ----------------------- */
+
+/*
+ * Le courriel restait le seul maillon dependant de quelque chose qu'on ne
+ * maitrise pas : un serveur d'envoi, un port ouvert, une autorisation a
+ * demander. Le conducteur recoit donc, une fois pour toutes, une adresse
+ * personnelle a mettre en favori sur son telephone. Elle lui montre les fiches
+ * qui attendent SON visa, et rien d'autre.
+ *
+ * Ce lien ne passe jamais par le chef d'equipe : c'est ce qui distingue un
+ * controle d'une formalite. Un chef qui detiendrait le lien pourrait viser sa
+ * propre fiche.
+ */
+function lienConducteur(conducteur) {
+  if (!conducteur || !conducteur.jeton) return '';
+  return `${adressePublique()}/conducteur.html?cle=${encodeURIComponent(conducteur.jeton)}`;
+}
+
+/** Regenere le secret : l'ancien lien cesse aussitot de fonctionner. */
+function regenererJeton(conducteurId) {
+  const jeton = crypto.randomBytes(24).toString('base64url');
+  const resultat = db.prepare('UPDATE conducteurs SET jeton = ? WHERE id = ?').run(jeton, conducteurId);
+  if (!resultat.changes) return { erreur: 'Conducteur de travaux inconnu.', code: 404 };
+  return { conducteur: db.prepare('SELECT * FROM conducteurs WHERE id = ?').get(conducteurId) };
+}
+
+function conducteurDuJeton(cle) {
+  if (!cle || typeof cle !== 'string') return null;
+  return db.prepare('SELECT * FROM conducteurs WHERE jeton = ? AND actif = 1').get(cle) || null;
+}
+
+/**
+ * Ce que voit le conducteur en ouvrant son lien : ses fiches en attente, et
+ * celles qu'il a visees recemment — pour qu'il sache que son geste a porte.
+ *
+ * Chaque fiche en attente est accompagnee de son lien de visa du moment. Le
+ * mecanisme d'ouverture d'une fiche reste donc exactement celui du courriel,
+ * deja eprouve : un secret par fiche, renouvele a chaque transmission.
+ */
+function tableauConducteur(cle) {
+  const conducteur = conducteurDuJeton(cle);
+  if (!conducteur) return { erreur: 'Ce lien n’est plus valable. Demandez-en un nouveau à la direction.', code: 403 };
+
+  const enAttente = db
+    .prepare(
+      `SELECT f.id, f.annee, f.semaine, f.chantier, f.ville, f.visa_envoye_le, u.nom AS chef_nom,
+              (SELECT COUNT(*) FROM fiche_lignes l
+                WHERE l.fiche_id = f.id AND TRIM(l.nom_affiche) <> '') AS nb_salaries,
+              (SELECT COALESCE(SUM(j.minutes), 0) FROM fiche_jours j
+                 JOIN fiche_lignes l2 ON l2.id = j.ligne_id
+                WHERE l2.fiche_id = f.id) AS total_minutes
+         FROM fiches f
+         JOIN utilisateurs u ON u.id = f.chef_id
+        WHERE f.statut = 'soumise' AND f.visa_statut = 'attente'
+          AND COALESCE(f.conducteur_id, u.conducteur_id) = ?
+        ORDER BY f.annee DESC, f.semaine DESC`
+    )
+    .all(conducteur.id);
+
+  const recentes = db
+    .prepare(
+      `SELECT f.id, f.annee, f.semaine, f.chantier, f.visa_le, f.statut, u.nom AS chef_nom
+         FROM fiches f
+         JOIN utilisateurs u ON u.id = f.chef_id
+        WHERE f.visa_statut = 'vise'
+          AND COALESCE(f.conducteur_id, u.conducteur_id) = ?
+        ORDER BY f.visa_le DESC LIMIT 8`
+    )
+    .all(conducteur.id);
+
+  return {
+    conducteur: { nom: conducteur.nom },
+    enAttente: enAttente.map((f) => ({ ...f, lien: lienFiche(f.id) })),
+    recentes,
+  };
+}
+
+/**
+ * Lien de visa d'une fiche donnee, signe a l'instant.
+ *
+ * Le secret vit dans la fiche et change a chaque transmission : on le lit plutot
+ * que d'en poser un nouveau, sans quoi ouvrir sa liste condamnerait les liens
+ * deja envoyes par courriel pour la meme fiche.
+ */
+function lienFiche(ficheId) {
+  const ligne = db.prepare('SELECT visa_jeton FROM fiches WHERE id = ?').get(ficheId);
+  if (!ligne || !ligne.visa_jeton) return '';
+  const jeton = signer({ f: ficheId, n: ligne.visa_jeton, exp: Date.now() + DUREE_JETON_MS });
+  return `/visa.html?jeton=${encodeURIComponent(jeton)}`;
+}
+
 module.exports = {
   envoyerDemandeVisa,
   conducteurDeLaFiche,
@@ -249,4 +340,7 @@ module.exports = {
   vueConducteur,
   viser,
   renvoyer,
+  lienConducteur,
+  regenererJeton,
+  tableauConducteur,
 };

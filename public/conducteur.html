@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#10416b">
+  <title>Pointage — mes fiches à viser</title>
+  <link rel="icon" href="/icone.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="appbar">
+    <div class="titre">
+      Fiches à viser
+      <small id="entete-conducteur">…</small>
+    </div>
+    <button class="petit" id="btn-rafraichir" type="button">Actualiser</button>
+  </header>
+
+  <main>
+    <section class="carte" id="bloc-erreur" hidden>
+      <h2>Ce lien n'est plus utilisable</h2>
+      <p class="aide" id="texte-erreur"></p>
+      <p class="aide">
+        Demandez un nouveau lien à la direction : il se régénère en un clic depuis
+        l'écran <strong>Paramètres</strong>.
+      </p>
+    </section>
+
+    <div id="contenu" hidden>
+      <section class="carte">
+        <h2>En attente de votre visa</h2>
+        <p class="aide" id="resume-attente"></p>
+        <div id="liste-attente"></div>
+      </section>
+
+      <section class="carte" id="bloc-recentes" hidden>
+        <h2>Vos derniers visas</h2>
+        <div id="liste-recentes"></div>
+      </section>
+
+      <section class="carte">
+        <p class="aide" style="margin:0">
+          Cette page est la vôtre : ajoutez-la à vos favoris, ou à l'écran d'accueil de
+          votre téléphone. Elle se met à jour toute seule à chaque ouverture, et ne
+          demande ni compte ni code.
+        </p>
+      </section>
+    </div>
+  </main>
+
+  <script src="/js/regles.js"></script>
+  <script src="/js/commun.js"></script>
+  <script src="/js/conducteur.js"></script>
+</body>
+</html>

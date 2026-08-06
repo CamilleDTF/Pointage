@@ -229,6 +229,26 @@ ajouterColonne('fiches', 'premiere_soumission_le', 'TEXT');
  */
 ajouterColonne('fiches', 'conducteur_id', 'INTEGER REFERENCES conducteurs(id) ON DELETE SET NULL');
 
+/*
+ * Lien personnel et durable d'un conducteur de travaux.
+ *
+ * Le courriel restait le seul maillon dependant de quelque chose qu'on ne
+ * maitrise pas : un serveur d'envoi, un port ouvert, une autorisation a
+ * demander. Ce secret-la donne au conducteur une adresse a mettre en favori,
+ * qui lui montre les fiches attendant SON visa. Il se transmet une fois, comme
+ * on donne un numero de telephone, et se revoque en le regenerant.
+ *
+ * Il n'ouvre que cela : la liste de ses fiches en attente, sans aucun montant.
+ */
+ajouterColonne('conducteurs', 'jeton', 'TEXT');
+
+// Les conducteurs deja enregistres n'en avaient pas : on leur en pose un.
+{
+  const sansJeton = db.prepare("SELECT id FROM conducteurs WHERE jeton IS NULL OR jeton = ''").all();
+  const poser = db.prepare('UPDATE conducteurs SET jeton = ? WHERE id = ?');
+  for (const c of sansJeton) poser.run(require('crypto').randomBytes(24).toString('base64url'), c.id);
+}
+
 const PARC_INITIAL = [
   ['GR-686-YM', 'Renault', 'Trafic', 'Diesel'],
   ['GR-714-YM', 'Renault', 'Trafic', 'Diesel'],

@@ -82,8 +82,8 @@
   let prochainId = 1;
   let session = null;
   const CONDUCTEURS = [
-    { id: 1, nom: 'MOREAU Paul', courriel: 'paul.moreau@exemple.fr', actif: 1 },
-    { id: 2, nom: 'RENAUD Sophie', courriel: 'sophie.renaud@exemple.fr', actif: 1 },
+    { id: 1, nom: 'MOREAU Paul', courriel: 'paul.moreau@exemple.fr', actif: 1, jeton: 'demo-paul' },
+    { id: 2, nom: 'RENAUD Sophie', courriel: 'sophie.renaud@exemple.fr', actif: 1, jeton: 'demo-sophie' },
   ];
   // Un chef sur deux depend d'un conducteur : la demonstration montre les deux
   // circuits, avec et sans etape de visa.
@@ -484,6 +484,32 @@
           rejetee: compter('rejetee'),
           validee: compter('validee'),
         },
+      };
+    }],
+
+    ['GET', /^\/api\/conducteur\/([^/]+)$/, (m) => {
+      const cle = decodeURIComponent(m[1]);
+      const conducteur = CONDUCTEURS.find((c) => c.jeton === cle && c.actif);
+      if (!conducteur) erreur(403, 'Ce lien n\u2019est plus valable. Demandez-en un nouveau \u00e0 la direction.');
+
+      const sienne = (f) => {
+        const chef = utilisateurs.find((u) => u.id === f.chef_id);
+        return (f.conducteur_id || (chef && chef.conducteur_id)) === conducteur.id;
+      };
+      const resume = (f) => ({
+        id: f.id, annee: f.annee, semaine: f.semaine, chantier: f.chantier, ville: f.ville,
+        chef_nom: (utilisateurs.find((u) => u.id === f.chef_id) || {}).nom || '',
+        nb_salaries: f.lignes.filter((l) => l.nom_affiche.trim()).length,
+        total_minutes: f.lignes.reduce((t, l) => t + R.totalMinutesLigne(l), 0),
+        lien: `/visa.html?jeton=demo-${f.id}`,
+      });
+
+      return {
+        conducteur: { nom: conducteur.nom },
+        enAttente: fiches.filter((f) => f.statut === 'soumise' && f.visa_statut === 'attente' && sienne(f)).map(resume),
+        recentes: fiches
+          .filter((f) => f.visa_statut === 'vise' && sienne(f))
+          .map((f) => ({ ...resume(f), visa_le: f.visa_le, statut: f.statut })),
       };
     }],
 

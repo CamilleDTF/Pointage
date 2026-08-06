@@ -750,3 +750,68 @@ test('la vue de l annee montre tous les chefs, et reste fermee aux chefs', async
   assert.equal((await a('GET', '/api/calendrier-general?annee=2026')).statut, 403);
   assert.equal((await d('GET', '/api/calendrier-general?annee=1999')).statut, 400);
 });
+
+/*
+ * Le lien personnel du conducteur de travaux.
+ *
+ * Le courriel etait le seul maillon du circuit qui dependait de quelque chose
+ * qu'on ne maitrise pas : un serveur d'envoi, un port ouvert, une autorisation
+ * a demander. Ce lien-la se transmet une fois et se met en favori.
+ */
+test('le lien personnel montre au conducteur ses fiches, et rien d autre', async () => {
+  const d = await connexion('dir', '9999');
+  const a = await connexion('chefa', '1111');
+  const b = await connexion('chefb', '2222');
+  db.exec('DELETE FROM fiches');
+  db.exec('DELETE FROM conducteurs');
+
+  const paul = (await d('POST', '/api/admin/conducteurs', {
+    nom: 'MOREAU Paul', courriel: 'paul@exemple.fr',
+  })).corps;
+  const sophie = (await d('POST', '/api/admin/conducteurs', {
+    nom: 'RENAUD Sophie', courriel: 'sophie@exemple.fr',
+  })).corps;
+
+  // Le lien nait avec le conducteur : pas d'etape « activer son acces ».
+  assert.match(paul.lien, /\/conducteur\.html\?cle=/);
+  const clePaul = decodeURIComponent(paul.lien.split('cle=')[1]);
+  const cleSophie = decodeURIComponent(sophie.lien.split('cle=')[1]);
+  assert.notEqual(clePaul, cleSophie);
+  assert.ok(clePaul.length >= 24, 'le secret doit etre long et imprevisible');
+
+  await ficheTransmise(a, 40, paul.id);
+  await ficheTransmise(b, 41, sophie.id);
+
+  // Chacun ne voit que les siennes : c'est le meme cloisonnement que partout.
+  const vuePaul = (await fetch(`${base}/api/conducteur/${encodeURIComponent(clePaul)}`)).json
+    ? await (await fetch(`${base}/api/conducteur/${encodeURIComponent(clePaul)}`)).json()
+    : null;
+  assert.equal(vuePaul.conducteur.nom, 'MOREAU Paul');
+  assert.equal(vuePaul.enAttente.length, 1);
+  assert.equal(vuePaul.enAttente[0].semaine, 40);
+  assert.equal(vuePaul.enAttente[0].chef_nom, 'CHEF A');
+
+  // Aucun montant, aucun taux : cette page sert au controle des heures.
+  const texte = JSON.stringify(vuePaul);
+  assert.ok(!/taux|salaire|brut|net/i.test(texte), 'la page du conducteur ne doit porter aucun montant');
+
+  // Le lien de chaque fiche ouvre bien le visa, et lui seul.
+  const jeton = decodeURIComponent(vuePaul.enAttente[0].lien.split('jeton=')[1]);
+  const ouverture = await fetch(`${base}/api/visa/${encodeURIComponent(jeton)}`);
+  assert.equal(ouverture.status, 200);
+  assert.equal((await ouverture.json()).fiche.semaine, 40);
+
+  // Un secret invente n'ouvre rien.
+  assert.equal((await fetch(`${base}/api/conducteur/nimportequoi`)).status, 403);
+
+  // Regenerer coupe l'ancien lien immediatement.
+  const nouveau = (await d('POST', `/api/admin/conducteurs/${paul.id}/lien`)).corps;
+  assert.notEqual(nouveau.lien, paul.lien);
+  assert.equal((await fetch(`${base}/api/conducteur/${encodeURIComponent(clePaul)}`)).status, 403);
+  const cleNeuve = decodeURIComponent(nouveau.lien.split('cle=')[1]);
+  assert.equal((await fetch(`${base}/api/conducteur/${encodeURIComponent(cleNeuve)}`)).status, 200);
+
+  // Et un chef d'equipe ne peut pas se fabriquer un lien de conducteur.
+  assert.equal((await a('POST', `/api/admin/conducteurs/${paul.id}/lien`)).statut, 403);
+  assert.equal((await a('GET', '/api/admin/conducteurs')).statut, 403);
+});
