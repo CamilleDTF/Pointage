@@ -185,9 +185,9 @@ window.corrigerCompte = async (id, champ, valeur, element) => {
     message(
       champ === 'identifiant'
         ? 'Identifiant modifié. Prévenez l’intéressé : c’est avec celui-là qu’il se connectera.'
-        : 'Nom du compte mis à jour.',
+        : 'Compte mis à jour. Sa fiche de salarié suit le même nom.',
       'succes',
-      champ === 'identifiant' ? 7000 : 3000
+      champ === 'identifiant' ? 7000 : 3500
     );
   } catch (e) {
     // On remet la valeur d'avant : laisser a l'ecran une correction refusee
@@ -338,9 +338,15 @@ async function chargerAdmin() {
 
   $('table-utilisateurs').querySelector('tbody').innerHTML = utilisateurs
     .map(
-      (u) => `<tr style="${u.actif ? '' : 'opacity:.5'}">
-        <td><input value="${echapper(u.nom)}" style="width:180px"
+      (u) => {
+        // Le compte ne porte qu'un champ « NOM Prenom » : on le presente en deux
+        // cases, parce que c'est ainsi qu'on corrige une orthographe.
+        const { nom, prenom } = Regles.separerNomPrenom(u.nom);
+        return `<tr style="${u.actif ? '' : 'opacity:.5'}">
+        <td><input value="${echapper(nom)}" style="width:150px"
                    onchange="corrigerCompte(${u.id}, 'nom', this.value, this)"></td>
+        <td><input value="${echapper(prenom)}" style="width:130px"
+                   onchange="corrigerCompte(${u.id}, 'prenom', this.value, this)"></td>
         <td><input value="${echapper(u.identifiant)}" style="width:130px"
                    onchange="corrigerCompte(${u.id}, 'identifiant', this.value, this)"></td>
         <td>${u.role}</td>
@@ -348,7 +354,8 @@ async function chargerAdmin() {
           <button class="petit" onclick="reinitialiserCode(${u.id})">Nouveau code</button>
           <button class="petit" onclick="basculerActif(${u.id}, ${u.actif ? 0 : 1})">${u.actif ? 'Désactiver' : 'Réactiver'}</button>
         </td>
-      </tr>`
+      </tr>`;
+      }
     )
     .join('');
 

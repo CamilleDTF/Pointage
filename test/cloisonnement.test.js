@@ -928,8 +928,12 @@ test('le directeur corrige le nom et l identifiant d un compte', async () => {
   const d = await connexion('dir', '9999');
   const chefB = db.prepare("SELECT id FROM utilisateurs WHERE identifiant = 'chefb'").get().id;
 
-  assert.equal((await d('PUT', `/api/admin/utilisateurs/${chefB}`, { nom: 'CHEF B corrige' })).statut, 200);
-  assert.equal(db.prepare('SELECT nom FROM utilisateurs WHERE id = ?').get(chefB).nom, 'CHEF B corrige');
+  // Le compte ne porte qu'un champ « NOM Prenom » : les deux cases de l'ecran
+  // s'y recomposent, et l'une se corrige sans effacer l'autre.
+  assert.equal((await d('PUT', `/api/admin/utilisateurs/${chefB}`, { nom: 'BERNARD' })).statut, 200);
+  assert.equal(db.prepare('SELECT nom FROM utilisateurs WHERE id = ?').get(chefB).nom, 'BERNARD B');
+  assert.equal((await d('PUT', `/api/admin/utilisateurs/${chefB}`, { prenom: 'Bruno' })).statut, 200);
+  assert.equal(db.prepare('SELECT nom FROM utilisateurs WHERE id = ?').get(chefB).nom, 'BERNARD Bruno');
 
   // L'identifiant se corrige aussi, et c'est avec le nouveau qu'on se connecte.
   assert.equal((await d('PUT', `/api/admin/utilisateurs/${chefB}`, { identifiant: 'chefbis' })).statut, 200);
@@ -954,4 +958,37 @@ test('le directeur corrige le nom et l identifiant d un compte', async () => {
   assert.equal((await a('PUT', `/api/admin/utilisateurs/${chefB}`, { nom: 'X' })).statut, 403);
 
   db.prepare("UPDATE utilisateurs SET identifiant = 'chefb', nom = 'CHEF B' WHERE id = ?").run(chefB);
+});
+
+/*
+ * Le chef travaille aussi sur le chantier : il a une fiche de salarie, rattachee
+ * a lui par son nom. Corriger l'un sans l'autre les separerait — il cesserait
+ * d'apparaitre en tete de sa propre fiche.
+ */
+test('renommer un chef renomme aussi sa fiche de salarie', async () => {
+  const d = await connexion('dir', '9999');
+  const chefA = db.prepare("SELECT id, nom FROM utilisateurs WHERE identifiant = 'chefa'").get();
+
+  // Des tests anterieurs ont pu laisser un homonyme : on part d'un etat net,
+  // sans quoi « sa » fiche de salarie ne designerait rien de precis.
+  db.prepare("DELETE FROM salaries WHERE chef_id = ? AND nom = 'CHEF'").run(chefA.id);
+
+  // On lui donne sa fiche de salarie, comme l'import le fait.
+  const sien = db
+    .prepare('INSERT INTO salaries (matricule, nom, prenom, chef_id) VALUES (?, ?, ?, ?)')
+    .run('CA', 'CHEF', 'A', chefA.id).lastInsertRowid;
+
+  assert.equal((await d('PUT', `/api/admin/utilisateurs/${chefA.id}`, { nom: 'CHEFFE' })).statut, 200);
+
+  const apres = db.prepare('SELECT nom, prenom FROM salaries WHERE id = ?').get(sien);
+  assert.equal(apres.nom, 'CHEFFE', 'sa fiche de salarie doit suivre');
+  assert.equal(apres.prenom, 'A');
+  assert.equal(db.prepare('SELECT nom FROM utilisateurs WHERE id = ?').get(chefA.id).nom, 'CHEFFE A');
+
+  // Les autres salaries de son equipe ne bougent pas.
+  const andre = db.prepare("SELECT nom FROM salaries WHERE nom = 'ANDRE' LIMIT 1").get();
+  assert.ok(andre, "les coequipiers gardent leur nom");
+
+  db.prepare('DELETE FROM salaries WHERE id = ?').run(sien);
+  db.prepare("UPDATE utilisateurs SET nom = 'CHEF A' WHERE id = ?").run(chefA.id);
 });

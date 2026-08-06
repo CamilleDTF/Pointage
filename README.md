@@ -452,7 +452,11 @@ inutilisé ne réclame rien. La légende figure en haut de chaque feuille.
   dans les deux sens, puisqu'un même chantier peut relever des deux selon les jours,
   et que la ville ne dit pas où le salarié a dormi. Les fiches antérieures à ces deux
   colonnes gardent leur répartition calculée depuis la ville — sans quoi un mois déjà
-  pointé changerait de montant après coup.
+  pointé changerait de montant après coup. Sur une **semaine à cheval sur deux mois**,
+  ces jours suivent le prorata des jours pointés, comme les paniers : 2 jours de GD 72
+  sur une semaine dont 4 jours sur 5 tombent en septembre donnent 1,5 jour à septembre.
+  L'application ne peut pas savoir lesquels des deux jours c'étaient ; le prorata est la
+  seule réponse qui ne favorise arbitrairement aucun des deux mois.
 - **Semaines à cheval sur deux mois** *(validé)* — chaque tableau ne retient que
   ses propres jours, comme dans le classeur d'origine où le 29 et le 30 juin
   restent vides sur la feuille de juillet. Les primes suivent au prorata des jours

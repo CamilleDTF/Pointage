@@ -726,11 +726,18 @@ app.put('/api/admin/utilisateurs/:id', A.exigerDirecteur, (req, res) => {
   const compte = db.prepare('SELECT * FROM utilisateurs WHERE id = ?').get(id);
   if (!compte) return res.status(404).json({ erreur: 'Compte introuvable.' });
 
+  /*
+   * Le compte ne porte qu'un champ de nom, « NOM Prenom », comme la fiche
+   * papier. L'ecran le presente en deux cases parce que c'est ainsi qu'on le
+   * corrige ; on les recompose ici.
+   */
   const maj = {};
-  if (req.body.nom !== undefined) {
-    const nom = String(req.body.nom).trim();
+  const ancien = D.separerNomPrenom(compte.nom);
+  if (req.body.nom !== undefined || req.body.prenom !== undefined) {
+    const nom = String(req.body.nom !== undefined ? req.body.nom : ancien.nom).trim();
+    const prenom = String(req.body.prenom !== undefined ? req.body.prenom : ancien.prenom).trim();
     if (!nom) return res.status(400).json({ erreur: 'Le nom ne peut pas etre vide.' });
-    maj.nom = nom;
+    maj.nom = `${nom} ${prenom}`.trim();
   }
   if (req.body.identifiant !== undefined) {
     const identifiant = String(req.body.identifiant).trim().toLowerCase();
@@ -748,6 +755,23 @@ app.put('/api/admin/utilisateurs/:id', A.exigerDirecteur, (req, res) => {
     db.prepare(`UPDATE utilisateurs SET ${set} WHERE id = @id`).run({ ...maj, id });
   } catch {
     return res.status(409).json({ erreur: 'Cet identifiant est deja pris par un autre compte.' });
+  }
+
+  /*
+   * Le chef travaille aussi sur le chantier : il a une fiche salarie, rattachee
+   * a lui par son nom. Corriger l'un sans l'autre les separerait — il cesserait
+   * d'apparaitre en tete de sa propre fiche, et le calendrier ne le reconnaitrait
+   * plus comme chef.
+   */
+  if (maj.nom && maj.nom !== compte.nom) {
+    const sien = db
+      .prepare('SELECT id, nom, prenom FROM salaries WHERE chef_id = ?')
+      .all(id)
+      .find((s) => D.memePersonne(`${s.nom} ${s.prenom}`, compte.nom));
+    if (sien) {
+      const { nom, prenom } = D.separerNomPrenom(maj.nom);
+      db.prepare('UPDATE salaries SET nom = ?, prenom = ? WHERE id = ?').run(nom, prenom, sien.id);
+    }
   }
 
   journaliser(null, req.utilisateur.id, 'compte_modifie', `${compte.identifiant} -> ${JSON.stringify(maj)}`);
