@@ -9,6 +9,7 @@
  *   node server/seed.js --demo     -> ajoute en plus une fiche d'exemple remplie
  */
 
+require('./configuration'); // reglages de configuration.txt
 const { db, journaliser } = require('./db');
 const { hacherPin } = require('./auth');
 const D = require('./domaine');

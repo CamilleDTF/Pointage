@@ -18,6 +18,7 @@
  * affectation : le directeur la completera depuis l'ecran Equipes.
  */
 
+require('../server/configuration'); // reglages de configuration.txt
 const path = require('path');
 const ExcelJS = require('exceljs');
 const { db } = require('../server/db');

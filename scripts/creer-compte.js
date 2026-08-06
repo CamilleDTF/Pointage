@@ -12,6 +12,7 @@
  * mettre a jour le nom, le role et le code.
  */
 
+require('../server/configuration'); // reglages de configuration.txt
 const { db } = require('../server/db');
 const { hacherPin } = require('../server/auth');
 

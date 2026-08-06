@@ -9,6 +9,7 @@
  * l'ecran ne le montre pas", sans avoir a interpreter une capture d'ecran.
  */
 
+require('../server/configuration'); // reglages de configuration.txt
 const { db } = require('../server/db');
 
 const utilisateurs = db

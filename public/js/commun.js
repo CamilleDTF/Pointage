@@ -45,8 +45,6 @@ function message(texte, type = 'info', duree = 4000) {
 // affiches a l'ecran sont calcules par le meme code que ceux de la paie.
 const { versMinutes, versTexte, versSaisie, jourMois, controlerFiche } = Regles;
 
-const semaineISOCourante = () => Regles.semaineISO(new Date());
-
 // Le role de la personne connectee, renseigne au demarrage de chaque ecran :
 // un meme statut ne se dit pas pareil selon qu'on transmet ou qu'on valide.
 let roleCourant = 'directeur';

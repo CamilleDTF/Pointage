@@ -1,0 +1,80 @@
+rem ===========================================================================
+rem  REGLAGES DE L'APPLICATION DE POINTAGE
+rem ---------------------------------------------------------------------------
+rem  Pour vous en servir : copiez ce fichier a cote de DEMARRER.bat sous le nom
+rem
+rem        configuration.txt
+rem
+rem  puis remplissez les lignes qui vous concernent et relancez l'application.
+rem
+rem  Une ligne par reglage, sous la forme  CLE=valeur
+rem  Les lignes commencant par rem ou # sont des explications, pas des reglages.
+rem  Une ligne laissee vide est ignoree : le reglage garde sa valeur par defaut.
+rem
+rem  Ce fichier contient un mot de passe de messagerie : ne le publiez pas et ne
+rem  le joignez pas a un courriel.
+rem ===========================================================================
+
+
+rem ---------------------------------------------------------------------------
+rem  1. ENVOI DES COURRIELS AUX CONDUCTEURS DE TRAVAUX
+rem ---------------------------------------------------------------------------
+rem  Sans ces quatre lignes, l'application fonctionne mais aucun courriel ne
+rem  part : les messages sont ecrits dans data\courriels\ et le directeur peut
+rem  recuperer le lien de visa depuis la fiche pour le transmettre lui-meme.
+rem
+rem  COURRIEL_EXPEDITEUR est l'adresse qui apparaitra comme expediteur. Chez la
+rem  plupart des fournisseurs, elle doit etre celle du compte SMTP_UTILISATEUR.
+
+SMTP_HOTE=
+SMTP_PORT=587
+SMTP_UTILISATEUR=
+SMTP_MOT_DE_PASSE=
+COURRIEL_EXPEDITEUR=
+
+rem  Reglages courants, a recopier tels quels dans les lignes ci-dessus :
+rem
+rem    Microsoft 365 / Outlook   SMTP_HOTE=smtp.office365.com     SMTP_PORT=587
+rem    Google Workspace / Gmail  SMTP_HOTE=smtp.gmail.com         SMTP_PORT=587
+rem    OVH                       SMTP_HOTE=ssl0.ovh.net           SMTP_PORT=587
+rem    Orange Pro                SMTP_HOTE=smtp.orange.fr         SMTP_PORT=587
+rem
+rem  Attention : Gmail et Microsoft 365 refusent le mot de passe habituel du
+rem  compte. Il faut creer un "mot de passe d'application" dans les reglages de
+rem  securite du compte, et le coller dans SMTP_MOT_DE_PASSE. C'est une suite de
+rem  16 caracteres, propre a cette application, revocable a tout moment.
+rem
+rem  Le port 465 fonctionne aussi chez la plupart des fournisseurs : l'application
+rem  passe alors automatiquement en TLS direct.
+
+
+rem ---------------------------------------------------------------------------
+rem  2. ADRESSE DE L'APPLICATION
+rem ---------------------------------------------------------------------------
+rem  Les liens contenus dans les courriels doivent etre cliquables depuis le
+rem  telephone du conducteur de travaux : indiquez ici l'adresse par laquelle il
+rem  atteint l'application, sans barre oblique finale.
+rem
+rem    ADRESSE_PUBLIQUE=https://pointage.mon-entreprise.fr
+rem    ADRESSE_PUBLIQUE=http://192.168.1.20:3000
+
+ADRESSE_PUBLIQUE=
+
+
+rem ---------------------------------------------------------------------------
+rem  3. REGLAGES DE FONCTIONNEMENT
+rem ---------------------------------------------------------------------------
+rem  PORT              Port d'ecoute (3000 par defaut).
+rem  DATA_DIR          Dossier de la base de donnees. Par defaut, le sous-dossier
+rem                    "data" de l'application. A changer pour poser la base sur
+rem                    un disque sauvegarde.
+rem  DEBUT_SERVICE     Date de mise en service, au format AAAA-MM-JJ. Rien n'est
+rem                    reclame ni compte comme retard avant cette date.
+rem  DELAI_TRANSMISSION_JOURS
+rem                    Nombre de jours apres le dimanche pour rendre une fiche.
+rem                    1 = le lundi qui suit, la regle de la maison.
+
+PORT=
+DATA_DIR=
+DEBUT_SERVICE=
+DELAI_TRANSMISSION_JOURS=

@@ -1,5 +1,9 @@
 'use strict';
 
+// En premier, avant tout module qui lit process.env : configuration.txt pose
+// les reglages du poste (dossier de donnees, serveur d'envoi des courriels).
+require('./configuration');
+
 const path = require('path');
 const express = require('express');
 
@@ -779,6 +783,15 @@ app.use((err, req, res, next) => {
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`Pointage DTF : http://localhost:${PORT}`);
+    // Dit des le demarrage si les courriels partiront : sans cette ligne, on ne
+    // s'en apercoit qu'au premier chef d'equipe qui transmet sa fiche.
+    console.log(
+      C.ACTIF
+        ? "Envoi des courriels : actif (les demandes de visa partent aux conducteurs de travaux)."
+        : "Envoi des courriels : inactif. Les demandes de visa sont conservees dans " +
+          `${C.DOSSIER_COURRIELS} et le lien s'affiche sur la fiche. ` +
+          'Pour les faire partir, remplissez les lignes SMTP de configuration.txt.'
+    );
   });
 }
 

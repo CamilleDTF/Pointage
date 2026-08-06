@@ -116,7 +116,9 @@ async function chargerConducteurs() {
   $('aide-envoi').innerHTML = envoiConfigure
     ? '<span class="jauge bon">Envoi de courriels configuré</span>'
     : '<span class="jauge moyen">Aucun serveur d’envoi configuré</span> — les messages sont conservés sur le serveur ' +
-      'et le lien de visa s’affiche pour être transmis à la main. Voir SMTP_HOTE dans la configuration.';
+      'et le lien de visa s’affiche sur la fiche, à transmettre à la main. Pour que les courriels partent ' +
+      'vraiment : copiez <code>configuration-exemple.txt</code> en <code>configuration.txt</code> à côté de ' +
+      'DEMARRER.bat, remplissez les lignes SMTP, puis relancez l’application.';
 
   const champ = (c, nom, largeur, type = 'text') =>
     `<input type="${type}" value="${echapper(c[nom])}" style="width:${largeur}"

@@ -254,9 +254,5 @@ function valoriser(salarie, { montantPanier = 0 } = {}) {
 
 module.exports = {
   agregerMois,
-  nomFeuille,
-  cleSalarie,
   valoriser,
-  HEURES_MENSUELLES_BASE,
-  PART_NET,
 };

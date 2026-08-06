@@ -509,4 +509,4 @@ async function exporterMois(mois, { version = 'direction' } = {}) {
   return wb.xlsx.writeBuffer();
 }
 
-module.exports = { exporterMois, BLOCS_SEMAINE, LIGNE_TOTAUX };
+module.exports = { exporterMois };

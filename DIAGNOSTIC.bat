@@ -79,6 +79,14 @@ call node -e "fetch('http://127.0.0.1:3000/').then(function(r){console.log('HTTP
 
 taskkill /f /im node.exe >nul 2>&1
 if exist sortie-serveur.txt del /q sortie-serveur.txt
+
+>>"%RAPPORT%" echo.
+>>"%RAPPORT%" echo --- 6. Envoi des courriels ---
+if exist configuration.txt >>"%RAPPORT%" echo Fichier configuration.txt present
+if not exist configuration.txt >>"%RAPPORT%" echo Aucun fichier configuration.txt : copiez configuration-exemple.txt sous ce nom
+>>"%RAPPORT%" echo Reglages lus, sans les mots de passe :
+call node -e "require('./server/configuration'); var c=['SMTP_HOTE','SMTP_PORT','SMTP_UTILISATEUR','COURRIEL_EXPEDITEUR','ADRESSE_PUBLIQUE']; c.forEach(function(k){console.log('  '+k+' = '+(process.env[k]||'non renseigne'))}); console.log('  SMTP_MOT_DE_PASSE = '+(process.env.SMTP_MOT_DE_PASSE?'renseigne':'non renseigne'))" >>"%RAPPORT%" 2>&1
+
 goto :fin
 
 :absent

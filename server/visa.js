@@ -114,7 +114,8 @@ function demanderVisa(ficheId, { relance = false } = {}) {
 
 /** L'adresse a laquelle les conducteurs joignent l'application. */
 function adressePublique() {
-  return String(process.env.URL_PUBLIQUE || `http://localhost:${process.env.PORT || 3000}`).replace(/\/+$/, '');
+  const adresse = process.env.ADRESSE_PUBLIQUE || process.env.URL_PUBLIQUE;
+  return String(adresse || `http://localhost:${process.env.PORT || 3000}`).replace(/\/+$/, '');
 }
 
 async function envoyerDemandeVisa(ficheId, options = {}) {
@@ -242,13 +243,10 @@ function renvoyer(jeton, commentaire) {
 }
 
 module.exports = {
-  demanderVisa,
   envoyerDemandeVisa,
-  conducteurDuChef,
   conducteurDeLaFiche,
   ficheDuJeton,
   vueConducteur,
   viser,
   renvoyer,
-  adressePublique,
 };

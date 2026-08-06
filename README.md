@@ -167,7 +167,14 @@ visa** quand le conducteur n'est pas joignable ; le bouton le dit alors explicit
 | `SMTP_HOTE`, `SMTP_PORT` | Serveur d'envoi (587 par défaut, 465 pour du TLS direct) |
 | `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE` | Identifiants, si le serveur en demande |
 | `COURRIEL_EXPEDITEUR` | Adresse d'expédition |
-| `URL_PUBLIQUE` | L'adresse à laquelle les conducteurs joignent l'application |
+| `ADRESSE_PUBLIQUE` | L'adresse à laquelle les conducteurs joignent l'application |
+
+Ces réglages se posent dans `configuration.txt` (voir *Configuration*). Pour
+vérifier qu'ils fonctionnent sans faire transmettre une vraie fiche :
+**`TESTER-COURRIEL.bat`**, ou `node scripts/tester-courriel.js mon.adresse@exemple.fr`.
+Le script nomme les réglages manquants, et recopie le refus du serveur d'envoi en
+l'expliquant — un mot de passe d'application exigé par Gmail et Microsoft 365, un
+nom de serveur mal orthographié, un port bloqué par le pare-feu.
 
 L'envoi repose sur `nodemailer`, **chargé de façon facultative** : une installation
 dont les composants datent d'avant son ajout démarre quand même, et se contente de
@@ -455,6 +462,25 @@ relancer.
 
 ## Configuration
 
+Tout se règle par variables d'environnement — commode sur un serveur Linux, où
+elles se posent dans un fichier de service. Sur le poste de la direction, elles se
+perdraient à la première fenêtre fermée : l'application lit donc aussi un fichier
+**`configuration.txt`**, à côté de `DEMARRER.bat`, une ligne par réglage.
+
+```
+SMTP_HOTE=smtp.office365.com
+SMTP_UTILISATEUR=pointage@mon-entreprise.fr
+SMTP_MOT_DE_PASSE=xxxxxxxxxxxxxxxx
+COURRIEL_EXPEDITEUR=pointage@mon-entreprise.fr
+ADRESSE_PUBLIQUE=https://pointage.mon-entreprise.fr
+```
+
+`configuration-exemple.txt` sert de modèle commenté : le copier sous le nom
+`configuration.txt` et remplir les lignes utiles. Une variable déjà définie dans
+l'environnement l'emporte toujours sur le fichier, et une ligne laissée vide ne
+définit rien. Le fichier contient un mot de passe de messagerie : il n'est pas
+suivi par git.
+
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `PORT` | Port d'écoute | `3000` |
@@ -464,7 +490,7 @@ relancer.
 | `COOKIE_SECURE` | `true` force le cookie `Secure`, même joint en HTTP | déduit du protocole utilisé |
 | `DEBUT_SERVICE` | Première semaine attendue dans l'application (`AAAA-MM-JJ`) | `2026-09-01` |
 | `DELAI_TRANSMISSION_JOURS` | Délai attendu, en jours après le dimanche (1 = le lundi) | `1` |
-| `URL_PUBLIQUE` | Adresse publique, pour les liens envoyés aux conducteurs | `http://localhost:PORT` |
+| `ADRESSE_PUBLIQUE` | Adresse publique, pour les liens envoyés aux conducteurs | `http://localhost:PORT` |
 | `SMTP_HOTE`, `SMTP_PORT` | Serveur d'envoi des courriels | — (messages déposés sur disque) |
 | `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE` | Identifiants du serveur d'envoi | — |
 | `COURRIEL_EXPEDITEUR` | Adresse d'expédition | — |
