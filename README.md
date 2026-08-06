@@ -165,7 +165,7 @@ visa** quand le conducteur n'est pas joignable ; le bouton le dit alors explicit
 | Variable | Rôle |
 |---|---|
 | `SMTP_HOTE`, `SMTP_PORT` | Serveur d'envoi (587 par défaut, 465 pour du TLS direct) |
-| `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE` | Identifiants, si le serveur en demande |
+| `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE` | Identifiants — **facultatifs**, voir *Envoyer sans compte* |
 | `COURRIEL_EXPEDITEUR` | Adresse d'expédition |
 | `ADRESSE_PUBLIQUE` | L'adresse à laquelle les conducteurs joignent l'application |
 
@@ -189,6 +189,38 @@ il faut un mot de passe d'application, et parfois que l'organisation autorise
 d'abord l'authentification SMTP sur la boîte ; et beaucoup de serveurs
 **n'autorisent à envoyer que depuis l'adresse du compte connecté**, ce qui impose
 la même valeur dans `SMTP_UTILISATEUR` et `COURRIEL_EXPEDITEUR`.
+
+`TESTER-COURRIEL.bat` propose enfin de **préparer `configuration.txt`** avec les
+réglages trouvés, plutôt que de laisser recopier six lignes à la main. Il n'écrase
+jamais un fichier existant : celui-ci peut contenir un mot de passe et des réglages
+qui ne le regardent pas.
+
+### Envoyer sans compte ni mot de passe
+
+`SMTP_UTILISATEUR` et `SMTP_MOT_DE_PASSE` sont **facultatifs**. Sans eux, aucune
+commande d'authentification n'est envoyée — ce qui correspond à deux situations
+courantes : un relais interne à l'entreprise, et l'envoi direct de Microsoft 365
+vers ses propres boîtes.
+
+Ce second cas mérite d'être connu, parce qu'il correspond exactement à l'usage
+ici : les conducteurs de travaux ont des adresses de la maison. Microsoft accepte
+un message adressé à l'une de ses boîtes sur le serveur d'entrée du domaine
+(`<domaine>.mail.protection.outlook.com`, port 25), sans compte. **Aucun mot de
+passe n'est alors posé sur le poste, donc aucun n'est à protéger**, et rien n'est
+à demander à l'administrateur du locataire. En échange, aucun message ne peut
+partir vers une adresse extérieure, et le pare-feu doit laisser sortir le port 25
+— souvent bloqué.
+
+### Un envoi ne fait jamais attendre le chef d'équipe
+
+`soumettre` attend l'envoi avant de répondre. Les délais de `nodemailer`
+s'appliquent **par adresse IP essayée**, et un nom de serveur en désigne souvent
+quatre : un port bloqué faisait tourner la roue une minute ou deux après un appui
+sur *transmettre*, pour finir sur un échec. `server/courriel.js` pose donc un
+plafond ferme de **20 secondes sur l'opération entière** (`SMTP_DELAI_MS`), au
+terme desquelles le message part sur le disque et le chef reçoit sa réponse. Sa
+fiche, elle, est enregistrée depuis le début : l'envoi n'a jamais conditionné la
+transmission.
 
 L'envoi repose sur `nodemailer`, **chargé de façon facultative** : une installation
 dont les composants datent d'avant son ajout démarre quand même, et se contente de
@@ -433,6 +465,7 @@ test/
   composants.test.js    Les lanceurs vérifient bien toutes les dépendances
   configuration.test.js Lecture de configuration.txt, priorité de l'environnement
   fournisseurs.test.js  Reconnaissance de l'hébergeur d'une adresse professionnelle
+  courriel.test.js      Un serveur muet ne bloque pas la transmission d'une fiche
 scripts/
   tester-courriel.js    Essai d'envoi, et diagnostic des réglages SMTP
   importer-effectif.js  Chargement de l'effectif depuis le tableau d'affectation
@@ -521,7 +554,8 @@ suivi par git.
 | `DELAI_TRANSMISSION_JOURS` | Délai attendu, en jours après le dimanche (1 = le lundi) | `1` |
 | `ADRESSE_PUBLIQUE` | Adresse publique, pour les liens envoyés aux conducteurs | `http://localhost:PORT` |
 | `SMTP_HOTE`, `SMTP_PORT` | Serveur d'envoi des courriels | — (messages déposés sur disque) |
-| `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE` | Identifiants du serveur d'envoi | — |
+| `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE` | Identifiants du serveur d'envoi (facultatifs) | — |
+| `SMTP_DELAI_MS` | Plafond de temps sur un envoi, en millisecondes | `20000` |
 | `COURRIEL_EXPEDITEUR` | Adresse d'expédition | — |
 
 ### Mise à jour des fichiers de l'interface

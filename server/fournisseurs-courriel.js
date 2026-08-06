@@ -31,6 +31,24 @@ const FOURNISSEURS = [
       "Microsoft refuse le mot de passe habituel du compte. Selon le reglage de votre " +
       "organisation, il faut soit un mot de passe d'application, soit que le service " +
       "informatique autorise l'authentification SMTP sur la boite utilisee.",
+    /*
+     * Microsoft accepte aussi l'envoi sans aucun compte, directement sur le
+     * serveur d'entree du domaine (« direct send »). C'est precisement le cas
+     * d'usage ici : les conducteurs de travaux ont des adresses de la maison,
+     * et un message adresse a une boite du meme locataire passe sans
+     * authentification. Aucun mot de passe a poser sur le poste, donc aucun mot
+     * de passe a proteger — mais rien ne sort vers l'exterieur.
+     */
+    sansCompte: {
+      port: 25,
+      condition: 'destinataires internes au domaine uniquement',
+      explication:
+        "Microsoft accepte les messages adresses a ses propres boites sans compte ni mot de " +
+        "passe, directement sur le serveur d'entree du domaine. Comme les conducteurs de " +
+        'travaux ont des adresses de la maison, cela suffit ici, et rien de confidentiel ne ' +
+        "reste sur le poste. En echange, aucun message ne peut partir vers une adresse " +
+        "exterieure, et le pare-feu doit laisser sortir le port 25.",
+    },
   },
   {
     motif: /aspmx.*\.google\.com$|googlemail\.com$/,

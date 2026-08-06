@@ -35,6 +35,25 @@ if "%ADRESSE%"=="" (
 
 call node scripts\tester-courriel.js "%ADRESSE%"
 
+rem  Rien n'est configure et aucun fichier n'existe encore : on propose de le
+rem  preparer avec les reglages qui viennent d'etre trouves, plutot que de
+rem  laisser recopier six lignes a la main.
+if exist configuration.txt goto :fin
+if not errorlevel 1 goto :fin
+
+echo.
+set REPONSE=
+set /p REPONSE=  Preparer le fichier configuration.txt avec ces reglages ? (O/N) :
+if /i not "%REPONSE%"=="O" goto :fin
+
+echo.
+call node scripts\tester-courriel.js "%ADRESSE%" --preparer
+echo.
+echo   Le fichier va s ouvrir dans le Bloc-notes.
+echo   Completez ce qu il reste, enregistrez, puis relancez ce test.
+if exist configuration.txt start "" notepad configuration.txt
+
+:fin
 echo.
 echo   ============================================================
 pause

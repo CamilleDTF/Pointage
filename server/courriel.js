@@ -56,13 +56,34 @@ const CONFIG = {
 
 const ACTIF = Boolean(nodemailer && CONFIG.hote && CONFIG.expediteur);
 
+/*
+ * Delais d'attente courts, volontairement.
+ *
+ * Par defaut, une connexion qui n'aboutit pas est abandonnee au bout de deux
+ * minutes. Un port bloque par le pare-feu — le 25 l'est presque partout — ferait
+ * alors patienter deux minutes le chef d'equipe qui vient d'appuyer sur
+ * « transmettre », pour finir sur un echec. Sa fiche est deja enregistree a ce
+ * moment-la : mieux vaut renoncer vite et le lui dire.
+ */
+const DELAIS = {
+  connectionTimeout: 8000,
+  greetingTimeout: 8000,
+  socketTimeout: 20000,
+};
+
+/* Plafond sur l'operation entiere : voir avecDelai() plus bas. */
+const DELAI_TOTAL_MS = Number(process.env.SMTP_DELAI_MS) || 20000;
+
 let transport = null;
 if (ACTIF) {
   transport = nodemailer.createTransport({
     host: CONFIG.hote,
     port: CONFIG.port,
     secure: CONFIG.port === 465,
+    // Sans compte, on n'envoie aucune commande d'authentification : c'est le cas
+    // d'un relais interne, ou de l'envoi direct vers les boites d'un domaine.
     auth: CONFIG.utilisateur ? { user: CONFIG.utilisateur, pass: CONFIG.motDePasse } : undefined,
+    ...DELAIS,
   });
 }
 
@@ -88,7 +109,9 @@ async function envoyer({ destinataire, sujet, html, texte }) {
   }
 
   try {
-    await transport.sendMail({ from: CONFIG.expediteur, to: destinataire, subject: sujet, html, text: texte });
+    await avecDelai(
+      transport.sendMail({ from: CONFIG.expediteur, to: destinataire, subject: sujet, html, text: texte })
+    );
     return { envoye: true };
   } catch (erreur) {
     // Un envoi qui echoue ne doit jamais faire perdre la transmission de la
@@ -97,6 +120,30 @@ async function envoyer({ destinataire, sujet, html, texte }) {
     console.error(`Echec de l'envoi a ${destinataire} : ${erreur.message}. Message conserve dans ${fichier}`);
     return { envoye: false, raison: erreur.message, fichier };
   }
+}
+
+/*
+ * Renonce au bout de DELAI_TOTAL_MS, quoi qu'il arrive.
+ *
+ * Les delais de la bibliotheque s'appliquent a chaque adresse essayee, et un nom
+ * de serveur en designe souvent quatre : quinze secondes par tentative font une
+ * minute d'attente. Ici, c'est un plafond ferme sur l'operation entiere. La
+ * tentative continue peut-etre sa vie dans son coin, mais plus personne ne
+ * l'attend : le chef d'equipe a deja sa reponse, et son message est sur le
+ * disque.
+ */
+function avecDelai(promesse, delai = DELAI_TOTAL_MS) {
+  let minuterie;
+  const echeance = new Promise((_, rejeter) => {
+    minuterie = setTimeout(
+      () => rejeter(new Error(`le serveur d'envoi n'a pas repondu en ${Math.round(delai / 1000)} secondes`)),
+      delai
+    );
+  });
+  // Une tentative qui echoue tardivement ne doit pas remonter en erreur non
+  // capturee apres que l'echeance a tranche.
+  promesse.catch(() => {});
+  return Promise.race([promesse, echeance]).finally(() => clearTimeout(minuterie));
 }
 
 /* ------------------------- Demande de visa au conducteur ------------------- */
@@ -205,4 +252,15 @@ function messageVisa({ fiche, lignes, conducteur, chefNom, lien }) {
   };
 }
 
-module.exports = { envoyer, messageVisa, ACTIF, DOSSIER_COURRIELS };
+/*
+ * Ferme les connexions gardees ouvertes par la bibliotheque.
+ *
+ * Sans cela, un script en ligne de commande affiche son resultat puis reste
+ * plante la, le temps qu'une tentative abandonnee finisse de s'eteindre : de
+ * l'exterieur, cela ressemble a un blocage.
+ */
+function fermer() {
+  if (transport) transport.close();
+}
+
+module.exports = { envoyer, messageVisa, fermer, ACTIF, DOSSIER_COURRIELS };

@@ -25,6 +25,13 @@ rem  recuperer le lien de visa depuis la fiche pour le transmettre lui-meme.
 rem
 rem  COURRIEL_EXPEDITEUR est l'adresse qui apparaitra comme expediteur. Chez la
 rem  plupart des fournisseurs, elle doit etre celle du compte SMTP_UTILISATEUR.
+rem
+rem  SMTP_UTILISATEUR et SMTP_MOT_DE_PASSE sont FACULTATIFS. Laisses vides,
+rem  aucune authentification n'est tentee : c'est ce qu'il faut pour un relais
+rem  interne a l'entreprise, et pour l'envoi direct de Microsoft 365 vers ses
+rem  propres boites. Un mot de passe qu'on ne pose pas sur le poste est un mot
+rem  de passe qu'on n'a pas a proteger. TESTER-COURRIEL.bat vous dira si votre
+rem  domaine s'y prete.
 
 SMTP_HOTE=
 SMTP_PORT=587

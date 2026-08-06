@@ -55,3 +55,21 @@ test('chaque hebergeur annonce un port et une explication utilisables', () => {
     assert.ok(f.note.length > 20, `explication trop courte pour ${f.nom}`);
   }
 });
+
+/*
+ * Microsoft accepte les messages adresses a ses propres boites sans compte ni
+ * mot de passe. C'est le reglage a proposer en premier ici : les conducteurs de
+ * travaux ont des adresses de la maison, et un mot de passe qu'on ne pose pas
+ * sur le poste est un mot de passe qu'on n'a pas a proteger.
+ */
+test('Microsoft 365 propose aussi un envoi sans compte, les autres non', () => {
+  const microsoft = reconnaitre(['dtffrance-com.mail.protection.outlook.com']);
+  assert.ok(microsoft.sansCompte, 'Microsoft doit proposer un envoi sans compte');
+  assert.equal(microsoft.sansCompte.port, 25);
+  assert.match(microsoft.sansCompte.condition, /interne/);
+
+  // Nulle part ailleurs : proposer un envoi sans compte a un hebergeur qui le
+  // refuse ferait perdre du temps sur un essai voue a echouer.
+  const autres = FOURNISSEURS.filter((f) => f.sansCompte && f.hote !== 'smtp.office365.com');
+  assert.deepEqual(autres, []);
+});
