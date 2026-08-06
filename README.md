@@ -172,9 +172,23 @@ visa** quand le conducteur n'est pas joignable ; le bouton le dit alors explicit
 Ces réglages se posent dans `configuration.txt` (voir *Configuration*). Pour
 vérifier qu'ils fonctionnent sans faire transmettre une vraie fiche :
 **`TESTER-COURRIEL.bat`**, ou `node scripts/tester-courriel.js mon.adresse@exemple.fr`.
-Le script nomme les réglages manquants, et recopie le refus du serveur d'envoi en
-l'expliquant — un mot de passe d'application exigé par Gmail et Microsoft 365, un
-nom de serveur mal orthographié, un port bloqué par le pare-feu.
+
+Le script fait trois choses. Il nomme les réglages manquants. Il **devine le
+serveur d'envoi** à partir du domaine de l'adresse : les enregistrements MX
+désignent l'hébergeur de la messagerie, et l'hébergeur détermine le SMTP — ce qui
+évite d'attendre le service informatique pour un renseignement de trente secondes
+(`server/fournisseurs-courriel.js`, complété par Microsoft 365, OVHcloud, IONOS,
+Gandi, Infomaniak, Orange Pro, Google Workspace, Zoho). Un domaine servi par une
+machine interne à l'entreprise est annoncé comme tel, avec le nom du MX en piste,
+plutôt que rattaché à un hébergeur au hasard. Enfin il recopie le refus du serveur
+en l'expliquant.
+
+Deux causes de refus reviennent sans cesse sur une messagerie professionnelle :
+Microsoft 365 et Google Workspace **n'acceptent pas le mot de passe du compte** —
+il faut un mot de passe d'application, et parfois que l'organisation autorise
+d'abord l'authentification SMTP sur la boîte ; et beaucoup de serveurs
+**n'autorisent à envoyer que depuis l'adresse du compte connecté**, ce qui impose
+la même valeur dans `SMTP_UTILISATEUR` et `COURRIEL_EXPEDITEUR`.
 
 L'envoi repose sur `nodemailer`, **chargé de façon facultative** : une installation
 dont les composants datent d'avant son ajout démarre quand même, et se contente de
@@ -398,6 +412,7 @@ server/
   indicateurs.js Suivi des chefs : assiduité, retards, fiches renvoyées
   visa.js       Liens signés du conducteur de travaux, visa et renvoi
   courriel.js   Envoi SMTP, et dépôt sur disque à défaut de serveur d'envoi
+  fournisseurs-courriel.js  Réglages SMTP devinés depuis les MX du domaine
   index.js      API HTTP et service des fichiers statiques
   seed.js       Jeu de données initial
 public/
@@ -417,6 +432,7 @@ test/
   indicateurs.test.js   Délai attendu, calcul des retards et des semaines dues
   composants.test.js    Les lanceurs vérifient bien toutes les dépendances
   configuration.test.js Lecture de configuration.txt, priorité de l'environnement
+  fournisseurs.test.js  Reconnaissance de l'hébergeur d'une adresse professionnelle
 scripts/
   tester-courriel.js    Essai d'envoi, et diagnostic des réglages SMTP
   importer-effectif.js  Chargement de l'effectif depuis le tableau d'affectation

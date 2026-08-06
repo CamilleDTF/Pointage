@@ -15,6 +15,7 @@ require('../server/configuration'); // reglages de configuration.txt
  */
 
 const C = require('../server/courriel');
+const Fournisseurs = require('../server/fournisseurs-courriel');
 
 const REGLAGES = [
   ['SMTP_HOTE', "l'adresse du serveur d'envoi, par exemple smtp.office365.com"],
@@ -27,9 +28,16 @@ const REGLAGES = [
 function expliquer(raison) {
   const texte = String(raison || '').toLowerCase();
   if (texte.includes('invalid login') || texte.includes('authentication') || texte.includes('535')) {
-    return "Le serveur a refuse le compte ou le mot de passe. Gmail et Microsoft 365 n'acceptent " +
-      "pas le mot de passe habituel : il faut creer un « mot de passe d'application » dans les " +
-      'reglages de securite du compte, et le coller dans SMTP_MOT_DE_PASSE.';
+    return "Le serveur a refuse le compte ou le mot de passe. Sur une messagerie professionnelle, " +
+      "c'est presque toujours l'une de ces trois causes : Microsoft 365 et Google Workspace " +
+      "n'acceptent pas le mot de passe habituel et reclament un « mot de passe d'application » ; " +
+      "l'organisation doit parfois autoriser l'authentification SMTP sur la boite utilisee ; " +
+      'ou le compte n a pas le droit d envoyer depuis cette adresse.';
+  }
+  if (texte.includes('5.7.') || texte.includes('not allowed') || texte.includes('sender')) {
+    return "Le serveur a accepte le compte mais refuse l'adresse d'expedition. Mettez la meme " +
+      'adresse dans SMTP_UTILISATEUR et COURRIEL_EXPEDITEUR : beaucoup de messageries ' +
+      "d'entreprise n'autorisent a envoyer que depuis l'adresse du compte connecte.";
   }
   if (texte.includes('enotfound') || texte.includes('eai_again')) {
     return "Le nom du serveur d'envoi est introuvable : verifiez SMTP_HOTE, une faute de frappe suffit.";
@@ -43,6 +51,51 @@ function expliquer(raison) {
       "d'entreprise : demandez au service informatique le nom exact a mettre dans SMTP_HOTE.";
   }
   return null;
+}
+
+/**
+ * Propose les reglages du domaine, lus dans ses enregistrements MX.
+ *
+ * « Que mettre dans SMTP_HOTE ? » n'a rien d'evident quand on ne l'a jamais
+ * demande, et attendre le service informatique coute des jours pour un
+ * renseignement de trente secondes. Le domaine de l'adresse le dit deja.
+ */
+async function proposerReglages(adresse) {
+  const resultat = await Fournisseurs.detecter(adresse);
+  if (!resultat.domaine) return;
+
+  console.log(`\n--- Reglages probables pour le domaine ${resultat.domaine} ---\n`);
+
+  if (resultat.trouve) {
+    const f = resultat.fournisseur;
+    console.log(`  Votre messagerie est hebergee chez ${f.nom}.`);
+    console.log('  A recopier dans configuration.txt :\n');
+    console.log(`    SMTP_HOTE=${f.hote}`);
+    console.log(`    SMTP_PORT=${f.port}`);
+    console.log(`    SMTP_UTILISATEUR=${adresse}`);
+    console.log('    SMTP_MOT_DE_PASSE=');
+    console.log(`    COURRIEL_EXPEDITEUR=${adresse}\n`);
+    console.log(`  ${f.note}`);
+    return;
+  }
+
+  if (resultat.suggestion) {
+    console.log(`  Hebergeur non reconnu. Le courrier de ce domaine arrive sur :`);
+    for (const nom of resultat.mx.slice(0, 3)) console.log(`    ${nom}`);
+    console.log(
+      `\n  C'est probablement un serveur interne a l'entreprise. Essayez d'abord\n` +
+        `    SMTP_HOTE=${resultat.suggestion}\n` +
+        '  et si le serveur refuse, demandez au service informatique le serveur\n' +
+        "  d'envoi (SMTP) et un compte autorise a envoyer depuis cette adresse."
+    );
+    return;
+  }
+
+  console.log(
+    `  Impossible de lire les enregistrements du domaine (${resultat.raison}).\n` +
+      "  Demandez au service informatique le serveur d'envoi (SMTP), son port,\n" +
+      '  et un compte autorise a envoyer depuis cette adresse.'
+  );
 }
 
 async function principal() {
@@ -63,6 +116,7 @@ async function principal() {
       '\nCes lignes se remplissent dans le fichier "configuration.txt", a cote de DEMARRER.bat.' +
         '\nSi ce fichier n existe pas encore, copiez "configuration-exemple.txt" sous ce nom.'
     );
+    await proposerReglages(destinataire);
     process.exitCode = 1;
     return;
   }

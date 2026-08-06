@@ -32,19 +32,38 @@ SMTP_UTILISATEUR=
 SMTP_MOT_DE_PASSE=
 COURRIEL_EXPEDITEUR=
 
-rem  Reglages courants, a recopier tels quels dans les lignes ci-dessus :
+rem  QUE METTRE DANS SMTP_HOTE ?
 rem
-rem    Microsoft 365 / Outlook   SMTP_HOTE=smtp.office365.com     SMTP_PORT=587
-rem    Google Workspace / Gmail  SMTP_HOTE=smtp.gmail.com         SMTP_PORT=587
-rem    OVH                       SMTP_HOTE=ssl0.ovh.net           SMTP_PORT=587
-rem    Orange Pro                SMTP_HOTE=smtp.orange.fr         SMTP_PORT=587
+rem  Vous n'avez pas a le deviner : lancez TESTER-COURRIEL.bat avec votre adresse
+rem  professionnelle. Le script lit le domaine de l'adresse, reconnait
+rem  l'hebergeur de la messagerie, et affiche les quatre lignes a recopier ici.
 rem
-rem  Attention : Gmail et Microsoft 365 refusent le mot de passe habituel du
-rem  compte. Il faut creer un "mot de passe d'application" dans les reglages de
-rem  securite du compte, et le coller dans SMTP_MOT_DE_PASSE. C'est une suite de
-rem  16 caracteres, propre a cette application, revocable a tout moment.
+rem  Reglages des hebergeurs les plus courants, si vous savez deja lequel :
 rem
-rem  Le port 465 fonctionne aussi chez la plupart des fournisseurs : l'application
+rem    Microsoft 365 / Exchange Online  SMTP_HOTE=smtp.office365.com   PORT=587
+rem    OVHcloud                         SMTP_HOTE=ssl0.ovh.net         PORT=587
+rem    IONOS (1&1)                      SMTP_HOTE=smtp.ionos.fr        PORT=587
+rem    Gandi                            SMTP_HOTE=mail.gandi.net       PORT=587
+rem    Infomaniak                       SMTP_HOTE=mail.infomaniak.com  PORT=587
+rem    Orange Pro                       SMTP_HOTE=smtp.orange.fr       PORT=587
+rem    Google Workspace                 SMTP_HOTE=smtp.gmail.com       PORT=587
+rem
+rem  Serveur interne a l'entreprise : le service informatique vous donnera le nom
+rem  du serveur d'envoi et un compte autorise a envoyer depuis cette adresse.
+rem
+rem  Deux points qui bloquent souvent une messagerie professionnelle :
+rem
+rem   1. Microsoft 365 et Google Workspace refusent le mot de passe habituel du
+rem      compte. Il faut un "mot de passe d'application", cree dans les reglages
+rem      de securite du compte : une suite de 16 caracteres, propre a cette
+rem      application, revocable a tout moment. Chez Microsoft, l'organisation
+rem      doit parfois d'abord autoriser l'authentification SMTP sur la boite.
+rem
+rem   2. Beaucoup d'entreprises imposent que l'adresse d'expedition soit celle du
+rem      compte utilise pour se connecter. En cas de refus du serveur, mettez la
+rem      meme adresse dans SMTP_UTILISATEUR et COURRIEL_EXPEDITEUR.
+rem
+rem  Le port 465 fonctionne aussi chez la plupart des hebergeurs : l'application
 rem  passe alors automatiquement en TLS direct.
 
 
