@@ -25,11 +25,13 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'pointage-courriel-
  */
 let muet;
 let port;
+let portMuet;
 
 test.before(async () => {
   muet = net.createServer(() => {}); // aucune banniere, aucune reponse
   await new Promise((resoudre) => muet.listen(0, '127.0.0.1', resoudre));
   port = muet.address().port;
+  portMuet = port;
 
   process.env.SMTP_HOTE = '127.0.0.1';
   process.env.SMTP_PORT = String(port);
@@ -136,4 +138,39 @@ test('le detail du dialogue ne contient jamais le mot de passe', async () => {
     try { decode = Buffer.from(morceau, 'base64').toString('utf8'); } catch { continue; }
     assert.ok(!decode.includes(MOT_DE_PASSE), `le mot de passe apparait encode : ${morceau}`);
   }
+});
+
+/*
+ * Coupe-circuit : un port bloque par le pare-feu ne se debloque pas entre deux
+ * fiches. Sans lui, chaque transmission ferait attendre son chef d'equipe le
+ * plafond entier, pour un echec connu d'avance.
+ */
+test('apres trois echecs de connexion, on cesse de faire attendre les chefs', async () => {
+  delete require.cache[require.resolve('../server/courriel')];
+  process.env.SMTP_PORT = String(portMuet);
+  process.env.SMTP_DELAI_MS = '400';
+  process.env.SMTP_COUPURE_MS = '60000';
+  delete process.env.SMTP_UTILISATEUR;
+  delete process.env.SMTP_TRACE;
+
+  const C = require('../server/courriel');
+  const message = { destinataire: 'conducteur@exemple.fr', sujet: 'x', html: '<p>x</p>', texte: 'x' };
+
+  for (let i = 1; i <= 3; i += 1) {
+    const essai = await C.envoyer(message);
+    assert.equal(essai.envoye, false, `l essai ${i} devait echouer`);
+    assert.match(essai.raison, /n'a pas repondu/);
+  }
+
+  // Le quatrieme n'attend plus : il repond aussitot, et depose le message.
+  const debut = Date.now();
+  const apres = await C.envoyer(message);
+  const duree = Date.now() - debut;
+
+  assert.equal(apres.envoye, false);
+  assert.match(apres.raison, /injoignable/);
+  assert.ok(duree < 200, `la reponse doit etre immediate, ici ${duree} ms`);
+  assert.ok(apres.fichier && fs.existsSync(apres.fichier), 'le message reste conserve sur disque');
+
+  C.fermer();
 });

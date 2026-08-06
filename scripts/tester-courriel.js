@@ -27,6 +27,7 @@ if (DETAILS) process.env.SMTP_TRACE = '1';
 
 const C = require('../server/courriel');
 const Fournisseurs = require('../server/fournisseurs-courriel');
+const Sonde = require('../server/sonde-port');
 
 /*
  * Seuls deux reglages sont indispensables. Le compte et le mot de passe ne le
@@ -230,6 +231,84 @@ function ecrireConfiguration(reglages, origine) {
   console.log('  Relancez TESTER-COURRIEL.bat pour envoyer un essai avec ces reglages.');
 }
 
+/**
+ * Ouvre une connexion vers le serveur configure avant d'essayer d'envoyer.
+ *
+ * Renvoie `true` si l'envoi peut etre tente. Sinon, dit ce qui bloque et, si un
+ * autre port du meme fournisseur repond, lequel prendre : « le 25 est ferme, le
+ * 587 est ouvert » est une conclusion, pas une piste.
+ */
+async function verifierLaPorte(destinataire) {
+  const hote = process.env.SMTP_HOTE;
+  const port = Number(process.env.SMTP_PORT) || 587;
+
+  process.stdout.write(`Verification de l acces a ${hote}:${port} ... `);
+  const essai = await Sonde.joignable(hote, port);
+
+  if (essai.ouvert) {
+    console.log(`ouvert (${essai.duree} ms)\n`);
+    return true;
+  }
+
+  console.log(essai.raison === 'silence' ? 'AUCUNE REPONSE\n' : `${essai.raison}\n`);
+  console.log('=== L ENVOI N A MEME PAS PU ETRE TENTE ===\n');
+
+  if (essai.raison === 'enotfound' || essai.raison === 'eai_again') {
+    console.log(`  Le nom "${hote}" est introuvable. Verifiez SMTP_HOTE dans configuration.txt :`);
+    console.log('  une faute de frappe suffit.\n');
+    return false;
+  }
+
+  /*
+   * Les deux echecs ne disent pas la meme chose. Un silence, c'est un pare-feu
+   * qui jette les paquets sans repondre. Un refus immediat, c'est que la porte
+   * existe mais que personne n'ecoute derriere : le port est le mauvais.
+   */
+  console.log(
+    essai.raison === 'silence'
+      ? `  Le port ${port} ne sort pas de cette machine : rien ne revient, la connexion\n` +
+        "  reste sans reponse. C'est la signature d'un pare-feu d'entreprise ou d'un\n" +
+        "  fournisseur d'acces qui bloque ce port. Ce n'est ni un probleme de compte,\n" +
+        '  ni de mot de passe : la conversation ne commence jamais.\n'
+      : `  La connexion au port ${port} a ete refusee immediatement : le serveur repond,\n` +
+        "  mais rien n'ecoute sur ce port. C'est le numero de port qui est en cause,\n" +
+        '  pas le pare-feu.\n'
+  );
+
+  // Le port 25 bloque est la regle, pas l'exception. Reste a savoir si le 587
+  // passe, auquel cas la reponse est toute trouvee.
+  const alternatifs = [587, 465, 25].filter((p) => p !== port);
+  const detection = await Fournisseurs.detecter(process.env.COURRIEL_EXPEDITEUR || destinataire);
+  const hoteAuthentifie = detection.trouve ? detection.fournisseur.hote : hote;
+
+  console.log(`  Recherche d un port ouvert vers ${hoteAuthentifie} :\n`);
+  const resultats = await Sonde.sonderPorts(hoteAuthentifie, alternatifs);
+  for (const r of resultats) {
+    console.log(`    port ${String(r.port).padEnd(4)} ${r.ouvert ? 'OUVERT' : 'ferme'}`);
+  }
+  console.log('');
+
+  const ouvert = resultats.find((r) => r.ouvert);
+  if (!ouvert) {
+    console.log(
+      "  Aucun port d'envoi ne sort de cette machine. Demandez au service informatique\n" +
+        `  l'autorisation de joindre ${hoteAuthentifie} sur le port 587, en expliquant que\n` +
+        "  l'application doit envoyer les demandes de visa aux conducteurs de travaux.\n"
+    );
+    return false;
+  }
+
+  console.log(`  Le port ${ouvert.port} repond. Remplacez ces lignes dans configuration.txt :\n`);
+  console.log(`    SMTP_HOTE=${hoteAuthentifie}`);
+  console.log(`    SMTP_PORT=${ouvert.port}`);
+  console.log(`    SMTP_UTILISATEUR=${process.env.COURRIEL_EXPEDITEUR || destinataire}`);
+  console.log('    SMTP_MOT_DE_PASSE=<mot de passe d application>');
+  console.log(`    COURRIEL_EXPEDITEUR=${process.env.COURRIEL_EXPEDITEUR || destinataire}\n`);
+  if (detection.trouve) console.log(`  ${detection.fournisseur.note}\n`);
+
+  return false;
+}
+
 async function principal() {
   const arguments_ = process.argv.slice(2);
   const preparer = arguments_.includes('--preparer');
@@ -250,6 +329,14 @@ async function principal() {
       '\nCes lignes se remplissent dans le fichier "configuration.txt", a cote de DEMARRER.bat.'
     );
     await proposerReglages(destinataire, { preparer });
+    process.exitCode = 1;
+    return;
+  }
+
+  // Avant tout envoi : la porte est-elle ouverte ? Sinon, vingt secondes
+  // d'attente pour apprendre « le serveur n'a pas repondu », alors qu'une
+  // ouverture de connexion tranche en trois.
+  if (!(await verifierLaPorte(destinataire))) {
     process.exitCode = 1;
     return;
   }

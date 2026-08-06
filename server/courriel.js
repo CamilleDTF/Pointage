@@ -111,6 +111,27 @@ function deposer(destinataire, sujet, html) {
   return path.join(DOSSIER_COURRIELS, nom);
 }
 
+/*
+ * Coupe-circuit sur les pannes de connexion.
+ *
+ * Un port bloque par le pare-feu ne se debloque pas tout seul entre deux
+ * fiches : chaque transmission attendrait vingt secondes pour rien. Apres trois
+ * echecs de connexion d'affilee, on cesse d'essayer pendant dix minutes et les
+ * messages vont directement sur le disque — le chef d'equipe a sa reponse
+ * aussitot, et le directeur garde le lien de visa a transmettre.
+ *
+ * Seules les pannes de connexion comptent. Un destinataire refuse est un
+ * probleme de ce message-la, pas du serveur : il ne doit rien couper.
+ */
+const ECHECS_AVANT_COUPURE = 3;
+const DUREE_COUPURE_MS = Number(process.env.SMTP_COUPURE_MS) || 10 * 60 * 1000;
+
+const coupeCircuit = { echecs: 0, ferme: 0 };
+
+const panneDeConnexion = (erreur) =>
+  ['ETIMEDOUT', 'ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ESOCKET'].includes(erreur.code) ||
+  /n'a pas repondu/.test(erreur.message || '');
+
 async function envoyer({ destinataire, sujet, html, texte }) {
   if (!destinataire) return { envoye: false, raison: 'aucune adresse' };
 
@@ -121,12 +142,37 @@ async function envoyer({ destinataire, sujet, html, texte }) {
     return { envoye: false, raison, fichier };
   }
 
+  if (Date.now() < coupeCircuit.ferme) {
+    const fichier = deposer(destinataire, sujet, html);
+    const minutes = Math.ceil((coupeCircuit.ferme - Date.now()) / 60000);
+    console.warn(
+      `Serveur d'envoi injoignable : nouvel essai dans ${minutes} min. Message depose dans ${fichier}`
+    );
+    return { envoye: false, raison: `serveur d'envoi injoignable (nouvel essai dans ${minutes} min)`, fichier };
+  }
+
   try {
     await avecDelai(
       transport.sendMail({ from: CONFIG.expediteur, to: destinataire, subject: sujet, html, text: texte })
     );
+    coupeCircuit.echecs = 0;
     return { envoye: true };
   } catch (erreur) {
+    if (panneDeConnexion(erreur)) {
+      coupeCircuit.echecs += 1;
+      if (coupeCircuit.echecs >= ECHECS_AVANT_COUPURE) {
+        coupeCircuit.ferme = Date.now() + DUREE_COUPURE_MS;
+        coupeCircuit.echecs = 0;
+        console.error(
+          `Serveur d'envoi injoignable ${ECHECS_AVANT_COUPURE} fois de suite : les messages sont ` +
+            `deposes sur disque pendant ${Math.round(DUREE_COUPURE_MS / 60000)} minutes, sans faire ` +
+            'attendre les chefs d equipe.'
+        );
+      }
+    } else {
+      // Le serveur repond : la connexion va bien, c'est ce message qui est refuse.
+      coupeCircuit.echecs = 0;
+    }
     // Un envoi qui echoue ne doit jamais faire perdre la transmission de la
     // fiche : on garde une trace lisible et on le dit a l'appelant.
     const fichier = deposer(destinataire, sujet, html);
