@@ -265,6 +265,14 @@ le directeur qui doit s'en occuper. Les libellés suivent le rôle
 - Indicateurs de la semaine : fiches validées, à vérifier, manquantes, salariés
   pointés, total des heures.
 - Suivi des 8 chefs : qui a rendu, qui reste à relancer.
+- **Vue de l'année**, dépliable : une ligne par chef, une case par semaine.
+  Le tableau de bord montre une semaine à la fois — il répond à *qui doit encore
+  rendre sa fiche cette semaine*, jamais à *qui traîne depuis un mois*. Un trou de
+  trois semaines chez un chef ne se voyait qu'en changeant trois fois de semaine ;
+  ici il se lit d'un coup d'œil. La couleur donne l'état, l'infobulle le chantier
+  et le total, un clic ouvre la semaine dans le tableau de bord. Le bloc s'ouvre
+  de lui-même sur grand écran et reste replié ailleurs : c'est un complément, pas
+  un passage obligé.
 - Chaque fiche s'ouvre dans une **grille modifiable** (jour par jour, primes,
   observations) enregistrée automatiquement à chaque frappe.
 - Actions : **Valider**, **Renvoyer au chef** (avec motif), **Rouvrir**,
@@ -380,8 +388,7 @@ français l'ouvre directement).
 ```
 server/
   domaine.js    Point d'entrée des règles métier (réexporte public/js/regles.js)
-  mensuel.js    Agrégation d'un mois de paie par salarié et par semaine
-  export-mensuel.js  Classeur mensuel au format du tableau interne du directeur
+  configuration.js  Lecture de configuration.txt, avant tout le reste
   db.js         Schéma SQLite et journal des actions
   auth.js       Sessions signées, codes PIN, limitation des tentatives
   fiches.js     Cycle de vie d'une fiche : création, saisie, transmission, validation
@@ -409,6 +416,12 @@ test/
   cloisonnement.test.js Cloisonnement des accès par code, bout en bout sur l'API
   indicateurs.test.js   Délai attendu, calcul des retards et des semaines dues
   composants.test.js    Les lanceurs vérifient bien toutes les dépendances
+  configuration.test.js Lecture de configuration.txt, priorité de l'environnement
+scripts/
+  tester-courriel.js    Essai d'envoi, et diagnostic des réglages SMTP
+  importer-effectif.js  Chargement de l'effectif depuis le tableau d'affectation
+  verifier-composants.js  Les dépendances installées correspondent-elles ?
+  construire-demo.js    Fabrication de la page de démonstration autonome
 Dockerfile, docker-compose.yml   Installation en une commande sur votre machine
 ```
 

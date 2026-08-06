@@ -421,6 +421,74 @@ input[readonly] { background: #f7f9fc; color: var(--gris-texte); }
   .etats-resume { margin-left: 0; }
 }
 
+/* ------------------- Vue de l'année, tous les chefs ----------------------- */
+
+/* Une ligne par chef, une colonne par semaine. Cinquante-deux colonnes ne
+   tiennent sur aucun écran : la grille défile, la colonne des noms reste. */
+.calendrier-general { overflow-x: auto; padding-bottom: 4px; }
+.calendrier-general table { border-collapse: separate; border-spacing: 0; }
+.calendrier-general th,
+.calendrier-general td { padding: 0; border: none; }
+
+.calendrier-general .nom-chef {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #fff;
+  padding: 3px 12px 3px 2px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-align: left;
+  box-shadow: 1px 0 0 var(--gris-bord);
+}
+.calendrier-general thead .nom-chef { background: #fff; }
+
+.calendrier-general .entete-mois {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gris-texte);
+  font-weight: 700;
+  text-align: left;
+  padding: 0 0 3px 2px;
+  border-bottom: 1px solid var(--gris-bord);
+}
+.calendrier-general .entete-semaine {
+  font-size: 0.6rem;
+  color: var(--gris-texte);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  padding-bottom: 3px;
+}
+
+/* Chaque case est un bouton : la couleur dit l'état, l'infobulle le détaille. */
+.case-annee {
+  width: 17px;
+  height: 17px;
+  margin: 1px;
+  padding: 0;
+  border: 1px solid var(--gris-bord);
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+}
+.case-annee:hover { outline: 2px solid var(--bleu-clair); outline-offset: 1px; }
+.case-annee.avenir       { background: #fbfcfd; border-style: dotted; opacity: 0.55; }
+.case-annee.horsPerimetre { background: #fbfcfd; border-style: dotted; opacity: 0.3; }
+.case-annee.manquante    { background: #fff; border-style: dashed; border-color: #b7c0cc; }
+.case-annee.brouillon    { background: var(--orange); border-color: var(--orange); }
+.case-annee.soumise      { background: var(--bleu-clair); border-color: var(--bleu-clair); }
+.case-annee.attenteVisa  { background: #7d5bbe; border-color: #7d5bbe; }
+.case-annee.visee        { background: #a9c9e4; border-color: var(--bleu-clair); }
+.case-annee.rejetee      { background: var(--rouge); border-color: var(--rouge); }
+.case-annee.validee      { background: var(--vert); border-color: var(--vert); }
+.case-annee.courante     { box-shadow: 0 0 0 2px var(--orange); }
+
+.legende-annee { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; align-items: center; }
+.legende-annee span { display: flex; align-items: center; gap: 5px; font-size: 0.76rem; color: var(--gris-texte); }
+.legende-annee .case-annee { cursor: default; }
+
 /* ------------------- Grille de saisie (PC portable) ---------------------- */
 
 .grille-pointage { font-size: 0.86rem; }

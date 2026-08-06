@@ -194,6 +194,104 @@ app.get('/api/calendrier', A.exigerConnexion, (req, res) => {
   });
 });
 
+/**
+ * La meme lecture de l'annee, mais pour les huit chefs d'equipe a la fois : une
+ * ligne par chef, une colonne par semaine.
+ *
+ * Le tableau de bord montre une semaine a la fois, ce qui repond a « qui doit
+ * encore rendre sa fiche cette semaine » mais jamais a « qui traine depuis un
+ * mois ». Un trou de trois semaines chez un chef ne se voit qu'en changeant
+ * trois fois de semaine ; ici il se lit d'un coup d'oeil.
+ */
+app.get('/api/calendrier-general', A.exigerDirecteur, (req, res) => {
+  const courante = D.semaineISO(new Date());
+  const annee = Number(req.query.annee) || courante.annee;
+  if (!Number.isInteger(annee) || annee < 2020 || annee > 2100) {
+    return res.status(400).json({ erreur: 'Annee invalide.' });
+  }
+
+  const chefs = db
+    .prepare("SELECT id, nom FROM utilisateurs WHERE role = 'chef' AND actif = 1 ORDER BY nom")
+    .all();
+
+  // Une seule lecture des fiches de l'annee, rangee par chef puis par semaine :
+  // huit chefs sur cinquante-deux semaines feraient sinon autant de requetes.
+  const parChef = new Map(chefs.map((c) => [c.id, new Map()]));
+  for (const fiche of F.listerFiches({ annee })) {
+    const semaines = parChef.get(fiche.chef_id);
+    if (!semaines) continue; // fiche d'un chef desactive depuis
+    // Un chef peut avoir deux chantiers la meme semaine : la case retient l'etat
+    // le moins avance, celui qui reclame encore quelque chose.
+    const dejaLa = semaines.get(fiche.semaine);
+    semaines.set(fiche.semaine, dejaLa ? [...dejaLa, fiche] : [fiche]);
+  }
+
+  const semaines = [];
+  for (let s = 1; s <= D.nombreSemainesISO(annee); s += 1) {
+    const dates = D.datesDeLaSemaine(annee, s);
+    semaines.push({
+      semaine: s,
+      debut: dates[0],
+      fin: dates[6],
+      mois: Number(dates[3].slice(5, 7)),
+      courante: annee === courante.annee && s === courante.semaine,
+      future: annee > courante.annee || (annee === courante.annee && s > courante.semaine),
+      avantService: D.semaineAvantService(dates[6], DEBUT_SERVICE),
+    });
+  }
+
+  // Ordre de priorite : ce qui reclame une action passe devant ce qui est fait.
+  const RANG = ['rejetee', 'brouillon', 'soumise', 'validee'];
+  const moinsAvance = (fiches) =>
+    fiches.map((f) => D.etatAffiche(f)).sort((a, b) => {
+      const ra = RANG.indexOf(a) === -1 ? RANG.indexOf('soumise') : RANG.indexOf(a);
+      const rb = RANG.indexOf(b) === -1 ? RANG.indexOf('soumise') : RANG.indexOf(b);
+      return ra - rb;
+    })[0];
+
+  const lignes = chefs.map((chef) => {
+    const sesFiches = parChef.get(chef.id);
+    const cases = semaines.map((s) => {
+      const fiches = sesFiches.get(s.semaine);
+      if (!fiches) {
+        return {
+          semaine: s.semaine,
+          etat: s.avantService ? 'horsPerimetre' : s.future ? 'avenir' : 'manquante',
+        };
+      }
+      return {
+        semaine: s.semaine,
+        etat: moinsAvance(fiches),
+        chantiers: fiches.map((f) => f.chantier).filter(Boolean),
+        minutes: fiches.reduce((t, f) => t + (Number(f.total_minutes) || 0), 0),
+      };
+    });
+
+    const compter = (etat) => cases.filter((c) => c.etat === etat).length;
+    return {
+      chef_id: chef.id,
+      nom: chef.nom,
+      cases,
+      totaux: {
+        manquante: compter('manquante'),
+        brouillon: compter('brouillon'),
+        soumise: compter('soumise') + compter('attenteVisa') + compter('visee'),
+        rejetee: compter('rejetee'),
+        validee: compter('validee'),
+      },
+    };
+  });
+
+  res.json({
+    annee,
+    semaineCourante: courante,
+    debutService: DEBUT_SERVICE,
+    delaiJours: I.DELAI_ATTENDU_JOURS,
+    semaines,
+    chefs: lignes,
+  });
+});
+
 /* --------------------------------- Fiches --------------------------------- */
 
 app.get('/api/fiches', A.exigerConnexion, (req, res) => {

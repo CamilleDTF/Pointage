@@ -342,6 +342,9 @@
     const liste = [...parSalarie.values()].sort((a, b) => `${a.nom}`.localeCompare(b.nom, 'fr'));
     return {
       annee, mois, version, montantPanier,
+      // La case "Mois" du classeur de paie : jours ouvres du mois x 7 h.
+      joursOuvres: R.joursOuvresDuMois(annee, mois),
+      heuresReference: R.heuresReferenceMois(annee, mois),
       semaines: semaines.map((s) => ({ annee: s.annee, semaine: s.semaine, debut: s.dates[0] })),
       salaries: liste.map((s) => (version === 'direction' ? { ...s, ...valoriser(s, montantPanier) } : s)),
     };
@@ -481,6 +484,72 @@
           rejetee: compter('rejetee'),
           validee: compter('validee'),
         },
+      };
+    }],
+
+    ['GET', /^\/api\/calendrier-general$/, (m, corps, params) => {
+      exigerDirecteur();
+      const courante = R.semaineISO(new Date());
+      const annee = Number(params.get('annee')) || courante.annee;
+
+      const semaines = [];
+      for (let s = 1; s <= R.nombreSemainesISO(annee); s += 1) {
+        const dates = R.datesDeLaSemaine(annee, s);
+        semaines.push({
+          semaine: s,
+          debut: dates[0],
+          fin: dates[6],
+          mois: Number(dates[3].slice(5, 7)),
+          courante: annee === courante.annee && s === courante.semaine,
+          future: annee > courante.annee || (annee === courante.annee && s > courante.semaine),
+          avantService: R.semaineAvantService(dates[6], R.DEBUT_SERVICE_PAR_DEFAUT),
+        });
+      }
+
+      const RANG = ['rejetee', 'brouillon', 'soumise', 'validee'];
+      const rang = (etat) => (RANG.indexOf(etat) === -1 ? RANG.indexOf('soumise') : RANG.indexOf(etat));
+
+      const chefs = utilisateurs
+        .filter((x) => x.role === 'chef' && x.actif)
+        .map((chef) => {
+          const siennes = fiches.filter((f) => f.chef_id === chef.id && f.annee === annee);
+          const cases = semaines.map((s) => {
+            const duJour = siennes.filter((f) => f.semaine === s.semaine);
+            if (!duJour.length) {
+              return {
+                semaine: s.semaine,
+                etat: s.avantService ? 'horsPerimetre' : s.future ? 'avenir' : 'manquante',
+              };
+            }
+            const etats = duJour.map((f) => R.etatAffiche(f)).sort((a, b) => rang(a) - rang(b));
+            return {
+              semaine: s.semaine,
+              etat: etats[0],
+              chantiers: duJour.map((f) => f.chantier).filter(Boolean),
+              minutes: duJour.reduce((t, f) => t + (resumer(f).total_minutes || 0), 0),
+            };
+          });
+          const compter = (etat) => cases.filter((c) => c.etat === etat).length;
+          return {
+            chef_id: chef.id,
+            nom: chef.nom,
+            cases,
+            totaux: {
+              manquante: compter('manquante'),
+              brouillon: compter('brouillon'),
+              soumise: compter('soumise') + compter('attenteVisa') + compter('visee'),
+              rejetee: compter('rejetee'),
+              validee: compter('validee'),
+            },
+          };
+        });
+
+      return {
+        annee,
+        semaineCourante: courante,
+        debutService: R.DEBUT_SERVICE_PAR_DEFAUT,
+        semaines,
+        chefs,
       };
     }],
 
@@ -795,6 +864,19 @@
       if (String(corps.pin || '') !== u.pin) erreur(401, 'Code incorrect.');
       billetPaie = `billet-${Date.now()}`;
       return { billet: billetPaie };
+    }],
+
+    ['GET', /^\/api\/export\/mois-apercu$/, (m, corps, params) => {
+      exigerDirecteur();
+      const annee = Number(params.get('annee'));
+      const mois = Number(params.get('mois'));
+      const apercu = moisDemonstration(annee, mois, 'public', 0);
+      return {
+        annee, mois,
+        semaines: apercu.semaines,
+        nbSalaries: apercu.salaries.length,
+        minutes: apercu.salaries.reduce((t, s) => t + s.minutesMois, 0),
+      };
     }],
 
     ['GET', /^\/api\/mois$/, (m, corps, params) => {

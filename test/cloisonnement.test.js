@@ -707,3 +707,46 @@ test('le chef choisit lui-meme le conducteur, et son choix l emporte', async () 
   assert.equal(db.prepare('SELECT visa_courriel FROM fiches WHERE id = ?').get(fiche.id).visa_courriel,
     'sophie@exemple.fr');
 });
+
+/*
+ * Vue de l'annee du directeur : une ligne par chef, une case par semaine. Elle
+ * repond a une question que le tableau de bord ne pose jamais — qui traine
+ * depuis un mois — et elle ne doit s'ouvrir qu'a la direction.
+ */
+test('la vue de l annee montre tous les chefs, et reste fermee aux chefs', async () => {
+  const d = await connexion('dir', '9999');
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+  db.exec('DELETE FROM conducteurs');
+
+  await ficheTransmise(a, 26);
+  const validee = await ficheTransmise(a, 27);
+  await d('POST', `/api/fiches/${validee.id}/decision`, { decision: 'valider' });
+
+  const vue = (await d('GET', '/api/calendrier-general?annee=2026')).corps;
+  assert.equal(vue.annee, 2026);
+  assert.equal(vue.semaines.length, 53); // 2026 compte 53 semaines ISO
+  assert.deepEqual(vue.chefs.map((c) => c.nom), ['CHEF A', 'CHEF B']);
+
+  const ligneA = vue.chefs.find((c) => c.nom === 'CHEF A');
+  const etat = (semaine) => ligneA.cases.find((c) => c.semaine === semaine).etat;
+  assert.equal(etat(26), 'soumise');
+  assert.equal(etat(27), 'validee');
+  assert.equal(ligneA.cases.find((c) => c.semaine === 27).chantiers[0], 'Chantier visa');
+  assert.equal(ligneA.totaux.validee, 1);
+
+  // Le chef B n'a rien rendu : ses semaines echues sont manquantes, jamais nulles.
+  const ligneB = vue.chefs.find((c) => c.nom === 'CHEF B');
+  assert.equal(ligneB.cases.length, 53);
+  assert.ok(ligneB.cases.every((c) => c.etat));
+
+  // Une case ne porte aucun montant : cette vue sert au suivi, pas a la paie.
+  assert.deepEqual(
+    Object.keys(ligneA.cases.find((c) => c.semaine === 27)).sort(),
+    ['chantiers', 'etat', 'minutes', 'semaine']
+  );
+
+  // Et un chef d'equipe n'y a pas acces : il verrait le travail de ses collegues.
+  assert.equal((await a('GET', '/api/calendrier-general?annee=2026')).statut, 403);
+  assert.equal((await d('GET', '/api/calendrier-general?annee=1999')).statut, 400);
+});

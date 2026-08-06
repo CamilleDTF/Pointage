@@ -37,8 +37,21 @@ async function demarrer() {
   $('entete-nom').textContent = `${utilisateur.nom} · version ${reference.version}`;
   $('annee').value = reference.semaineCourante.annee;
   $('semaine').value = reference.semaineCourante.semaine;
+
+  // La vue de l'annee est facultative : elle s'ouvre sur grand ecran, ou le
+  // tableau de bord n'en souffre pas, et reste repliee ailleurs.
+  poser('annee-calendrier', (e) => { e.value = reference.semaineCourante.annee; });
+  poser('bloc-calendrier-general', (e) => { e.open = window.innerWidth >= 1100; });
+
   await charger();
   await apercuMois();
+  await chargerCalendrierGeneral();
+}
+
+/** Applique une action a un element, s'il existe sur la page. */
+function poser(id, action) {
+  const element = $(id);
+  if (element) action(element);
 }
 
 /** Ce que contient le mois en cours, annonce sur le tableau de bord. */
@@ -69,6 +82,126 @@ surClic('btn-export-xlsx', () => exporter('xlsx'));
 surClic('btn-export-csv', () => exporter('csv'));
 for (const bouton of ['btn-mensuel', 'btn-mensuel-haut']) {
   surClic(bouton, () => { location.href = '/mensuel.html'; });
+}
+
+surEvenement('annee-calendrier', 'change', chargerCalendrierGeneral);
+
+/* ------------------- Vue de l'annee, tous les chefs ----------------------- */
+
+/*
+ * Le tableau de bord montre une semaine a la fois : il repond a « qui doit
+ * encore rendre sa fiche cette semaine », jamais a « qui traine depuis un
+ * mois ». Une ligne par chef et une colonne par semaine repondent a la seconde
+ * question d'un coup d'oeil, et un clic ouvre la semaine concernee.
+ */
+const ETATS_LEGENDE = ['manquante', 'brouillon', 'soumise', 'attenteVisa', 'visee', 'rejetee', 'validee'];
+
+async function chargerCalendrierGeneral() {
+  const zone = $('calendrier-general');
+  if (!zone) return;
+
+  const annee = Number($('annee-calendrier').value);
+  let donnees;
+  try {
+    donnees = await API.get(`/api/calendrier-general?annee=${annee}`);
+  } catch (e) {
+    zone.innerHTML = `<p class="vide">${echapper(e.message)}</p>`;
+    return;
+  }
+
+  if (!donnees.chefs.length) {
+    zone.innerHTML = '<p class="vide">Aucun chef d\'équipe actif.</p>';
+    return;
+  }
+
+  // Les semaines se regroupent sous le mois de leur jeudi, comme dans le
+  // calendrier du chef : un intitule tous les quatre ou cinq numeros suffit a
+  // se reperer sans surcharger l'en-tete.
+  const largeurMois = new Map();
+  for (const s of donnees.semaines) largeurMois.set(s.mois, (largeurMois.get(s.mois) || 0) + 1);
+
+  const enteteMois = [...largeurMois.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([mois, largeur]) => `<th class="entete-mois" colspan="${largeur}">${Regles.MOIS[mois - 1].slice(0, 4)}</th>`)
+    .join('');
+
+  const enteteSemaines = donnees.semaines
+    .map((s) => `<th class="entete-semaine">${s.semaine % 5 === 0 ? s.semaine : ''}</th>`)
+    .join('');
+
+  const lignes = donnees.chefs
+    .map((chef) => {
+      const cases = chef.cases
+        .map((c, i) => {
+          const s = donnees.semaines[i];
+          const chantiers = (c.chantiers || []).join(' / ');
+          const titre = `${chef.nom} — S${String(s.semaine).padStart(2, '0')} du ${jourMois(s.debut)} au ${jourMois(s.fin)}` +
+            `\n${etiquetteStatut(c.etat)}${chantiers ? `\n${chantiers}` : ''}` +
+            `${c.minutes ? `\n${versTexte(c.minutes)}` : ''}`;
+          return `<td><button type="button" class="case-annee ${c.etat}${s.courante ? ' courante' : ''}"
+                    data-semaine="${s.semaine}" title="${echapper(titre)}"
+                    aria-label="${echapper(titre)}"></button></td>`;
+        })
+        .join('');
+      // Un seul chiffre a cote du nom : ce qui reclame encore quelque chose.
+      const reste = chef.totaux.manquante + chef.totaux.rejetee;
+      return `<tr>
+        <th class="nom-chef" scope="row">${echapper(chef.nom)}${
+          reste
+            ? ` <span class="etat manquante" title="${reste} semaine(s) non commencée(s) ou à corriger">${reste}</span>`
+            : ''
+        }</th>
+        ${cases}
+      </tr>`;
+    })
+    .join('');
+
+  zone.innerHTML = `
+    <div class="calendrier-general">
+      <table>
+        <thead>
+          <tr><th class="nom-chef"></th>${enteteMois}</tr>
+          <tr><th class="nom-chef"></th>${enteteSemaines}</tr>
+        </thead>
+        <tbody>${lignes}</tbody>
+      </table>
+    </div>
+    <div class="legende-annee">
+      ${ETATS_LEGENDE.map(
+        (etat) => `<span><span class="case-annee ${etat}"></span>${echapper(etiquetteStatut(etat))}</span>`
+      ).join('')}
+    </div>`;
+
+  const cumul = (champ) => donnees.chefs.reduce((t, c) => t + c.totaux[champ], 0);
+  poser('resume-calendrier-general', (resume) => {
+    resume.innerHTML = [
+      ['rejetee', cumul('rejetee')],
+      ['manquante', cumul('manquante')],
+      ['brouillon', cumul('brouillon')],
+      ['soumise', cumul('soumise')],
+      ['validee', cumul('validee')],
+    ]
+      .filter(([, nombre]) => nombre > 0)
+      .map(([etat, nombre]) => `<span class="etat ${etat}">${nombre} ${echapper(etiquetteStatut(etat))}</span>`)
+      .join('');
+  });
+
+  poser('note-calendrier-general', (note) => {
+    note.textContent =
+      `Une ligne par chef d'équipe, une case par semaine. Cliquez sur une case pour ouvrir cette semaine. ` +
+      (donnees.debutService
+        ? `Les semaines antérieures au ${dateFrancaise(donnees.debutService)} étaient pointées sur papier.`
+        : '');
+  });
+
+  zone.querySelectorAll('.case-annee[data-semaine]').forEach((bouton) => {
+    bouton.addEventListener('click', () => {
+      $('annee').value = donnees.annee;
+      $('semaine').value = bouton.dataset.semaine;
+      charger();
+      $('periode').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
 }
 
 function decalerSemaine(pas) {
