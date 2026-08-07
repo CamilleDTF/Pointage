@@ -208,7 +208,7 @@ app.get('/api/calendrier', A.exigerConnexion, (req, res) => {
  * Reserve a la direction : chaque ligne dit ou etait chaque salarie, ce qu'aucun
  * chef d'equipe n'a a savoir de l'equipe d'un autre.
  */
-app.get('/api/calendrier-mensuel', A.exigerDirecteur, (req, res) => {
+app.get('/api/calendrier-mensuel', A.exigerDirecteurOuConducteur, (req, res) => {
   const annee = Number(req.query.annee);
   const mois = Number(req.query.mois);
   if (!Number.isInteger(annee) || annee < 2020 || annee > 2100) {
@@ -224,7 +224,7 @@ app.get('/api/calendrier-mensuel', A.exigerDirecteur, (req, res) => {
   });
 });
 
-app.get('/api/conges', A.exigerDirecteur, (req, res) => {
+app.get('/api/conges', A.exigerDirecteurOuConducteur, (req, res) => {
   res.json({ conges: CAL.listerConges({ depuis: req.query.depuis || null }), motifs: CAL.MOTIFS_CONGE });
 });
 
@@ -430,11 +430,67 @@ app.get('/api/visa/:jeton', (req, res) => {
 });
 
 app.post('/api/visa/:jeton/decision', (req, res) => {
-  const decision = req.body.decision;
-  if (decision === 'viser') return repondre(res, V.viser(req.params.jeton, req.body.commentaire));
-  if (decision === 'renvoyer') return repondre(res, V.renvoyer(req.params.jeton, req.body.commentaire));
-  res.status(400).json({ erreur: 'Decision inconnue.' });
+  decider(res, V.ficheDuJeton(req.params.jeton), req.body);
 });
+
+/* --------------------- Espace du conducteur de travaux --------------------- */
+
+/*
+ * Les memes gestes, par compte plutot que par lien signe.
+ *
+ * Un conducteur connecte est reconnu pour ce qu'il est : il n'a plus besoin
+ * qu'on lui envoie un secret par fiche. Son perimetre se lit sur la fiche —
+ * celles ou le chef l'a designe — et non sur un rattachement fixe : un chef peut
+ * changer de conducteur d'une semaine a l'autre, ou en avoir deux a la fois s'il
+ * tient deux chantiers.
+ */
+function exigerConducteur(req, res, next) {
+  if (!req.utilisateur) return res.status(401).json({ erreur: 'Session expiree, reconnectez-vous.' });
+  if (req.utilisateur.role !== 'conducteur') {
+    return res.status(403).json({ erreur: 'Action reservee au conducteur de travaux.' });
+  }
+  next();
+}
+
+app.get('/api/conducteur/moi', exigerConducteur, (req, res) => {
+  repondre(res, V.tableauConducteur(req.utilisateur));
+});
+
+app.get('/api/visa/fiche/:id', exigerConducteur, (req, res) => {
+  const acces = V.ficheDuConducteur(req.utilisateur, req.params.id);
+  if (acces.erreur) return res.status(acces.code || 403).json({ erreur: acces.erreur });
+  res.json({
+    fiche: {
+      ...V.vueConducteur(acces.fiche),
+      // Il peut corriger tant que la fiche attend son visa, et pas au-dela :
+      // une fiche visee ou validee ne se retouche plus de son cote.
+      modifiable: acces.fiche.statut === 'soumise' && acces.fiche.visa_statut === 'attente',
+    },
+    reference: { joursCourts: D.JOURS_COURTS, codesAbsence: D.CODES_ABSENCE },
+  });
+});
+
+/*
+ * La correction des heures. Le conducteur controle le pointage : lui interdire
+ * de rectifier une erreur l'obligerait a renvoyer la fiche entiere au chef pour
+ * une virgule. Il ne peut toucher qu'aux heures, et seulement tant que la fiche
+ * attend son visa — la validation finale reste au directeur.
+ */
+app.put('/api/visa/fiche/:id/heures', exigerConducteur, (req, res) => {
+  repondre(res, V.corrigerHeures(req.utilisateur, req.params.id, req.body.lignes));
+});
+
+app.post('/api/visa/fiche/:id/decision', exigerConducteur, (req, res) => {
+  decider(res, V.ficheDuConducteur(req.utilisateur, req.params.id), req.body, req.utilisateur);
+});
+
+/* Viser ou renvoyer : le geste ne depend pas de la facon dont on est arrive. */
+function decider(res, acces, corps, utilisateur = null) {
+  const decision = corps.decision;
+  if (decision === 'viser') return repondre(res, V.viser(acces, corps.commentaire, utilisateur));
+  if (decision === 'renvoyer') return repondre(res, V.renvoyer(acces, corps.commentaire, utilisateur));
+  res.status(400).json({ erreur: 'Decision inconnue.' });
+}
 
 /*
  * Le lien personnel d'un conducteur : ses fiches en attente de visa.
@@ -445,7 +501,7 @@ app.post('/api/visa/:jeton/decision', (req, res) => {
  * pour toutes.
  */
 app.get('/api/conducteur/:cle', (req, res) => {
-  repondre(res, V.tableauConducteur(req.params.cle));
+  repondre(res, V.tableauConducteurParLien(req.params.cle));
 });
 
 /* ------------------------ Conducteurs de travaux --------------------------- */

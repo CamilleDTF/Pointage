@@ -18,7 +18,7 @@
 
   <main>
     <section class="carte" id="bloc-erreur" hidden>
-      <h2>Ce lien n'est plus utilisable</h2>
+      <h2 id="titre-erreur">Ce lien n'est plus utilisable</h2>
       <p class="aide" id="texte-erreur"></p>
       <p class="aide">
         Demandez au chef d'équipe de retransmettre sa fiche, ou au directeur de vous
@@ -49,6 +49,28 @@
           <table class="grille-pointage" id="grille"></table>
         </div>
         <p class="aide" id="observations" style="margin-top:12px"></p>
+      </section>
+
+      <!--
+        La correction n'apparaît que pour un conducteur connecté, sur une fiche
+        qui attend encore son visa. Par lien signé, l'écran reste en lecture.
+      -->
+      <section class="carte masque" id="bloc-correction">
+        <h2>Corriger les heures</h2>
+        <p class="aide">
+          Les cases du tableau ci-dessus sont modifiables : vous pouvez rectifier une
+          journée, la route ou le trajet sans renvoyer la fiche au chef d'équipe. Le
+          reste — chantier, primes, signatures — ne se corrige pas ici.
+        </p>
+        <p class="aide">
+          Chaque correction est inscrite au journal de la fiche avec votre nom, l'avant
+          et l'après : les opérateurs ont signé une version du pointage, et la
+          direction doit pouvoir savoir ce qui a changé depuis.
+        </p>
+        <div class="rangee">
+          <button class="petit principal" id="btn-enregistrer" type="button">Enregistrer les corrections</button>
+          <span class="aide" id="etat-correction"></span>
+        </div>
       </section>
 
       <section class="carte" id="bloc-decision">

@@ -1210,3 +1210,174 @@ test('les GD declares sur deux fiches se comptent ensemble', async () => {
   assert.ok(plafond, 'deux fois 37h30 font 75h sur la semaine');
   assert.match(plafond.message, /75h00/);
 });
+
+/* ------------------ Espace du conducteur de travaux ------------------------ */
+
+/** Un conducteur avec un code, prêt à se connecter. */
+async function conducteurConnecte(directeur, champs) {
+  const compte = await creerConducteur(directeur, champs);
+  await directeur('POST', `/api/admin/utilisateurs/${compte.id}/code`, { pin: '5555' });
+  const identifiant = db.prepare('SELECT identifiant FROM utilisateurs WHERE id = ?').get(compte.id).identifiant;
+  return { ...compte, appeler: await connexion(identifiant, '5555') };
+}
+
+/*
+ * Le perimetre du conducteur se lit sur la fiche, pas sur un rattachement fixe.
+ *
+ * C'est ce qui permet a un chef de changer de conducteur d'une semaine a
+ * l'autre, ou d'en avoir deux a la fois quand il tient deux chantiers : une case
+ * de rattachement ne contient qu'un nom, une fiche porte le sien.
+ */
+test('un conducteur ne voit que les fiches ou le chef l a designe', async () => {
+  const d = await connexion('dir', '9999');
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+
+  const paul = await conducteurConnecte(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
+  const sophie = await conducteurConnecte(d, { nom: 'RENAUD Sophie', courriel: 'sophie@exemple.fr' });
+
+  const sienne = await ficheTransmise(a, 10, paul.id);
+  const autre = await ficheTransmise(a, 11, sophie.id);
+
+  const tableau = (await paul.appeler('GET', '/api/conducteur/moi')).corps;
+  assert.equal(tableau.conducteur.nom, 'MOREAU Paul');
+  assert.deepEqual(tableau.enAttente.map((f) => f.id), [sienne.id]);
+  // Le lien ne porte plus de secret : c'est la session qui prouve qui vise.
+  assert.equal(tableau.enAttente[0].lien, `/visa.html?fiche=${sienne.id}`);
+
+  assert.equal((await paul.appeler('GET', `/api/visa/fiche/${sienne.id}`)).statut, 200);
+  const refus = await paul.appeler('GET', `/api/visa/fiche/${autre.id}`);
+  assert.equal(refus.statut, 403);
+  assert.match(refus.corps.erreur, /ne releve pas de vous/);
+
+  // Et rien de la paie ne s'ouvre au passage.
+  for (const chemin of ['/api/mois?annee=2026&mois=8', '/api/tableau?annee=2026&mois=8', '/api/admin/salaries']) {
+    assert.equal((await paul.appeler('GET', chemin)).statut, 403, chemin);
+  }
+});
+
+test('le conducteur vise depuis son compte, et la fiche poursuit sa route', async () => {
+  const d = await connexion('dir', '9999');
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+
+  const paul = await conducteurConnecte(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
+  const { id } = await ficheTransmise(a, 12, paul.id);
+
+  assert.equal((await paul.appeler('POST', `/api/visa/fiche/${id}/decision`, { decision: 'viser' })).statut, 200);
+  const apres = db.prepare('SELECT visa_statut, visa_conducteur FROM fiches WHERE id = ?').get(id);
+  assert.equal(apres.visa_statut, 'vise');
+  assert.equal(apres.visa_conducteur, 'MOREAU Paul');
+
+  // Le journal nomme l'auteur : par compte, on sait qui a vise.
+  const trace = db
+    .prepare("SELECT user_id FROM journal WHERE fiche_id = ? AND action = 'visa_conducteur'")
+    .get(id);
+  assert.equal(trace.user_id, paul.id, 'le visa doit porter un nom, pas un anonyme');
+
+  // Une fiche deja visee ne se corrige plus de son cote.
+  const tardif = await paul.appeler('PUT', `/api/visa/fiche/${id}/heures`, { lignes: [] });
+  assert.equal(tardif.statut, 409);
+});
+
+/*
+ * Corriger plutot que renvoyer la fiche entiere pour une virgule. Le pouvoir est
+ * volontairement etroit : seules les heures, et seulement tant que la fiche
+ * attend ce visa.
+ */
+test('le conducteur corrige les heures, et rien d autre', async () => {
+  const d = await connexion('dir', '9999');
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+
+  const paul = await conducteurConnecte(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
+  const { id } = await ficheTransmise(a, 13, paul.id);
+
+  const avant = (await paul.appeler('GET', `/api/visa/fiche/${id}`)).corps.fiche;
+  assert.equal(avant.modifiable, true);
+  const ligne = avant.lignes[0];
+  assert.equal(ligne.jours[0].minutes, 450);
+
+  const correction = await paul.appeler('PUT', `/api/visa/fiche/${id}/heures`, {
+    lignes: [{
+      id: ligne.id,
+      minutes_route: 30,
+      minutes_trajet: ligne.minutes_trajet,
+      jours: [{ jour: 0, minutes: 480, code_absence: '' }],
+    }],
+  });
+  assert.equal(correction.statut, 200);
+  assert.equal(correction.corps.corrections, 2, 'la journee et la route');
+  assert.equal(correction.corps.fiche.lignes[0].jours[0].minutes, 480);
+
+  // Le journal garde l'avant et l'apres, sous le nom de son auteur.
+  const trace = db
+    .prepare("SELECT user_id, detail FROM journal WHERE fiche_id = ? AND action = 'correction_conducteur'")
+    .get(id);
+  assert.equal(trace.user_id, paul.id);
+  assert.match(trace.detail, /Lundi : 7h30 → 8h00/);
+  assert.match(trace.detail, /route : 0h00 → 0h30/);
+
+  /*
+   * Le point qui compte : cette route ne sait ecrire que des heures. Meme si le
+   * client envoie autre chose, rien d'autre ne bouge — la limite est dans le
+   * code, pas dans la politesse de l'appelant.
+   */
+  const entete = db.prepare('SELECT chantier, statut, conducteur_id FROM fiches WHERE id = ?').get(id);
+  await paul.appeler('PUT', `/api/visa/fiche/${id}/heures`, {
+    lignes: [{ id: ligne.id, nb_gd72: 5, jours_zone: 4, signature: null, jours: [] }],
+    chantier: 'Detourne',
+    statut: 'validee',
+  });
+  const apres = db.prepare('SELECT chantier, statut, conducteur_id FROM fiches WHERE id = ?').get(id);
+  assert.deepEqual(apres, entete, "l'entete de la fiche ne bouge pas");
+  const ligneApres = db.prepare('SELECT nb_gd72, jours_zone, signature FROM fiche_lignes WHERE id = ?').get(ligne.id);
+  assert.equal(ligneApres.nb_gd72, 0, 'les primes ne se corrigent pas ici');
+  assert.equal(ligneApres.jours_zone, 0);
+  assert.ok(ligneApres.signature, 'la signature du salarie reste intacte');
+
+  // Et il ne peut pas valider : cela reste au directeur.
+  assert.equal((await paul.appeler('POST', `/api/fiches/${id}/decision`, { decision: 'valider' })).statut, 403);
+});
+
+test('le conducteur renvoie la fiche au chef, avec son commentaire', async () => {
+  const d = await connexion('dir', '9999');
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+
+  const paul = await conducteurConnecte(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
+  const { id } = await ficheTransmise(a, 14, paul.id);
+
+  const sansMotif = await paul.appeler('POST', `/api/visa/fiche/${id}/decision`, { decision: 'renvoyer' });
+  assert.equal(sansMotif.statut, 400, 'un renvoi sans motif n aide pas le chef');
+
+  assert.equal(
+    (await paul.appeler('POST', `/api/visa/fiche/${id}/decision`, {
+      decision: 'renvoyer', commentaire: 'Mardi manquant pour BERTIN.',
+    })).statut,
+    200
+  );
+  const apres = db.prepare('SELECT statut, motif_rejet FROM fiches WHERE id = ?').get(id);
+  assert.equal(apres.statut, 'rejetee');
+  assert.match(apres.motif_rejet, /MOREAU Paul \(conducteur de travaux\) : Mardi manquant/);
+});
+
+test('le calendrier des presences s ouvre au conducteur, la paie non', async () => {
+  const d = await connexion('dir', '9999');
+  // Les fiches d'abord : le journal garde le nom de qui a vise, et retient donc
+  // le compte correspondant. C'est bien ce qu'on lui demande.
+  db.exec('DELETE FROM fiches');
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+  const paul = await conducteurConnecte(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
+
+  assert.equal((await paul.appeler('GET', '/api/calendrier-mensuel?annee=2026&mois=8')).statut, 200);
+  assert.equal((await paul.appeler('GET', '/api/conges')).statut, 200);
+  // Il consulte, il n'administre pas.
+  assert.equal((await paul.appeler('POST', '/api/conges', { salarie_id: 1, debut: '2026-08-03', fin: '2026-08-07' })).statut, 403);
+  assert.equal((await paul.appeler('GET', '/api/admin/conducteurs')).statut, 403);
+  assert.equal((await paul.appeler('GET', '/api/admin/indicateurs')).statut, 403);
+});

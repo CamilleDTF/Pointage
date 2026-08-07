@@ -15,13 +15,14 @@
       <small id="entete-conducteur">…</small>
     </div>
     <button class="petit" id="btn-rafraichir" type="button">Actualiser</button>
+    <button class="petit masque" id="btn-quitter" type="button">Quitter</button>
   </header>
 
   <main>
     <section class="carte" id="bloc-erreur" hidden>
-      <h2>Ce lien n'est plus utilisable</h2>
+      <h2 id="titre-erreur">Ce lien n'est plus utilisable</h2>
       <p class="aide" id="texte-erreur"></p>
-      <p class="aide">
+      <p class="aide" id="conseil-erreur">
         Demandez un nouveau lien à la direction : il se régénère en un clic depuis
         l'écran <strong>Paramètres</strong>.
       </p>
@@ -40,11 +41,7 @@
       </section>
 
       <section class="carte">
-        <p class="aide" style="margin:0">
-          Cette page est la vôtre : ajoutez-la à vos favoris, ou à l'écran d'accueil de
-          votre téléphone. Elle se met à jour toute seule à chaque ouverture, et ne
-          demande ni compte ni code.
-        </p>
+        <p class="aide" style="margin:0" id="note-page"></p>
       </section>
     </div>
   </main>

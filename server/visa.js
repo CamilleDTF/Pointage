@@ -22,6 +22,7 @@
 
 const crypto = require('crypto');
 const { db, journaliser } = require('./db');
+const D = require('./domaine');
 const F = require('./fiches');
 const C = require('./courriel');
 
@@ -155,6 +156,28 @@ function ficheDuJeton(jeton) {
   return { fiche };
 }
 
+/*
+ * L'autre facon d'arriver sur une fiche : par son compte.
+ *
+ * Le lien signe ne donnait acces qu'a une fiche, et seulement tant qu'elle
+ * attendait ce visa. Un conducteur connecte, lui, est reconnu pour ce qu'il est,
+ * et son perimetre se lit sur la fiche : celles ou le chef l'a designe. C'est la
+ * meme regle que `conducteurDeLaFiche` — ce qu'il voit est exactement ce qu'il
+ * doit viser, ni plus ni moins.
+ */
+function ficheDuConducteur(conducteur, ficheId) {
+  if (!conducteur || conducteur.role !== 'conducteur') return { erreur: 'Acces reserve.', code: 403 };
+
+  const fiche = F.obtenirFiche(Number(ficheId));
+  if (!fiche) return { erreur: 'Fiche introuvable.', code: 404 };
+
+  const sien = conducteurDeLaFiche(fiche);
+  if (!sien || sien.id !== conducteur.id) {
+    return { erreur: 'Cette fiche ne releve pas de vous.', code: 403 };
+  }
+  return { fiche };
+}
+
 /**
  * Ce que voit le conducteur : la fiche, sans rien qui depasse son objet. Ni les
  * autres semaines, ni les autres chefs, ni le moindre montant.
@@ -185,6 +208,9 @@ function vueConducteur(fiche) {
     lignes: fiche.lignes
       .filter((l) => String(l.nom_affiche || '').trim())
       .map((l) => ({
+        // L'identifiant sert au conducteur a designer la ligne qu'il corrige :
+        // l'ordre affiche ne fait pas foi.
+        id: l.id,
         nom_affiche: l.nom_affiche,
         jours: l.jours.map((j) => ({ jour: j.jour, minutes: j.minutes, code_absence: j.code_absence, saisi: j.saisi })),
         total_minutes: l.total_minutes,
@@ -199,9 +225,14 @@ function vueConducteur(fiche) {
   };
 }
 
-/** Le conducteur vise : la fiche poursuit sa route vers le directeur. */
-function viser(jeton, commentaire = '') {
-  const acces = ficheDuJeton(jeton);
+/*
+ * Le conducteur vise : la fiche poursuit sa route vers le directeur.
+ *
+ * `acces` est deja resolu par l'appelant — par jeton signe ou par compte. Le
+ * geste est le meme dans les deux cas ; seule la facon de prouver qui l'on est
+ * change, et elle n'a rien a faire ici.
+ */
+function viser(acces, commentaire = '', utilisateur = null) {
   if (acces.erreur) return acces;
   const fiche = acces.fiche;
 
@@ -217,13 +248,12 @@ function viser(jeton, commentaire = '') {
       WHERE id = ?`
   ).run(conducteur ? conducteur.nom : '', String(commentaire || '').trim().slice(0, 1000), fiche.id);
 
-  journaliser(fiche.id, null, 'visa_conducteur', conducteur ? conducteur.nom : '');
+  journaliser(fiche.id, utilisateur ? utilisateur.id : null, 'visa_conducteur', conducteur ? conducteur.nom : '');
   return { fiche: vueConducteur(F.obtenirFiche(fiche.id)) };
 }
 
 /** Le conducteur renvoie : la fiche repart au chef, avec son commentaire. */
-function renvoyer(jeton, commentaire) {
-  const acces = ficheDuJeton(jeton);
+function renvoyer(acces, commentaire, utilisateur = null) {
   if (acces.erreur) return acces;
   const fiche = acces.fiche;
 
@@ -240,8 +270,86 @@ function renvoyer(jeton, commentaire) {
       WHERE id = ?`
   ).run(`${signature} : ${motif}`.slice(0, 1000), motif.slice(0, 1000), fiche.id);
 
-  journaliser(fiche.id, null, 'renvoi_conducteur', motif.slice(0, 1000));
+  journaliser(fiche.id, utilisateur ? utilisateur.id : null, 'renvoi_conducteur', motif.slice(0, 1000));
   return { renvoyee: true, fiche: vueConducteur(F.obtenirFiche(fiche.id)) };
+}
+
+/*
+ * Le conducteur corrige les heures d'une fiche qui attend son visa.
+ *
+ * Volontairement etroit, et etroit par construction plutot que par confiance :
+ * cette fonction ne sait ecrire que des journees, de la route et du trajet. Elle
+ * ne peut pas toucher au chantier, aux primes, au choix du conducteur ni au
+ * statut — non parce qu'on demande au client de ne pas les envoyer, mais parce
+ * qu'aucune ligne de code ici ne les ecrit.
+ *
+ * Les operateurs ont signe une version de la fiche. Corriger apres coup est
+ * legitime — c'est le role du controle — mais cela decale leur signature de ce
+ * qui partira en paie. Chaque correction est donc inscrite au journal, nommement,
+ * avec l'avant et l'apres : la question « qui a change cette heure » doit avoir
+ * une reponse.
+ */
+function corrigerHeures(conducteur, ficheId, lignesEnvoyees) {
+  const acces = ficheDuConducteur(conducteur, ficheId);
+  if (acces.erreur) return acces;
+
+  const fiche = acces.fiche;
+  if (fiche.statut !== 'soumise' || fiche.visa_statut !== 'attente') {
+    return { erreur: 'Cette fiche n attend plus votre visa : elle n est plus modifiable.', code: 409 };
+  }
+  if (!Array.isArray(lignesEnvoyees)) return { erreur: 'Aucune correction transmise.', code: 400 };
+
+  // Les lignes se retrouvent par leur identifiant : l'ordre affiche ne fait pas
+  // foi, et une ligne vide de la fiche n'est jamais montree au conducteur.
+  const parId = new Map(fiche.lignes.map((l) => [l.id, l]));
+  const changements = [];
+
+  const ecrire = db.transaction(() => {
+    const majJour = db.prepare(
+      'UPDATE fiche_jours SET minutes = ?, code_absence = ?, saisi = 1 WHERE ligne_id = ? AND jour = ?'
+    );
+    const majLigne = db.prepare('UPDATE fiche_lignes SET minutes_route = ?, minutes_trajet = ? WHERE id = ?');
+
+    for (const envoyee of lignesEnvoyees) {
+      const ligne = parId.get(Number(envoyee.id));
+      if (!ligne) continue;
+
+      for (const jour of envoyee.jours || []) {
+        const index = Number(jour.jour);
+        const ancienne = ligne.jours.find((j) => j.jour === index);
+        if (!ancienne) continue;
+
+        const minutes = Math.max(0, Math.round(Number(jour.minutes) || 0));
+        const code = String(jour.code_absence || '').trim().toUpperCase().slice(0, 4);
+        if (minutes === ancienne.minutes && code === ancienne.code_absence) continue;
+
+        majJour.run(minutes, code, ligne.id, index);
+        changements.push(
+          `${ligne.nom_affiche} ${D.JOURS[index]} : ${D.versTexte(ancienne.minutes)} → ${D.versTexte(minutes)}`
+        );
+      }
+
+      const route = Math.max(0, Math.round(Number(envoyee.minutes_route) || 0));
+      const trajet = Math.max(0, Math.round(Number(envoyee.minutes_trajet) || 0));
+      if (route !== ligne.minutes_route || trajet !== ligne.minutes_trajet) {
+        majLigne.run(route, trajet, ligne.id);
+        if (route !== ligne.minutes_route) {
+          changements.push(`${ligne.nom_affiche} route : ${D.versTexte(ligne.minutes_route)} → ${D.versTexte(route)}`);
+        }
+        if (trajet !== ligne.minutes_trajet) {
+          changements.push(`${ligne.nom_affiche} trajet : ${D.versTexte(ligne.minutes_trajet)} → ${D.versTexte(trajet)}`);
+        }
+      }
+    }
+
+    if (changements.length) {
+      db.prepare("UPDATE fiches SET maj_le = datetime('now') WHERE id = ?").run(fiche.id);
+      journaliser(fiche.id, conducteur.id, 'correction_conducteur', changements.join(' ; ').slice(0, 1000));
+    }
+  });
+  ecrire();
+
+  return { corrections: changements.length, fiche: vueConducteur(F.obtenirFiche(fiche.id)) };
 }
 
 /* ------------------- Lien personnel d'un conducteur ----------------------- */
@@ -288,10 +396,19 @@ function conducteurDuJeton(cle) {
  * mecanisme d'ouverture d'une fiche reste donc exactement celui du courriel,
  * deja eprouve : un secret par fiche, renouvele a chaque transmission.
  */
-function tableauConducteur(cle) {
+function tableauConducteurParLien(cle) {
   const conducteur = conducteurDuJeton(cle);
   if (!conducteur) return { erreur: 'Ce lien n’est plus valable. Demandez-en un nouveau à la direction.', code: 403 };
+  return tableauConducteur(conducteur, { avecLiens: true });
+}
 
+/*
+ * `avecLiens` distingue les deux chemins. Par lien personnel, chaque fiche doit
+ * porter son propre secret signe — c'est la seule chose qui autorise a l'ouvrir.
+ * Par compte, ces secrets n'ont plus lieu d'etre : c'est la session qui prouve
+ * qui vise, et un lien de moins est un lien de moins a egarer.
+ */
+function tableauConducteur(conducteur, { avecLiens = false, historique = 60 } = {}) {
   const enAttente = db
     .prepare(
       `SELECT f.id, f.annee, f.semaine, f.chantier, f.ville, f.visa_envoye_le, u.nom AS chef_nom,
@@ -314,15 +431,18 @@ function tableauConducteur(cle) {
          FROM fiches f
          JOIN utilisateurs u ON u.id = f.chef_id
         WHERE f.visa_statut = 'vise'
-          AND COALESCE(f.conducteur_id, u.conducteur_id) = ?
-        ORDER BY f.visa_le DESC LIMIT 8`
+          AND COALESCE(f.conducteur_id, u.conducteur_id) = @id
+        ORDER BY f.visa_le DESC LIMIT @limite`
     )
-    .all(conducteur.id);
+    .all({ id: conducteur.id, limite: historique });
 
   return {
     conducteur: { nom: conducteur.nom },
-    enAttente: enAttente.map((f) => ({ ...f, lien: lienFiche(f.id) })),
-    recentes,
+    enAttente: enAttente.map((f) => ({
+      ...f,
+      lien: avecLiens ? lienFiche(f.id) : `/visa.html?fiche=${f.id}`,
+    })),
+    recentes: recentes.map((f) => ({ ...f, lien: avecLiens ? '' : `/visa.html?fiche=${f.id}` })),
   };
 }
 
@@ -344,10 +464,13 @@ module.exports = {
   envoyerDemandeVisa,
   conducteurDeLaFiche,
   ficheDuJeton,
+  ficheDuConducteur,
+  corrigerHeures,
   vueConducteur,
   viser,
   renvoyer,
   lienConducteur,
   regenererJeton,
   tableauConducteur,
+  tableauConducteurParLien,
 };

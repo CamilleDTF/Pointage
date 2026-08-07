@@ -15,16 +15,27 @@ const $ = (id) => document.getElementById(id);
 
 const parametres = new URLSearchParams(location.search);
 const JETON = parametres.get('jeton') || '';
+const FICHE = parametres.get('fiche') || '';
 const ACTION = parametres.get('action') || '';
+
+/*
+ * Deux portes, un seul ecran. Par jeton signe, le conducteur n'a pas de compte
+ * et ne peut que lire puis decider. Par compte, il est reconnu pour ce qu'il est
+ * et peut en plus corriger les heures : un controle qui ne peut pas rectifier
+ * une virgule oblige a renvoyer la fiche entiere pour rien.
+ */
+const PAR_LIEN = Boolean(JETON);
+const RACINE = PAR_LIEN ? `/api/visa/${encodeURIComponent(JETON)}` : `/api/visa/fiche/${encodeURIComponent(FICHE)}`;
 
 let fiche = null;
 let reference = null;
+let corrections = new Map(); // id de ligne -> ligne corrigee, en attente d'envoi
 
 async function demarrer() {
-  if (!JETON) return afficherErreur('Lien incomplet : il manque son identifiant.');
+  if (!JETON && !FICHE) return afficherErreur('Adresse incomplète : aucune fiche désignée.');
 
   try {
-    const reponse = await API.get(`/api/visa/${encodeURIComponent(JETON)}`);
+    const reponse = await API.get(RACINE);
     fiche = reponse.fiche;
     reference = reponse.reference;
   } catch (e) {
@@ -33,6 +44,9 @@ async function demarrer() {
 
   afficher();
 }
+
+/** Le conducteur peut-il corriger cette fiche ? Le serveur seul en decide. */
+const corrigeable = () => !PAR_LIEN && Boolean(fiche && fiche.modifiable);
 
 function afficherErreur(texte) {
   $('bloc-erreur').hidden = false;
@@ -48,6 +62,8 @@ function afficher() {
   $('sous-titre').textContent =
     `${fiche.chef_nom} · semaine ${fiche.semaine} · du ${jourMois(fiche.dates[0])} au ${jourMois(fiche.dates[6])} ${fiche.annee}` +
     ` · ${versTexte(fiche.total_minutes)} au total`;
+
+  poserBlocCorrection();
 
   const deja = fiche.visa_statut === 'vise';
   $('badge-visa').innerHTML = deja
@@ -108,6 +124,13 @@ function construireGrille() {
     .map((ligne) => {
       const cellules = ligne.jours
         .map((jour, j) => {
+          if (corrigeable()) {
+            return `<td class="num ${j >= 5 ? 'weekend' : ''}">
+              <input class="cellule heures" data-ligne="${ligne.id}" data-jour="${j}"
+                     value="${echapper(jour.minutes || jour.saisi ? versTexte(jour.minutes) : '')}"
+                     placeholder="${echapper(jour.code_absence || '')}" inputmode="decimal">
+            </td>`;
+          }
           const contenu = jour.code_absence
             ? `<abbr title="${echapper(libelleCode(jour.code_absence))}">${echapper(jour.code_absence)}</abbr>`
             : jour.minutes || jour.saisi
@@ -117,12 +140,18 @@ function construireGrille() {
         })
         .join('');
 
+      const heure = (champ, valeur) =>
+        corrigeable()
+          ? `<td class="num"><input class="cellule" data-ligne="${ligne.id}" data-champ="${champ}"
+                    value="${echapper(valeur ? versTexte(valeur) : '')}" inputmode="decimal"></td>`
+          : `<td class="num">${valeur ? echapper(versTexte(valeur)) : '—'}</td>`;
+
       return `<tr>
         <td>${echapper(ligne.nom_affiche)}</td>
         ${cellules}
-        <td class="num total">${echapper(versTexte(ligne.total_minutes))}</td>
-        <td class="num">${ligne.minutes_route ? echapper(versTexte(ligne.minutes_route)) : '—'}</td>
-        <td class="num">${ligne.minutes_trajet ? echapper(versTexte(ligne.minutes_trajet)) : '—'}</td>
+        <td class="num total" data-total="${ligne.id}">${echapper(versTexte(ligne.total_minutes))}</td>
+        ${heure('minutes_route', ligne.minutes_route)}
+        ${heure('minutes_trajet', ligne.minutes_trajet)}
         <td class="num">${ligne.jours_zone || '—'}</td>
         <td class="num">${echapper(ligne.type_masque || '—')}</td>
         <td class="num">${ligne.nb_deplacement || '—'}</td>
@@ -140,6 +169,70 @@ function construireGrille() {
       <th style="min-width:110px">Observations</th><th class="num">Signé</th>
     </tr></thead>
     <tbody>${rangs}</tbody>`;
+
+  if (corrigeable()) brancherCorrections();
+}
+
+function poserBlocCorrection() {
+  const bloc = $('bloc-correction');
+  if (!bloc) return;
+  bloc.classList.toggle('masque', !corrigeable());
+  if (!corrigeable()) return;
+  $('btn-enregistrer').disabled = true;
+  $('btn-enregistrer').addEventListener('click', enregistrerCorrections);
+}
+
+/* ------------------------------ Correction -------------------------------- */
+
+/*
+ * Le conducteur controle le pointage : lui interdire de rectifier une heure
+ * l'obligerait a renvoyer la fiche entiere au chef pour une virgule. Il ne
+ * touche qu'aux heures — le serveur ne sait ecrire que cela — et chaque
+ * correction est inscrite au journal sous son nom.
+ */
+function brancherCorrections() {
+  for (const champ of $('grille').querySelectorAll('input.cellule')) {
+    champ.addEventListener('change', () => {
+      const ligne = fiche.lignes.find((l) => String(l.id) === champ.dataset.ligne);
+      if (!ligne) return;
+      const minutes = versMinutes(champ.value);
+      champ.value = minutes ? versTexte(minutes) : '';
+
+      if (champ.dataset.champ) ligne[champ.dataset.champ] = minutes;
+      else ligne.jours[Number(champ.dataset.jour)].minutes = minutes;
+
+      ligne.total_minutes = ligne.jours.reduce((t, j) => t + (Number(j.minutes) || 0), 0);
+      const total = $('grille').querySelector(`[data-total="${ligne.id}"]`);
+      if (total) total.textContent = versTexte(ligne.total_minutes);
+
+      corrections.set(ligne.id, ligne);
+      $('btn-enregistrer').disabled = false;
+      $('etat-correction').textContent = 'Correction non enregistrée.';
+    });
+  }
+}
+
+async function enregistrerCorrections() {
+  if (!corrections.size) return true;
+  const lignes = [...corrections.values()].map((l) => ({
+    id: l.id,
+    minutes_route: l.minutes_route,
+    minutes_trajet: l.minutes_trajet,
+    jours: l.jours.map((j) => ({ jour: j.jour, minutes: j.minutes, code_absence: j.code_absence })),
+  }));
+
+  try {
+    const reponse = await API.put(`${RACINE}/heures`, { lignes });
+    corrections = new Map();
+    $('btn-enregistrer').disabled = true;
+    $('etat-correction').textContent = reponse.corrections
+      ? `${reponse.corrections} correction(s) enregistrée(s).`
+      : 'Aucun changement.';
+    return true;
+  } catch (e) {
+    message(e.message, 'erreur');
+    return false;
+  }
 }
 
 /* --------------------------------- Décision -------------------------------- */
@@ -163,8 +256,15 @@ async function decider(decision) {
 
   for (const bouton of ['btn-viser', 'btn-renvoyer']) $(bouton).disabled = true;
 
+  // Viser sans enregistrer ferait perdre les corrections au moment meme ou l'on
+  // approuve ce qu'on vient de corriger.
+  if (!(await enregistrerCorrections())) {
+    for (const bouton of ['btn-viser', 'btn-renvoyer']) $(bouton).disabled = false;
+    return;
+  }
+
   try {
-    const reponse = await API.post(`/api/visa/${encodeURIComponent(JETON)}/decision`, { decision, commentaire });
+    const reponse = await API.post(`${RACINE}/decision`, { decision, commentaire });
     fiche = reponse.fiche || fiche;
     if (decision === 'viser') {
       terminer('Fiche visée', 'Merci. Elle est transmise à la direction pour validation.');
@@ -184,7 +284,11 @@ function terminer(titre, texte) {
   $('bloc-decision').classList.add('masque');
   $('bloc-resultat').classList.remove('masque');
   $('titre-resultat').textContent = titre;
-  $('texte-resultat').textContent = `${texte} Vous pouvez fermer cette page.`;
+  const bloc = $('bloc-correction');
+  if (bloc) bloc.classList.add('masque');
+  $('texte-resultat').textContent = PAR_LIEN
+    ? `${texte} Vous pouvez fermer cette page.`
+    : `${texte} Retournez à vos fiches pour la suivante.`;
   $('bloc-resultat').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 

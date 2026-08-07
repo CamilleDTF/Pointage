@@ -114,6 +114,7 @@ Le code saisi à la connexion détermine entièrement ce qui s'affiche :
 | Qui se connecte | Ce qu'il voit |
 |---|---|
 | Un chef d'équipe | Ses fiches et sa seule équipe — ni les fiches, ni les salariés, ni les noms des autres chefs |
+| Un conducteur de travaux | Les fiches où un chef l'a désigné, et le calendrier des présences — aucun montant |
 | Le directeur | Les 8 chefs, toutes les fiches, les exports, la gestion des comptes |
 
 Le cloisonnement est appliqué côté serveur, pas seulement à l'affichage : un chef
@@ -175,10 +176,33 @@ Le conducteur de travaux vise **avant** la direction. Il a désormais un **compt
 avec son identifiant et son code, dans le même registre que les chefs d'équipe et la
 direction — une personne y vit à un seul endroit, et s'y désactive une seule fois.
 
-> **Son espace est en cours d'ouverture.** Les comptes existent et se gèrent depuis
-> *Paramètres*, mais aucune route ne leur est encore ouverte : un conducteur connecté
-> n'obtient rien de plus qu'un visiteur, et arrive sur un écran qui le lui dit. En
-> attendant, il vise par son **lien personnel**, qu'il garde en favori.
+Connecté, il arrive sur **ses fiches à viser**. Il ouvre celle qu'il veut, la relit,
+**corrige les heures** si besoin, puis vise ou renvoie au chef avec un commentaire.
+
+### Ce qu'il peut, et ce qu'il ne peut pas
+
+| | |
+|---|---|
+| **Voit** | Les fiches où le chef l'a désigné, en attente comme passées, et le calendrier des présences |
+| **Peut** | Viser, renvoyer avec un commentaire, corriger les heures |
+| **Ne peut pas** | Valider définitivement — cela reste à la direction |
+| **N'a pas** | Le tableau mensuel, les exports de paie, les taux horaires, *Paramètres* |
+
+**Son périmètre se lit sur la fiche, pas sur un rattachement.** C'est ce qui permet à un
+chef de changer de conducteur d'une semaine à l'autre, ou d'en avoir deux à la fois
+quand il tient deux chantiers : une case de rattachement ne contient qu'un nom, une
+fiche porte le sien. Le rattachement de *Paramètres* garde son rôle — proposer le bon
+nom par défaut.
+
+**La correction est étroite par construction.** `corrigerHeures` (`server/visa.js`) ne
+sait écrire que des journées, de la route et du trajet : ni le chantier, ni les primes,
+ni les signatures, ni le statut. Ce n'est pas une politesse demandée au navigateur —
+aucune ligne de code n'écrit ces champs-là. Et chaque correction est inscrite au journal
+**sous son nom, avec l'avant et l'après** : les opérateurs ont signé une version du
+pointage, la direction doit pouvoir savoir ce qui a changé depuis.
+
+Le lien personnel continue de fonctionner en parallèle, en lecture seule — il n'ouvre
+pas la correction, puisqu'un jeton prouve un droit et non une identité.
 
 **C'est le chef d'équipe qui désigne le conducteur**, en bas de sa fiche, juste avant
 de transmettre. D'une semaine à l'autre le chantier peut relever de quelqu'un d'autre,
@@ -586,7 +610,7 @@ server/
   export-mensuel.js  Le classeur mensuel, versions publique et direction
   indicateurs.js Suivi des chefs : assiduité, retards, fiches renvoyées
   calendrier.js Vue mensuelle par personne, et registre des congés
-  visa.js       Liens signés du conducteur de travaux, visa et renvoi
+  visa.js       Espace du conducteur : ses fiches, visa, renvoi, correction des heures
   alerte.js     Message prévenant le conducteur (SMS, WhatsApp, courriel) — sans aucun lien
   courriel.js   Envoi SMTP, et dépôt sur disque à défaut de serveur d'envoi
   fournisseurs-courriel.js  Réglages SMTP devinés depuis les MX du domaine
@@ -599,7 +623,8 @@ public/
   parametres.html Paramètres direction + js/parametres.js
   mensuel.html    Tableau mensuel      + js/mensuel.js
   calendrier.html Calendrier du mois   + js/calendrier.js
-  visa.html       Visa du conducteur   + js/visa.js  (sans compte, par lien signé)
+  conducteur.html Ses fiches à viser   + js/conducteur.js
+  visa.html       Une fiche à viser     + js/visa.js  (par compte, ou par lien signé)
   js/regles.js  Règles métier partagées avec le serveur (heures, semaines, contrôles)
   js/commun.js  API, signature tactile, file d'attente réseau, boutons d'alerte selon l'appareil
 test/

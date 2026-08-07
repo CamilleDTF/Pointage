@@ -137,7 +137,11 @@ function exigerConnexion(req, res, next) {
 const ouvertAuConducteur = (chemin) =>
   ['/api/moi', '/api/deconnexion', '/api/mon-code'].includes(chemin) ||
   chemin.startsWith('/api/visa/') ||
-  chemin.startsWith('/api/conducteur/');
+  chemin.startsWith('/api/conducteur/') ||
+  // Le calendrier des presences et le registre des conges : ils expliquent une
+  // journee sans heures avant de viser. Aucun montant n'y figure.
+  chemin === '/api/calendrier-mensuel' ||
+  chemin === '/api/conges';
 
 function espaceConducteurFerme(req, res, next) {
   const conducteur = req.utilisateur && req.utilisateur.role === 'conducteur';
@@ -145,6 +149,19 @@ function espaceConducteurFerme(req, res, next) {
     return res.status(403).json({
       erreur: "Votre espace n'est pas encore ouvert. La direction vous préviendra.",
     });
+  }
+  next();
+}
+
+/*
+ * Le calendrier des presences est le seul ecran que le conducteur partage avec
+ * la direction. Il n'y a aucun montant : il sert a comprendre pourquoi telle
+ * journee est vide avant de viser une fiche.
+ */
+function exigerDirecteurOuConducteur(req, res, next) {
+  if (!req.utilisateur) return res.status(401).json({ erreur: 'Session expiree, reconnectez-vous.' });
+  if (!['directeur', 'conducteur'].includes(req.utilisateur.role)) {
+    return res.status(403).json({ erreur: 'Action reservee a la direction.' });
   }
   next();
 }
@@ -252,6 +269,7 @@ module.exports = {
   fermerSession,
   exigerConnexion,
   exigerDirecteur,
+  exigerDirecteurOuConducteur,
   espaceConducteurFerme,
   delivrerBilletPaie,
   consommerBilletPaie,
