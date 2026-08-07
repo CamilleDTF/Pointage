@@ -422,7 +422,7 @@ taux horaire remonté vers les feuilles individuelles).
 | `TRAJET 50%` / `TRAJET 100%` | Colonnes trajet 50 % et route 100 % de la fiche |
 | `FÉRIÉS` | Jours marqués `F` sur la fiche, valorisés à 7 h par jour |
 | `AMIANTE 1` / `AMIANTE 2` | Jours en zone, selon que le masque est `VA` ou `AA` |
-| `PANIER` | Jours de déplacement |
+| `PANIER` | Jours travaillés **moins** les jours de grand déplacement |
 | `GD 72` / `GD 80` | Ces mêmes jours, ventilés selon la ville du chantier |
 | `Contrôle` | `total − 25 % − 50 % − 100 % − 35` : ce qui reste à redistribuer |
 | `Mois` | Horaire de référence du mois : **jours ouvrés × 7 h** |
@@ -446,6 +446,11 @@ inutilisé ne réclame rien. La légende figure en haut de chaque feuille.
 
 ### Conventions retenues
 
+- **Panier repas** *(validé)* — **12,20 € par jour**, et rien à saisir : ni le montant,
+  qui ne change pas, ni le nombre de jours, qui se compte depuis le pointage. Tout jour
+  travaillé y donne droit **sauf** s'il est couvert par un grand déplacement, dont
+  l'indemnité comprend déjà le repas. Le montant est dans `public/js/regles.js`
+  (`MONTANT_PANIER_REPAS`), la règle dans `joursPanierRepas`.
 - **Grand déplacement** *(validé)* — le chef d'équipe compte lui-même, ligne par
   ligne, les **jours passés sous chacun des deux taux** (colonnes `GD 72` et
   `GD 80`). Le taux se déduisait auparavant de la ville du chantier : c'était faux

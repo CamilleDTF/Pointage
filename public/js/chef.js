@@ -545,7 +545,6 @@ function carteSalarie(ligne, index) {
         <div><label>Heures trajet 50%</label><input class="trajet" value="${versSaisie(ligne.minutes_trajet)}" placeholder="0h00"></div>
         <div><label>Jours en zone</label><input class="zone" type="number" min="0" max="7" step="0.5" value="${ligne.jours_zone || ''}"></div>
         <div><label>Type de masque</label><select class="masque-type">${optionsMasque(ligne.type_masque)}</select></div>
-        <div><label>Nb déplacements</label><input class="deplacement" type="number" min="0" step="1" value="${ligne.nb_deplacement || ''}"></div>
         <div><label>Jours GD 72</label><input class="gd72" type="number" min="0" max="7" step="1" value="${ligne.nb_gd72 || ''}"></div>
         <div><label>Jours GD 80</label><input class="gd80" type="number" min="0" max="7" step="1" value="${ligne.nb_gd80 || ''}"></div>
       </div>
@@ -598,7 +597,6 @@ function gabaritTableau() {
           <td class="num"><input class="cellule trajet" value="${versSaisie(ligne.minutes_trajet)}" placeholder="0h00"></td>
           <td class="num"><input class="cellule zone" type="number" min="0" max="7" step="0.5" value="${ligne.jours_zone || ''}"></td>
           <td class="num"><select class="cellule masque-type">${optionsMasque(ligne.type_masque)}</select></td>
-          <td class="num"><input class="cellule deplacement" type="number" min="0" step="1" value="${ligne.nb_deplacement || ''}"></td>
           <td class="num"><input class="cellule gd72" type="number" min="0" max="7" step="1" value="${ligne.nb_gd72 || ''}"></td>
           <td class="num"><input class="cellule gd80" type="number" min="0" max="7" step="1" value="${ligne.nb_gd80 || ''}"></td>
           <td><input class="cellule observation" value="${echapper(ligne.observation)}"></td>
@@ -613,7 +611,7 @@ function gabaritTableau() {
       <thead><tr>
         <th style="min-width:165px">Nom - Prénom</th>${entetesJours}
         <th class="num">Total<br>semaine</th><th class="num">Route<br>100%</th><th class="num">Trajet<br>50%</th>
-        <th class="num">Jours<br>zone</th><th class="num">Masque</th><th class="num">Nb<br>dépl.</th>
+        <th class="num">Jours<br>zone</th><th class="num">Masque</th>
         <th class="num">GD 72<br><small style="font-weight:400">jours</small></th>
         <th class="num">GD 80<br><small style="font-weight:400">jours</small></th>
         <th style="min-width:110px">Observations</th><th class="num">Signature</th>
@@ -807,7 +805,6 @@ function collecter() {
       minutes_trajet: versMinutes(conteneur.querySelector('.trajet').value),
       jours_zone: Number(conteneur.querySelector('.zone').value) || 0,
       type_masque: conteneur.querySelector('.masque-type').value,
-      nb_deplacement: Number(conteneur.querySelector('.deplacement').value) || 0,
       nb_gd72: Number(conteneur.querySelector('.gd72').value) || 0,
       nb_gd80: Number(conteneur.querySelector('.gd80').value) || 0,
       observation: conteneur.querySelector('.observation').value,

@@ -68,7 +68,6 @@ surClic('btn-export-mois', telechargerMois);
 surClic('btn-voir-mois', () => afficherMois());
 surClic('btn-verrouiller', masquerMontants);
 surEvenement('version-mois', 'change', () => afficherMois());
-surEvenement('montant-panier', 'change', () => afficherMois());
 for (const champ of ['mois', 'annee-mois']) {
   surEvenement(champ, 'change', () => { apercuMois(); afficherMois(); });
 }
@@ -84,7 +83,6 @@ const parametresMois = () => {
     mois: $('mois').value,
     version: versionDemandee(),
   });
-  if (versionDemandee() === 'direction') p.set('panier', $('montant-panier').value || 0);
   return p;
 };
 
@@ -175,7 +173,7 @@ function gabaritTableauMois(mois) {
   const entetes = [
     'Salarié', ...mois.semaines.map((s) => `S${s.semaine}`),
     'Total', '25 %', '50 %', 'Route', 'Trajet', 'Amiante 1', 'Amiante 2',
-    'Panier', 'GD 72', 'GD 80', 'Fériés',
+    'Paniers', 'GD 72', 'GD 80', 'Fériés',
     ...(direction ? ['Taux', 'S. brut', 'H. sup', 'Primes', 'Paniers €', 'GD €', 'Trajet €', 'Total brut', 'Total net'] : []),
   ];
 

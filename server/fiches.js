@@ -30,6 +30,9 @@ function normaliserLigne(brut, ordre) {
       saisi: source.saisi || minutes > 0 ? 1 : 0,
     });
   }
+  const gd72 = Math.max(0, Math.round(Number(brut.nb_gd72) || 0));
+  const gd80 = Math.max(0, Math.round(Number(brut.nb_gd80) || 0));
+
   return {
     salarie_id: brut.salarie_id ? Number(brut.salarie_id) : null,
     nom_affiche: String(brut.nom_affiche || '').trim().slice(0, 120),
@@ -40,11 +43,16 @@ function normaliserLigne(brut, ordre) {
     type_masque: D.TYPES_MASQUE.includes(String(brut.type_masque || '').toUpperCase())
       ? String(brut.type_masque || '').toUpperCase()
       : '',
-    nb_deplacement: Math.max(0, Math.round(Number(brut.nb_deplacement) || 0)),
     // Jours de grand deplacement, comptes par le chef : c'est lui qui sait sous
     // quel taux chaque journee est tombee.
-    nb_gd72: Math.max(0, Math.round(Number(brut.nb_gd72) || 0)),
-    nb_gd80: Math.max(0, Math.round(Number(brut.nb_gd80) || 0)),
+    nb_gd72: gd72,
+    nb_gd80: gd80,
+    /*
+     * « Nb depl. » de la fiche papier : ce n'est plus une saisie, c'est la somme
+     * des deux colonnes de GD. Le chef comptait le meme nombre deux fois, et
+     * l'exemplaire papier a toujours besoin de sa colonne.
+     */
+    nb_deplacement: gd72 + gd80 || Math.max(0, Math.round(Number(brut.nb_deplacement) || 0)),
     observation: String(brut.observation || '').trim().slice(0, 500),
     signature: typeof brut.signature === 'string' && brut.signature.startsWith('data:image/')
       ? brut.signature.slice(0, 200000)

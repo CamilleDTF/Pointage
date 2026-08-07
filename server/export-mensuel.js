@@ -305,6 +305,9 @@ function ecrireBlocPaie(ws, ligneDansTotal, ligneTotalGenerale) {
     AD25: `J25*${taux}`,
     AF25: 'AD25*0.77',
     AH25: '((S22*5)+(T22*10))*0.8',
+    // Panier repas : un montant fixe par jour ouvrant droit. La colonne V porte
+    // deja les jours calcules — travailles moins ceux de grand deplacement.
+    AJ25: `V22*${D.MONTANT_PANIER_REPAS}`,
     AL25: '(X22*72)+(Y22*80)',
     AN25: `(${taux}*Q22/2)+(${taux}*R22)`,
     AD28: `(${taux}*1.25*N22)+(${taux}*1.5*O22)+(${taux}*2*P22)+(${taux}*M22*2)+(${taux}*L22*2)`,
@@ -320,9 +323,9 @@ function ecrireBlocPaie(ws, ligneDansTotal, ligneTotalGenerale) {
     ws.getCell(ref).value = { formula: formule };
     ws.getCell(ref).numFmt = '#,##0.00 €';
   }
-  // Le panier est valorise par le directeur (montant unitaire variable).
-  remplir(ws.getCell('AJ25'), JAUNE);
-  ws.getCell('AJ25').numFmt = '#,##0.00 €';
+  // Le panier ne se saisit plus : son montant est celui de la maison, et ses
+  // jours se comptent depuis le pointage. La case est calculee, pas attendue.
+  remplir(ws.getCell('AJ25'), VERT_PALE);
 
   const titres = [
     ['AD33', 'Salaire Brut'], ['AJ33', 'Salaire Brut + ch Patronale'],

@@ -579,7 +579,6 @@ app.get('/api/mois', A.exigerDirecteur, (req, res) => {
     return res.status(403).json({ erreur: 'Les montants demandent votre code directeur.', codeDemande: true });
   }
 
-  const montantPanier = Number(req.query.panier) || 0;
   const donnees = M.agregerMois(annee, mois, { statut: req.query.statut || 'validee' });
 
   const salaries = donnees.salaries.map((s) => {
@@ -597,18 +596,21 @@ app.get('/api/mois', A.exigerDirecteur, (req, res) => {
       joursAmiante1: s.joursAmiante1,
       joursAmiante2: s.joursAmiante2,
       joursPanier: s.joursPanier,
+      joursTravailles: s.joursTravailles,
       joursGD72: s.joursGD72,
       joursGD80: s.joursGD80,
       joursFeries: s.joursFeries,
     };
-    return demandee === 'direction' ? { ...commun, ...M.valoriser(s, { montantPanier }) } : commun;
+    // Le montant du panier n'est plus un parametre : c'est une valeur de la
+    // maison, portee par les regles metier (D.MONTANT_PANIER_REPAS).
+    return demandee === 'direction' ? { ...commun, ...M.valoriser(s) } : commun;
   });
 
   res.json({
     annee,
     mois,
     version: demandee,
-    montantPanier,
+    montantPanier: D.MONTANT_PANIER_REPAS,
     // Horaire de reference du mois, la case "Mois" du classeur de paie.
     joursOuvres: D.joursOuvresDuMois(annee, mois),
     heuresReference: D.heuresReferenceMois(annee, mois),

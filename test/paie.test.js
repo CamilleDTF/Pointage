@@ -161,6 +161,22 @@ test('primes amiante, paniers et grands deplacements suivent le classeur', () =>
   assert.equal(v.trajet, 14 * 1 + 14 * 1);
 });
 
-test('sans montant de panier fixe, la ligne Paniers reste a zero', () => {
-  assert.equal(M.valoriser(moisType()).paniers, 0);
+/*
+ * Le panier repas vaut 12,20 € et ne se saisit plus : c'est un montant de la
+ * maison, pas une decision du mois. Le nombre de jours, lui, se deduit du
+ * pointage (voir mensuel.test.js).
+ */
+test('le panier repas vaut 12,20 EUR sans rien avoir a saisir', () => {
+  assert.equal(D.MONTANT_PANIER_REPAS, 12.2);
+  const v = M.valoriser(moisType());
+  assert.equal(Math.round(v.paniers * 100) / 100, Math.round(10 * 12.2 * 100) / 100);
+});
+
+test('un jour de grand deplacement ne donne pas de panier', () => {
+  // La regle : jours travailles moins jours de grand deplacement.
+  assert.equal(D.joursPanierRepas(5, 2), 3);
+  assert.equal(D.joursPanierRepas(5, 5), 0);
+  assert.equal(D.joursPanierRepas(5, 0), 5);
+  // Une saisie incoherente ne doit pas produire un panier negatif.
+  assert.equal(D.joursPanierRepas(2, 5), 0);
 });

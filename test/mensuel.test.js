@@ -122,7 +122,10 @@ test('deux chantiers dans la meme semaine se cumulent sur une seule ligne', () =
   const semaine = trouver(mois, 'ANDRE_Alain').semaines[IDX_PLEINE];
   assert.equal(semaine.minutesTotal, 41 * 60);
   assert.equal(semaine.minutes25, 6 * 60);
-  assert.equal(semaine.joursPanier, 6);
+  // Six jours travailles, six jours de deplacement : aucun panier repas, le
+  // grand deplacement comprend deja le repas.
+  assert.equal(semaine.joursTravailles, 6);
+  assert.equal(semaine.joursPanier, 0);
   assert.deepEqual(semaine.chantiers, ['Chantier A', 'Chantier B']);
 });
 
@@ -159,8 +162,45 @@ test('les jours de grand deplacement declares par le chef font foi', () => {
   const semaine = trouver(agregerMois(ANNEE, MOIS), 'ANDRE_Alain').semaines[IDX_PLEINE];
   assert.equal(semaine.joursGD72, 2);
   assert.equal(semaine.joursGD80, 3);
-  // Le panier reste compte a part : il suit les jours de deplacement.
-  assert.equal(semaine.joursPanier, 5);
+  // Cinq jours travailles, cinq jours sous grand deplacement : pas de panier.
+  assert.equal(semaine.joursPanier, 0);
+});
+
+/*
+ * Panier repas : rien a saisir, la regle se lit dans le pointage. Tout jour
+ * travaille y donne droit, sauf s'il est couvert par un grand deplacement.
+ */
+test('le panier repas se deduit des jours travailles, moins les jours de GD', () => {
+  db.exec('DELETE FROM fiches');
+  poserFiche({
+    semaine: PLEINE,
+    lignes: [
+      // Cinq jours travailles, deux sous grand deplacement : trois paniers.
+      { salarie_id: salaries[0], nom: 'ANDRE Alain', heures: [7, 7, 7, 7, 7], gd72: 2 },
+      // Aucun deplacement : un panier par jour travaille.
+      { salarie_id: salaries[1], nom: 'BERTIN Bruno', heures: [7, 7, 7, 0, 0] },
+    ],
+  });
+
+  const mois = agregerMois(ANNEE, MOIS);
+  const andre = trouver(mois, 'ANDRE_Alain').semaines[IDX_PLEINE];
+  assert.equal(andre.joursTravailles, 5);
+  assert.equal(andre.joursPanier, 3);
+
+  const bertin = trouver(mois, 'BERTIN_Bruno').semaines[IDX_PLEINE];
+  assert.equal(bertin.joursTravailles, 3);
+  assert.equal(bertin.joursPanier, 3, 'sans deplacement, un panier par jour travaille');
+});
+
+test('plus de jours de GD que de jours travailles ne donne pas un panier negatif', () => {
+  db.exec('DELETE FROM fiches');
+  poserFiche({
+    semaine: PLEINE,
+    lignes: [{ salarie_id: salaries[0], nom: 'ANDRE Alain', heures: [7, 7], gd80: 5 }],
+  });
+
+  const semaine = trouver(agregerMois(ANNEE, MOIS), 'ANDRE_Alain').semaines[IDX_PLEINE];
+  assert.equal(semaine.joursPanier, 0);
 });
 
 /*
@@ -186,8 +226,10 @@ test('la ville du chantier repartit les deplacements entre GD 72 et GD 80', () =
   assert.equal(andre.semaines[IDX_PLEINE].joursGD72, 0);
   assert.equal(andre.semaines[IDX_PLEINE_2].joursGD72, 4);
   assert.equal(andre.semaines[IDX_PLEINE_2].joursGD80, 0);
-  // Le panier compte tous les jours de deplacement, quelle que soit la ville.
-  assert.equal(andre.semaines[IDX_PLEINE].joursPanier + andre.semaines[IDX_PLEINE_2].joursPanier, 9);
+  // Cinq jours travailles pour cinq de deplacement la premiere semaine, cinq
+  // pour quatre la seconde : un seul panier sur les deux semaines.
+  assert.equal(andre.semaines[IDX_PLEINE].joursPanier, 0);
+  assert.equal(andre.semaines[IDX_PLEINE_2].joursPanier, 1);
 });
 
 test('les codes absence sont remontes jour par jour', () => {
@@ -230,8 +272,12 @@ test('une semaine a cheval sur deux mois ne compte ses heures qu une fois', () =
   assert.equal(juillet.minutesTotal + juin.minutesTotal, 35 * 60, 'aucune heure perdue ni doublee');
 
   // Les primes suivent la meme repartition, au prorata des jours pointes.
-  assert.equal(juillet.joursPanier + juin.joursPanier, 5);
   assert.equal(juillet.joursAmiante1 + juin.joursAmiante1, 5);
+  // Le panier, lui, se compte sur les jours reellement travailles de chaque
+  // mois : trois en juillet, deux en juin, cinq jours de deplacement declares.
+  assert.equal(juillet.joursTravailles, 3);
+  assert.equal(juin.joursTravailles, 2);
+  assert.equal(juillet.joursPanier + juin.joursPanier, 0);
 });
 
 test('un salarie sans fiche du mois n apparait pas dans le tableau', () => {

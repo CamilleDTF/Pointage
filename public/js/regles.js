@@ -138,6 +138,25 @@
    */
   const DUREE_JOURNEE_REFERENCE_MINUTES = BASE_HEBDOMADAIRE_MINUTES / 5;
 
+  /*
+   * Panier repas : un montant fixe, et une regle qui se deduit du pointage.
+   *
+   * Un jour travaille donne droit au panier, sauf s'il est couvert par un grand
+   * deplacement — l'indemnite de deplacement comprend deja le repas. Il n'y a
+   * donc rien a saisir : ni le montant, toujours le meme, ni le nombre de jours,
+   * qui se compte a partir des heures pointees et des jours de GD declares.
+   */
+  const MONTANT_PANIER_REPAS = 12.2;
+
+  /**
+   * Jours ouvrant droit au panier : les jours travailles, moins ceux de grand
+   * deplacement. Jamais negatif — un chef qui declare plus de jours de GD que de
+   * jours travailles se trompe, mais cela ne doit pas produire un panier negatif.
+   */
+  function joursPanierRepas(joursTravailles, joursGrandDeplacement) {
+    return Math.max(0, (Number(joursTravailles) || 0) - (Number(joursGrandDeplacement) || 0));
+  }
+
   /**
    * Nombre de jours ouvres d'un mois civil : les lundis au vendredis, du 1er au
    * dernier jour. Les jours feries ne sont pas deduits — la consigne est bien
@@ -473,6 +492,8 @@
     DUREE_JOURNEE_REFERENCE_MINUTES,
     joursOuvresDuMois,
     heuresReferenceMois,
+    MONTANT_PANIER_REPAS,
+    joursPanierRepas,
     heuresSupplementaires,
     estGrandDeplacement80,
     ZONES_DEPLACEMENT,

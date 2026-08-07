@@ -58,6 +58,7 @@ function semaineVide(semaine) {
     joursAmiante1: 0, // masque VA
     joursAmiante2: 0, // masque AA
     joursPanier: 0,
+    joursTravailles: 0,
     joursGD72: 0,
     joursGD80: 0,
     joursFeries: 0,
@@ -136,10 +137,6 @@ function agregerMois(annee, mois, { statut = 'validee' } = {}) {
     if (ligne.type_masque === 'VA') cible.joursAmiante1 += arrondiQuart(ligne.jours_zone * part);
     if (ligne.type_masque === 'AA') cible.joursAmiante2 += arrondiQuart(ligne.jours_zone * part);
 
-    // Le panier suit les jours de deplacement, comptes a part.
-    const deplacements = arrondiQuart(ligne.nb_deplacement * part);
-    cible.joursPanier += deplacements;
-
     /*
      * Grands deplacements : le chef d'equipe compte lui-meme ses jours sous
      * chacun des deux taux. C'est plus juste que de les deduire de la ville du
@@ -150,6 +147,7 @@ function agregerMois(annee, mois, { statut = 'validee' } = {}) {
      * gardent l'ancienne repartition, sans quoi les mois deja pointes
      * changeraient de montant apres coup.
      */
+    const deplacements = arrondiQuart(ligne.nb_deplacement * part);
     const declares = (Number(ligne.nb_gd72) || 0) + (Number(ligne.nb_gd80) || 0);
     if (declares > 0) {
       cible.joursGD72 += arrondiQuart((Number(ligne.nb_gd72) || 0) * part);
@@ -184,6 +182,19 @@ function agregerMois(annee, mois, { statut = 'validee' } = {}) {
       semaine.minutes25 = sup.minutes25;
       semaine.minutes50 = sup.minutes50;
 
+      /*
+       * Panier repas : rien a saisir, la regle se lit dans le pointage. Tout
+       * jour travaille y donne droit, sauf s'il est couvert par un grand
+       * deplacement — l'indemnite de deplacement comprend deja le repas.
+       *
+       * Les jours travailles se comptent ici, apres coup : un salarie present
+       * sur deux chantiers le meme jour n'a qu'un repas, et il faut d'abord
+       * avoir fusionne ses lignes pour le savoir.
+       */
+      const joursTravailles = semaine.jours.filter((j) => j.minutes > 0).length;
+      semaine.joursTravailles = joursTravailles;
+      semaine.joursPanier = D.joursPanierRepas(joursTravailles, semaine.joursGD72 + semaine.joursGD80);
+
       // Les jours feries se deduisent du code "F" de la fiche. La fiche ne porte
       // qu'un code, pas d'heures : on les valorise a la journee de reference.
       semaine.joursFeries = semaine.jours.filter((j) => j.codes.includes('F')).length;
@@ -211,6 +222,7 @@ function cumulerMois(salarie) {
     joursAmiante1: somme('joursAmiante1'),
     joursAmiante2: somme('joursAmiante2'),
     joursPanier: somme('joursPanier'),
+    joursTravailles: somme('joursTravailles'),
     joursGD72: somme('joursGD72'),
     joursGD80: somme('joursGD80'),
     joursFeries: somme('joursFeries'),
@@ -233,7 +245,7 @@ const ABATTEMENT_PRIME_AMIANTE = 0.8;
 const MONTANT_GD_72 = 72;
 const MONTANT_GD_80 = 80;
 
-function valoriser(salarie, { montantPanier = 0 } = {}) {
+function valoriser(salarie, { montantPanier = D.MONTANT_PANIER_REPAS } = {}) {
   const taux = Number(salarie.tauxHoraire) || 0;
   const h = (minutes) => (Number(minutes) || 0) / 60;
 
