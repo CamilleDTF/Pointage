@@ -171,7 +171,9 @@ async function relancerVisa(ficheId) {
     } else if (visa.envoye) {
       message(`Nouveau lien envoyé à ${visa.conducteur} (${visa.courriel}).`, 'succes', 6000);
     } else {
-      // Sans serveur d'envoi, le lien reste utile : il se transmet a la main.
+      // Sans serveur d'envoi, deux voies restent ouvertes : prevenir le
+      // conducteur par message — il ouvre sa page habituelle — ou lui
+      // transmettre ce lien-ci, qui ouvre cette fiche precise.
       afficherLienVisa(visa);
     }
     await charger();
@@ -180,26 +182,55 @@ async function relancerVisa(ficheId) {
   }
 }
 
+/**
+ * Deux voies quand le courriel ne part pas, dans cet ordre.
+ *
+ * La premiere suffit presque toujours : le conducteur a deja sa page en favori,
+ * il ne lui manque que de savoir qu'une fiche l'attend. Un message sans lien y
+ * pourvoit, et se transmet par n'importe quel moyen.
+ *
+ * La seconde, le lien de cette fiche, sert au cas ou il a perdu sa page. Elle
+ * vient en second parce qu'un lien de visa se transmet avec plus de precaution.
+ */
 function afficherLienVisa(visa) {
+  const alerte = visa.alerte || {};
   const fenetre = document.createElement('div');
   fenetre.className = 'fenetre';
   fenetre.innerHTML = `
     <div class="fenetre-corps">
-      <h2>Le courriel n'a pas pu partir</h2>
+      <h2>Prévenir ${echapper(visa.conducteur)}</h2>
       <p class="aide">
-        Aucun serveur d'envoi n'est configuré, ou il a refusé le message.
-        Transmettez ce lien à ${echapper(visa.conducteur)} (${echapper(visa.courriel)}) par vos propres moyens :
-        il ouvre la fiche et permet de la viser.
+        Le courriel n'est pas parti. ${echapper(visa.conducteur)} a sa page « Fiches à viser » :
+        il lui suffit de savoir qu'une fiche l'attend.
       </p>
-      <textarea readonly style="min-height:90px;font-family:monospace;font-size:0.8rem">${echapper(visa.lien || '')}</textarea>
+      <textarea readonly style="min-height:130px;font-size:0.86rem">${echapper(alerte.texte || '')}</textarea>
       <div class="rangee" style="margin-top:12px">
-        <button class="petit" type="button" data-copier>Copier le lien</button>
+        ${alerte.whatsapp ? `<a class="bouton-lien" href="${echapper(alerte.whatsapp)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
+        ${alerte.sms ? `<a class="bouton-lien" href="${echapper(alerte.sms)}">SMS</a>` : ''}
+        <button class="petit" type="button" data-copier-message>Copier le message</button>
+      </div>
+      <details style="margin-top:14px">
+        <summary class="aide" style="cursor:pointer">
+          Il a perdu sa page ? Transmettre le lien de cette fiche
+        </summary>
+        <p class="aide" style="margin-top:8px">
+          Ce lien ouvre cette fiche et permet de la viser : ne le transmettez qu'à
+          ${echapper(visa.conducteur)}, jamais à un chef d'équipe.
+        </p>
+        <textarea readonly style="min-height:80px;font-family:monospace;font-size:0.78rem">${echapper(visa.lien || '')}</textarea>
+        <button class="petit" type="button" data-copier style="margin-top:8px">Copier le lien</button>
+      </details>
+      <div class="rangee" style="margin-top:14px">
         <span class="pousse"></span>
         <button class="petit principal" type="button" data-fermer>Fermer</button>
       </div>
     </div>`;
   document.body.appendChild(fenetre);
 
+  fenetre.querySelector('[data-copier-message]').addEventListener('click', async () => {
+    await navigator.clipboard.writeText(alerte.texte || '').catch(() => {});
+    message('Message copié.', 'succes', 2500);
+  });
   fenetre.querySelector('[data-copier]').addEventListener('click', async () => {
     await navigator.clipboard.writeText(visa.lien || '').catch(() => {});
     message('Lien copié.', 'succes', 2500);

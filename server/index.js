@@ -17,6 +17,7 @@ const M = require('./mensuel');
 const I = require('./indicateurs');
 const V = require('./visa');
 const CAL = require('./calendrier');
+const AL = require('./alerte');
 const C = require('./courriel');
 
 const app = express();
@@ -314,10 +315,20 @@ app.post(
   })
 );
 
-/** Ce qu'on peut dire de l'envoi sans exposer le lien a n'importe qui. */
+/**
+ * Ce qu'on peut dire de l'envoi sans exposer le lien a n'importe qui.
+ *
+ * `alerte` accompagne toujours la reponse : c'est un message tout pret, sans
+ * aucun lien, que le chef d'equipe envoie de son telephone pour prevenir le
+ * conducteur. Le lien de visa, lui, ne sort que pour le directeur.
+ */
 function resumeVisa(visa, { avecLien = false } = {}) {
   if (!visa || visa.erreur) return { demande: false };
   if (!visa.conducteur) return { demande: false, raison: visa.raison || 'aucun_conducteur' };
+
+  const complete = visa.fiche ? F.obtenirFiche(visa.fiche.id) : null;
+  const lignes = complete ? complete.lignes.filter((l) => String(l.nom_affiche || '').trim()) : [];
+
   return {
     demande: true,
     conducteur: visa.conducteur.nom,
@@ -325,6 +336,15 @@ function resumeVisa(visa, { avecLien = false } = {}) {
     envoye: Boolean(visa.courriel && visa.courriel.envoye),
     raison: visa.courriel ? visa.courriel.raison : undefined,
     lien: avecLien ? visa.lien : undefined,
+    alerte: complete
+      ? AL.alerteVisa({
+          fiche: complete,
+          conducteur: visa.conducteur,
+          chefNom: complete.chef_nom,
+          nbSalaries: lignes.length,
+          totalMinutes: lignes.reduce((t, l) => t + (l.total_minutes || 0), 0),
+        })
+      : null,
   };
 }
 
@@ -424,8 +444,8 @@ app.post('/api/admin/conducteurs', A.exigerDirecteur, (req, res) => {
   // son acces », qui serait une occasion de plus de l'oublier.
   const jeton = require('crypto').randomBytes(24).toString('base64url');
   const r = db
-    .prepare('INSERT INTO conducteurs (nom, courriel, jeton) VALUES (?, ?, ?)')
-    .run(nom, courriel, jeton);
+    .prepare('INSERT INTO conducteurs (nom, courriel, telephone, jeton) VALUES (?, ?, ?, ?)')
+    .run(nom, courriel, String(req.body.telephone || '').trim().slice(0, 30), jeton);
   const conducteur = db.prepare('SELECT * FROM conducteurs WHERE id = ?').get(r.lastInsertRowid);
   res.json({ id: r.lastInsertRowid, lien: V.lienConducteur(conducteur) });
 });
@@ -442,7 +462,7 @@ app.post('/api/admin/conducteurs/:id/lien', A.exigerDirecteur, (req, res) => {
 });
 
 app.put('/api/admin/conducteurs/:id', A.exigerDirecteur, (req, res) => {
-  const champs = ['nom', 'courriel', 'actif'];
+  const champs = ['nom', 'courriel', 'telephone', 'actif'];
   const maj = {};
   for (const champ of champs) if (req.body[champ] !== undefined) maj[champ] = req.body[champ];
   if (!Object.keys(maj).length) return res.json({ ok: true });

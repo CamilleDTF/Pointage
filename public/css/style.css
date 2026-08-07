@@ -650,3 +650,18 @@ input[readonly] { background: #f7f9fc; color: var(--gris-texte); }
   font-variant-numeric: tabular-nums;
   box-shadow: -1px 0 0 var(--gris-bord);
 }
+
+/* Un lien qui se comporte en bouton : WhatsApp et SMS sont des liens, pas des
+   actions de la page — c'est le téléphone qui ouvre l'application. */
+.bouton-lien {
+  display: inline-block;
+  padding: 8px 14px;
+  border: 1px solid var(--bleu);
+  border-radius: 8px;
+  background: var(--bleu);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+.bouton-lien:hover { background: var(--bleu-clair); }

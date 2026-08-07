@@ -82,8 +82,8 @@
   let prochainId = 1;
   let session = null;
   const CONDUCTEURS = [
-    { id: 1, nom: 'MOREAU Paul', courriel: 'paul.moreau@exemple.fr', actif: 1, jeton: 'demo-paul' },
-    { id: 2, nom: 'RENAUD Sophie', courriel: 'sophie.renaud@exemple.fr', actif: 1, jeton: 'demo-sophie' },
+    { id: 1, nom: 'MOREAU Paul', courriel: 'paul.moreau@exemple.fr', telephone: '06 12 34 56 78', actif: 1, jeton: 'demo-paul' },
+    { id: 2, nom: 'RENAUD Sophie', courriel: 'sophie.renaud@exemple.fr', telephone: '06 98 76 54 32', actif: 1, jeton: 'demo-sophie' },
   ];
   // Un chef sur deux depend d'un conducteur : la demonstration montre les deux
   // circuits, avec et sans etape de visa.
@@ -419,6 +419,31 @@
     }
     const chef = utilisateurs.find((u) => u.id === (fiche ? fiche.chef_id : null));
     return chef && chef.conducteur_id ? CONDUCTEURS.find((c) => c.id === chef.conducteur_id && c.actif) : null;
+  }
+
+  /*
+   * Meme reponse que server/index.js. `envoye: false` n'est pas un defaut de la
+   * demonstration : c'est le cas qu'il faut montrer, celui ou le courriel ne
+   * part pas et ou le chef previent lui-meme par SMS ou WhatsApp.
+   */
+  function resumeVisa(fiche, conducteur, { avecLien = false } = {}) {
+    if (!conducteur) return { demande: false };
+    const complet = enrichir(fiche);
+    const lignes = complet.lignes.filter((l) => String(l.nom_affiche || '').trim());
+    return {
+      demande: true,
+      conducteur: conducteur.nom,
+      courriel: conducteur.courriel,
+      envoye: false,
+      lien: avecLien ? 'https://votre-adresse/visa.html?jeton=…(démonstration)' : undefined,
+      alerte: racine.Alerte.alerteVisa({
+        fiche: complet,
+        conducteur,
+        chefNom: complet.chef_nom,
+        nbSalaries: lignes.length,
+        totalMinutes: lignes.reduce((t, l) => t + (l.total_minutes || 0), 0),
+      }),
+    };
   }
 
   function exigerDirecteur() {
@@ -798,9 +823,7 @@
       return {
         fiche: enrichir(fiche),
         anomalies,
-        visa: conducteur
-          ? { demande: true, conducteur: conducteur.nom, courriel: conducteur.courriel, envoye: false }
-          : { demande: false },
+        visa: resumeVisa(fiche, conducteur),
       };
     }],
 
@@ -922,7 +945,7 @@
     ['GET', /^\/api\/admin\/conducteurs$/, () => {
       exigerDirecteur();
       return {
-        conducteurs: CONDUCTEURS,
+        conducteurs: CONDUCTEURS.map((c) => ({ ...c, lien: `https://votre-adresse/conducteur.html?cle=${c.jeton}` })),
         chefs: utilisateurs
           .filter((u) => u.role === 'chef')
           .map((u) => ({
@@ -931,6 +954,16 @@
           })),
         envoiConfigure: false,
       };
+    }],
+
+    // Regenerer un lien se voit : l'ancien jeton cesse aussitot de repondre,
+    // ce qui est precisement ce que la demonstration doit rendre credible.
+    ['POST', /^\/api\/admin\/conducteurs\/(\d+)\/lien$/, (m) => {
+      exigerDirecteur();
+      const c = CONDUCTEURS.find((x) => x.id === Number(m[1]));
+      if (!c) erreur(404, 'Conducteur introuvable.');
+      c.jeton = `demo-${Math.random().toString(36).slice(2, 10)}`;
+      return { lien: `https://votre-adresse/conducteur.html?cle=${c.jeton}` };
     }],
 
     ['PUT', /^\/api\/admin\/conducteurs\/(\d+)$/, (m, corps) => {
@@ -958,11 +991,7 @@
       if (!fiche) erreur(404, 'Fiche introuvable.');
       const conducteur = conducteurDeLaFiche(fiche);
       if (!conducteur) return { visa: { demande: false } };
-      return {
-        visa: { demande: true, conducteur: conducteur.nom, courriel: conducteur.courriel, envoye: false,
-                lien: 'https://votre-adresse/visa.html?jeton=…(démonstration)' },
-        fiche: enrichir(fiche),
-      };
+      return { visa: resumeVisa(fiche, conducteur, { avecLien: true }), fiche: enrichir(fiche) };
     }],
 
     ['GET', /^\/api\/admin\/indicateurs$/, () => {

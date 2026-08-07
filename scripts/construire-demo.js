@@ -166,6 +166,23 @@ function preparerParametres() {
   return source;
 }
 
+/*
+ * Le message d'alerte du conducteur vient du code reel, pas d'une copie : c'est
+ * lui qui garantit qu'aucun lien n'y figure, et une copie finirait par diverger.
+ * Seules changent les deux lignes de transport — le module devient un global.
+ */
+function preparerAlerte() {
+  let source = lire('server', 'alerte.js');
+  source = adapter(source, "const D = require('./domaine');", 'const D = globalThis.Regles;', 'regles partagees');
+  source = adapter(
+    source,
+    'module.exports = { alerteVisa, texteAlerte, numeroInternational };',
+    'globalThis.Alerte = { alerteVisa, texteAlerte, numeroInternational };',
+    "exposition de l'alerte"
+  );
+  return `(function () {\n${source}\n})();`;
+}
+
 /** Corps d'une page, sans ses balises <script> : le script est joue separement. */
 function corpsDePage(fichier) {
   const html = lire('public', fichier);
@@ -179,6 +196,7 @@ function corpsDePage(fichier) {
 const remplacements = {
   STYLE: lire('public', 'css', 'style.css'),
   REGLES: lire('public', 'js', 'regles.js'),
+  ALERTE: preparerAlerte(),
   FAUX_SERVEUR: lire('demo', 'faux-serveur.js'),
   COMMUN: preparerCommun(),
   GABARIT_CHEF: JSON.stringify(corpsDePage('chef.html')),

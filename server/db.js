@@ -265,6 +265,18 @@ ajouterColonne('fiches', 'conducteur_id', 'INTEGER REFERENCES conducteurs(id) ON
 ajouterColonne('conducteurs', 'jeton', 'TEXT');
 
 /*
+ * Numero de telephone du conducteur de travaux.
+ *
+ * Le lien personnel lui donne l'acces ; il ne le previent pas. Le courriel s'en
+ * chargeait, et c'est justement lui qui manque. Le chef d'equipe envoie donc un
+ * message depuis son propre telephone, par le moyen qu'ils utilisent deja —
+ * SMS, WhatsApp — et ce message ne contient aucun lien : le conducteur ouvre sa
+ * page, qu'il a en favori. Rien de secret ne transite par le chef, qui pourrait
+ * sinon viser ses propres fiches.
+ */
+ajouterColonne('conducteurs', 'telephone', "TEXT NOT NULL DEFAULT ''");
+
+/*
  * Jours de grand deplacement, saisis par le chef d'equipe, ligne par ligne.
  *
  * Le taux se deduisait de la ville du chantier : Paris et Nice au taux 80, le

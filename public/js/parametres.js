@@ -132,7 +132,8 @@ async function chargerConducteurs() {
         .map(
           (c) => `<tr style="${c.actif ? '' : 'opacity:.5'}">
             <td>${champ(c, 'nom', '190px')}</td>
-            <td>${champ(c, 'courriel', '260px', 'email')}</td>
+            <td>${champ(c, 'courriel', '240px', 'email')}</td>
+            <td>${champ(c, 'telephone', '140px', 'tel')}</td>
             <td>
               <div class="lien-conducteur">
                 <input readonly value="${echapper(c.lien)}" id="lien-${c.id}"
@@ -148,7 +149,7 @@ async function chargerConducteurs() {
           </tr>`
         )
         .join('')
-    : '<tr><td colspan="4" class="vide">Aucun conducteur de travaux enregistré.</td></tr>';
+    : '<tr><td colspan="5" class="vide">Aucun conducteur de travaux enregistré.</td></tr>';
 
   const options = (selectionne) =>
     `<option value="">— aucun, transmission directe à la direction</option>${conducteurs
@@ -260,8 +261,12 @@ window.rattacherChef = async (chefId, conducteurId) => {
 
 surClic('btn-ajout-conducteur', async () => {
   try {
-    await API.post('/api/admin/conducteurs', { nom: $('c-nom').value, courriel: $('c-courriel').value });
-    $('c-nom').value = $('c-courriel').value = '';
+    await API.post('/api/admin/conducteurs', {
+      nom: $('c-nom').value,
+      courriel: $('c-courriel').value,
+      telephone: $('c-telephone').value,
+    });
+    $('c-nom').value = $('c-courriel').value = $('c-telephone').value = '';
     await chargerConducteurs();
     message('Conducteur de travaux ajouté.', 'succes');
   } catch (e) {

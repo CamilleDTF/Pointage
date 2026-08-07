@@ -992,3 +992,43 @@ test('renommer un chef renomme aussi sa fiche de salarie', async () => {
   db.prepare('DELETE FROM salaries WHERE id = ?').run(sien);
   db.prepare("UPDATE utilisateurs SET nom = 'CHEF A' WHERE id = ?").run(chefA.id);
 });
+
+/*
+ * Prevenir le conducteur sans courriel.
+ *
+ * Le chef d'equipe recoit un message tout pret a envoyer de son telephone. Ce
+ * message ne doit contenir aucun lien : le chef pourrait sinon viser sa propre
+ * fiche, et le controle ne serait plus qu'une formalite.
+ */
+test('le chef recoit de quoi prevenir le conducteur, jamais de quoi viser', async () => {
+  const d = await connexion('dir', '9999');
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+  db.exec('DELETE FROM conducteurs');
+
+  const paul = (await d('POST', '/api/admin/conducteurs', {
+    nom: 'MOREAU Paul', courriel: 'paul@exemple.fr', telephone: '06 12 34 56 78',
+  })).corps;
+
+  const { visa } = await ficheTransmise(a, 46, paul.id);
+  assert.equal(visa.demande, true);
+  assert.equal(visa.envoye, false, 'aucun serveur d envoi dans les tests');
+
+  // Ce que le chef recoit : un message pret, et deux facons de l'envoyer.
+  assert.ok(visa.alerte, 'le chef doit repartir avec de quoi prevenir');
+  assert.equal(visa.alerte.telephone, '06 12 34 56 78');
+  assert.match(visa.alerte.texte, /Bonjour Paul/);
+  assert.match(visa.alerte.texte, /Semaine 46/);
+  assert.ok(visa.alerte.sms.startsWith('sms:+33612345678'));
+  assert.ok(visa.alerte.whatsapp.startsWith('https://wa.me/33612345678'));
+
+  // Et surtout : rien qui permette de viser.
+  const recu = JSON.stringify(visa);
+  assert.equal(visa.lien, undefined, 'le lien de visa ne sort jamais vers un chef');
+  assert.ok(!/visa\.html|conducteur\.html|cle=|jeton=/i.test(recu), 'aucun secret vers le chef');
+
+  // Le directeur, lui, obtient le lien : ce n'est pas lui qu'on controle.
+  const relance = (await d('POST', `/api/fiches/${(await ficheTransmise(a, 47, paul.id)).id}/relancer-visa`)).corps;
+  assert.match(relance.visa.lien, /visa\.html\?jeton=/);
+  assert.ok(relance.visa.alerte.texte.length > 50);
+});

@@ -80,13 +80,20 @@
         et un chef qui le détiendrait pourrait viser ses propres fiches. En cas de doute —
         téléphone perdu, départ — régénérez-le : l'ancien cesse aussitôt de fonctionner.
       </p>
+      <p class="aide">
+        Le <strong>téléphone</strong> sert à le prévenir : à chaque transmission, le chef d'équipe
+        peut lui envoyer un message par SMS ou WhatsApp depuis son propre téléphone. Ce message
+        <strong>ne contient pas le lien</strong> — il rappelle seulement qu'une fiche attend — de
+        sorte que rien de secret ne passe par le chef.
+      </p>
       <div class="enveloppe-table"><table id="table-conducteurs">
-        <thead><tr><th>Nom</th><th>Adresse de courriel</th><th>Lien personnel</th><th></th></tr></thead>
+        <thead><tr><th>Nom</th><th>Adresse de courriel</th><th>Téléphone</th><th>Lien personnel</th><th></th></tr></thead>
         <tbody></tbody>
       </table></div>
       <div class="rangee" style="margin-top:10px">
         <input id="c-nom" placeholder="NOM Prénom" style="flex:1;min-width:140px">
         <input id="c-courriel" type="email" placeholder="prenom.nom@societe.fr" style="flex:2;min-width:200px">
+        <input id="c-telephone" type="tel" placeholder="06 12 34 56 78" style="width:150px">
         <button class="petit principal" id="btn-ajout-conducteur" type="button">Ajouter</button>
       </div>
 

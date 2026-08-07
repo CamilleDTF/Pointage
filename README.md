@@ -128,17 +128,19 @@ peut la corriger, la valider, ou la renvoyer au chef avec un motif.
 ```
   chef d'équipe          conducteur de travaux           directeur
   ─────────────          ─────────────────────           ─────────
-  remplit et    ──────►  reçoit un courriel     ──────►  vérifie, corrige,
-  transmet               vise ou renvoie                 valide
-                                │
-                                └── renvoyée avec commentaire ──► retour au chef
+  remplit et    ──────►  ouvre sa page          ──────►  vérifie, corrige,
+  transmet               « Fiches à viser »               valide
+       │                 vise ou renvoie
+       │                        │
+       └── le prévient ─────────┘
+           (SMS ou WhatsApp)    └── renvoyée avec commentaire ──► retour au chef
 ```
 
-Le conducteur de travaux vise **avant** la direction. Il n'a pas de compte : chaque
-transmission lui envoie un courriel qui contient le pointage sous les yeux et deux
-boutons — *viser*, ou *renvoyer avec un commentaire*. C'est un choix délibéré : un
-compte de plus par conducteur, ce serait un code de plus à distribuer, à retenir et
-à réinitialiser, pour deux clics par semaine.
+Le conducteur de travaux vise **avant** la direction. Il n'a pas de compte : il a un
+**lien personnel**, qu'il garde en favori, où l'attendent les fiches à viser — le
+pointage sous les yeux et deux actions, *viser* ou *renvoyer avec un commentaire*.
+C'est un choix délibéré : un compte de plus par conducteur, ce serait un code de plus
+à distribuer, à retenir et à réinitialiser, pour deux clics par semaine.
 
 **C'est le chef d'équipe qui désigne le conducteur**, en bas de sa fiche, juste avant
 de transmettre. D'une semaine à l'autre le chantier peut relever de quelqu'un d'autre,
@@ -147,9 +149,11 @@ proposition, pré-sélectionnée pour lui. Le choix est obligatoire — dès lor
 un conducteur est enregistré : une organisation qui n'en a encore aucun n'est pas
 bloquée par une étape qui n'existe pas chez elle.
 
-Ce que le lien autorise est volontairement étroit : **une seule fiche**, **deux
-actions**, et seulement **tant qu'elle attend ce visa**. Une fiche modifiée puis
-retransmise reçoit un nouveau secret, ce qui condamne aussitôt les liens précédents.
+Quand l'envoi de courriels est configuré, chaque transmission lui adresse en plus un
+message qui porte un lien direct vers la fiche. Ce que ce lien-là autorise est
+volontairement étroit : **une seule fiche**, **deux actions**, et seulement **tant
+qu'elle attend ce visa**. Une fiche modifiée puis retransmise reçoit un nouveau secret,
+ce qui condamne aussitôt les liens précédents.
 
 Les liens du courriel **ouvrent une page, ils ne décident de rien**. La décision
 passe par un envoi depuis cette page. Sans cette précaution, l'antivirus d'une
@@ -159,6 +163,39 @@ viserait les fiches à la place du conducteur.
 Tant qu'**aucun conducteur n'est enregistré**, les fiches partent directement à la
 direction : l'étape est sautée sans blocage. Et le directeur peut toujours **valider sans le
 visa** quand le conducteur n'est pas joignable ; le bouton le dit alors explicitement.
+
+### Prévenir le conducteur sans courriel
+
+Le lien personnel règle l'**accès** du conducteur ; il ne le **prévient** de rien. Il
+faut encore qu'il pense à ouvrir sa page. C'était le rôle du courriel — et c'est
+justement lui qui manque quand le port 25 est fermé ou que l'envoi n'est pas encore
+autorisé sur le locataire.
+
+Alors le chef d'équipe le prévient lui-même. Sitôt la fiche transmise, une fenêtre lui
+propose un message tout prêt et trois façons de l'envoyer depuis son propre téléphone :
+**WhatsApp**, **SMS**, ou *Copier le message*. Renseignez le téléphone du conducteur
+dans *Paramètres ▸ Conducteurs de travaux* et les boutons apparaissent ; sans numéro,
+le texte reste copiable.
+
+```
+Bonjour Paul,
+
+BENALI Karim a transmis un pointage qui attend votre visa.
+Semaine 32 (du 03/08 au 09/08)
+Chantier : Lycée Jean Moulin — Toulouse
+4 salarié(s), 116h15
+
+Ouvrez votre page « Fiches à viser » (celle que la direction vous a transmise,
+à garder en favori).
+```
+
+**Ce message ne contient aucun lien**, et c'est tout l'édifice qui repose là-dessus.
+Un chef d'équipe qui transporterait le lien personnel du conducteur pourrait viser ses
+propres fiches, et le contrôle ne serait plus qu'une formalité. Le message dit ce qu'il
+faut savoir — qui, quelle semaine, quel chantier, combien d'heures — et rien de plus ;
+le conducteur ouvre sa page depuis ses favoris. `test/alerte.test.js` vérifie qu'aucune
+adresse web ni aucun secret n'y figure, et `test/cloisonnement.test.js` qu'un chef ne
+reçoit jamais de lien de visa dans ses réponses.
 
 ### Envoi des courriels
 
@@ -246,10 +283,10 @@ déposer les messages sur disque. Une bibliothèque d'envoi absente ne doit pas 
 l'application entière.
 
 **Sans SMTP configuré, rien ne casse** : le message est écrit dans
-`DATA_DIR/courriels/`, et le directeur récupère le lien depuis son tableau de bord
-(*Relancer le conducteur*) pour le transmettre lui-même. Ce n'est pas une
-dégradation silencieuse — c'est ce qui permet de faire tourner toute la chaîne
-avant que le service informatique ait fourni un compte d'envoi.
+`DATA_DIR/courriels/`, le conducteur passe par son lien personnel, et le chef le
+prévient par SMS ou WhatsApp (voir *Prévenir le conducteur sans courriel*). Ce n'est
+pas une dégradation silencieuse — c'est ce qui permet de faire tourner toute la chaîne
+sans jamais attendre que le service informatique fournisse un compte d'envoi.
 
 ## Les écrans
 
@@ -500,6 +537,7 @@ server/
   indicateurs.js Suivi des chefs : assiduité, retards, fiches renvoyées
   calendrier.js Vue mensuelle par personne, et registre des congés
   visa.js       Liens signés du conducteur de travaux, visa et renvoi
+  alerte.js     Message SMS / WhatsApp prévenant le conducteur — sans aucun lien
   courriel.js   Envoi SMTP, et dépôt sur disque à défaut de serveur d'envoi
   fournisseurs-courriel.js  Réglages SMTP devinés depuis les MX du domaine
   index.js      API HTTP et service des fichiers statiques
@@ -524,6 +562,7 @@ test/
   configuration.test.js Lecture de configuration.txt, priorité de l'environnement
   fournisseurs.test.js  Reconnaissance de l'hébergeur d'une adresse professionnelle
   courriel.test.js      Un serveur muet ne bloque pas la transmission d'une fiche
+  alerte.test.js        Le message envoyé par le chef ne porte ni lien ni secret
 scripts/
   tester-courriel.js    Essai d'envoi, et diagnostic des réglages SMTP
   importer-effectif.js  Chargement de l'effectif depuis le tableau d'affectation

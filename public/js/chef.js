@@ -147,7 +147,8 @@ function construireChoixConducteur() {
 
   poser('aide-conducteur', (aide) => {
     aide.textContent = conducteurs.length
-      ? "Il recevra la fiche par courriel dès la transmission, et pourra la viser ou vous la renvoyer avec un commentaire."
+      ? "Il verra la fiche dans sa page « Fiches à viser » dès la transmission, et pourra la viser " +
+        'ou vous la renvoyer avec un commentaire. Vous pourrez le prévenir par SMS ou WhatsApp.'
       : '';
   });
 }
@@ -937,6 +938,56 @@ function designerChamps(anomalies, deplier) {
 }
 
 /*
+ * Prevenir le conducteur de travaux, sans courriel.
+ *
+ * Le message ne contient aucun lien : le conducteur ouvre sa page « Fiches a
+ * viser », qu'il garde en favori. C'est ce qui permet au chef de l'envoyer
+ * lui-meme sans jamais detenir de quoi viser — il pourrait sinon viser ses
+ * propres fiches, et le controle ne serait plus qu'une formalite.
+ */
+function proposerAlerte(alerte) {
+  const fenetre = document.createElement('div');
+  fenetre.className = 'fenetre';
+  fenetre.innerHTML = `
+    <div class="fenetre-corps">
+      <h2>Prévenir ${echapper(alerte.nom)}</h2>
+      <p class="aide">
+        Le courriel n'a pas pu partir. Envoyez-lui ce message : il ouvrira sa page
+        « Fiches à viser », celle qu'il garde en favori.
+      </p>
+      <textarea readonly style="min-height:150px;font-size:0.86rem">${echapper(alerte.texte)}</textarea>
+      <div class="rangee" style="margin-top:12px">
+        ${alerte.whatsapp ? `<a class="bouton-lien" href="${echapper(alerte.whatsapp)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
+        ${alerte.sms ? `<a class="bouton-lien" href="${echapper(alerte.sms)}">SMS</a>` : ''}
+        <button class="petit" type="button" data-copier>Copier le message</button>
+        <span class="pousse"></span>
+        <button class="petit principal" type="button" data-fermer>Fermer</button>
+      </div>
+      ${
+        alerte.telephone
+          ? `<p class="aide" style="margin-top:10px">${echapper(alerte.telephone)}</p>`
+          : `<p class="aide" style="margin-top:10px">Aucun numéro enregistré pour ${echapper(alerte.nom)} :
+             copiez le message et envoyez-le par vos propres moyens. La direction peut ajouter son
+             numéro dans Paramètres.</p>`
+      }
+    </div>`;
+  document.body.appendChild(fenetre);
+
+  fenetre.querySelector('[data-copier]').addEventListener('click', async (e) => {
+    try {
+      await navigator.clipboard.writeText(alerte.texte);
+      e.target.textContent = 'Copié';
+    } catch {
+      // Presse-papiers refuse : la selection permet au moins un appui long.
+      const zone = fenetre.querySelector('textarea');
+      zone.focus();
+      zone.select();
+    }
+  });
+  fenetre.querySelector('[data-fermer]').addEventListener('click', () => fenetre.remove());
+}
+
+/*
  * Reprendre sa fiche pour la corriger.
  *
  * Le visa en cours est annule : un conducteur qui a vise une version ne doit
@@ -980,13 +1031,14 @@ async function transmettre() {
     } else if (visa.envoye) {
       message(`Fiche envoyée à ${visa.conducteur} pour visa.`, 'succes', 6000);
     } else {
-      // L'envoi a echoue : le dire franchement plutot que de laisser croire que
-      // le conducteur a recu quelque chose.
-      message(
-        `Fiche transmise, mais le courriel à ${visa.conducteur} n'est pas parti. Prévenez la direction.`,
-        'erreur',
-        9000
-      );
+      /*
+       * Le courriel n'est pas parti — pare-feu, serveur d'envoi non configure.
+       * La fiche attend bel et bien le visa : ce qui manque, c'est de prevenir
+       * le conducteur. Le chef le fait de son telephone, par le moyen qu'ils
+       * utilisent deja.
+       */
+      message(`Fiche transmise. Prévenez ${visa.conducteur} qu'elle l'attend.`, 'succes', 7000);
+      if (visa.alerte) proposerAlerte(visa.alerte);
     }
   } catch (e) {
     if (e.anomalies) {
