@@ -59,15 +59,27 @@ function texteAlerte({ fiche, conducteur, chefNom, nbSalaries, totalMinutes }) {
   ].join('\n');
 }
 
+/** L'objet du courriel. Le corps, lui, est le meme texte que partout ailleurs. */
+function objetAlerte({ fiche, chefNom }) {
+  return `Pointage à viser — semaine ${fiche.semaine}${chefNom ? ` (${chefNom})` : ''}`;
+}
+
 /**
- * Les trois facons d'envoyer ce message depuis un telephone. Aucune n'est
- * imposee : le chef prend celle dont il se sert deja avec ce conducteur.
+ * Les facons d'envoyer ce message. Aucune n'est imposee : le chef prend celle
+ * dont il se sert deja avec ce conducteur, sur l'appareil qu'il a en main.
  *
- * `wa.me` n'accepte pas de numero vide, et `sms:` s'en accommode : on ne
+ * `courriel` n'est pas une contradiction avec ce qui precede. Ce qui est bloque,
+ * c'est l'envoi *automatique par le serveur* ; la messagerie du chef, elle,
+ * fonctionne — c'est celle dont il se sert toute la journee. `mailto:` la lui
+ * ouvre avec le message deja ecrit, et c'est ce qui sauve le cas du PC de
+ * bureau, ou `sms:` ne mene generalement nulle part.
+ *
+ * `wa.me` n'accepte pas de numero vide, et `mailto:` pas d'adresse vide : on ne
  * propose que ce qui peut fonctionner.
  */
 function alerteVisa({ fiche, conducteur, chefNom, nbSalaries, totalMinutes }) {
   const texte = texteAlerte({ fiche, conducteur, chefNom, nbSalaries, totalMinutes });
+  const objet = objetAlerte({ fiche, chefNom });
   const numero = numeroInternational(conducteur.telephone);
   const encode = encodeURIComponent(texte);
 
@@ -75,10 +87,14 @@ function alerteVisa({ fiche, conducteur, chefNom, nbSalaries, totalMinutes }) {
     nom: conducteur.nom,
     telephone: conducteur.telephone || '',
     texte,
+    objet,
     // `?&body=` est la forme qui marche a la fois sur iOS et sur Android.
     sms: numero ? `sms:${numero}?&body=${encode}` : '',
     whatsapp: numero ? `https://wa.me/${numero.replace('+', '')}?text=${encode}` : '',
+    courriel: conducteur.courriel
+      ? `mailto:${encodeURIComponent(conducteur.courriel)}?subject=${encodeURIComponent(objet)}&body=${encode}`
+      : '',
   };
 }
 
-module.exports = { alerteVisa, texteAlerte, numeroInternational };
+module.exports = { alerteVisa, texteAlerte, objetAlerte, numeroInternational };

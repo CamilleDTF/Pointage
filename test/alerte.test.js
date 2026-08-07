@@ -75,11 +75,37 @@ test('le message ne contient jamais de lien ni de secret', () => {
   assert.ok(!/https?:\/\//.test(alerte.texte), 'aucune adresse web dans le message');
   assert.ok(!/jeton|cle=|visa\.html|conducteur\.html/i.test(alerte.texte), 'aucun secret dans le message');
 
-  // Les liens sms: et wa.me ne portent que ce meme texte.
+  // Les liens sms:, wa.me et mailto: ne portent que ce meme texte.
   const contenuSms = decodeURIComponent(alerte.sms.split('body=')[1]);
   assert.equal(contenuSms, alerte.texte);
   const contenuWhatsapp = decodeURIComponent(alerte.whatsapp.split('text=')[1]);
   assert.equal(contenuWhatsapp, alerte.texte);
+  const contenuCourriel = decodeURIComponent(alerte.courriel.split('&body=')[1]);
+  assert.equal(contenuCourriel, alerte.texte);
+  assert.ok(!/https?:\/\/|jeton|cle=/i.test(alerte.objet), 'aucun secret dans l’objet du courriel');
+});
+
+/*
+ * Le cas du PC de bureau : `sms:` n'y aboutit generalement pas, et c'est la
+ * messagerie de celui qui est devant l'ecran qui prend le relais. Elle
+ * fonctionne — ce n'est pas elle qui est bloquee, mais l'envoi automatique
+ * depuis le serveur.
+ */
+test('un courriel tout pret part de la messagerie de celui qui previent', () => {
+  const alerte = AL.alerteVisa({ fiche: ficheType, conducteur, chefNom: 'BENALI Karim' });
+
+  assert.ok(alerte.courriel.startsWith('mailto:paul%40exemple.fr?subject='));
+  assert.match(alerte.objet, /semaine 37/);
+  assert.match(alerte.objet, /BENALI Karim/);
+
+  // Sans adresse, pas de bouton : un mailto: sans destinataire n'aide personne.
+  const sans = AL.alerteVisa({
+    fiche: ficheType,
+    conducteur: { ...conducteur, courriel: '' },
+    chefNom: 'BENALI Karim',
+  });
+  assert.equal(sans.courriel, '');
+  assert.ok(sans.texte.length > 50, 'le texte reste disponible a la copie');
 });
 
 test('les liens sms et WhatsApp visent le bon numero', () => {

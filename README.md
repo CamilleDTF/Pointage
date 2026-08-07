@@ -133,7 +133,7 @@ peut la corriger, la valider, ou la renvoyer au chef avec un motif.
        │                 vise ou renvoie
        │                        │
        └── le prévient ─────────┘
-           (SMS ou WhatsApp)    └── renvoyée avec commentaire ──► retour au chef
+    (SMS, WhatsApp, courriel)   └── renvoyée avec commentaire ──► retour au chef
 ```
 
 Le conducteur de travaux vise **avant** la direction. Il n'a pas de compte : il a un
@@ -172,10 +172,22 @@ justement lui qui manque quand le port 25 est fermé ou que l'envoi n'est pas en
 autorisé sur le locataire.
 
 Alors le chef d'équipe le prévient lui-même. Sitôt la fiche transmise, une fenêtre lui
-propose un message tout prêt et trois façons de l'envoyer depuis son propre téléphone :
-**WhatsApp**, **SMS**, ou *Copier le message*. Renseignez le téléphone du conducteur
-dans *Paramètres ▸ Conducteurs de travaux* et les boutons apparaissent ; sans numéro,
-le texte reste copiable.
+propose un message tout prêt et de quoi l'envoyer d'un appui, **depuis l'appareil qu'il
+a en main**. Renseignez le téléphone du conducteur dans *Paramètres ▸ Conducteurs de
+travaux* et les boutons apparaissent ; sans numéro, le texte reste copiable.
+
+| Sur téléphone | Sur PC |
+| --- | --- |
+| **SMS**, **WhatsApp**, **Courriel**, *Copier* | **Courriel**, **WhatsApp**, *Copier* |
+
+Le SMS disparaît sur PC, et ce n'est pas un oubli : `sms:` n'y aboutit qu'avec un
+téléphone Android apparié, et un bouton qui ne fait rien est pire que pas de bouton —
+on croit avoir prévenu. C'est alors **Courriel** qui prend le relais : il ouvre la
+messagerie de celui qui est devant l'écran, message déjà écrit. Là non plus, pas de
+contradiction avec ce qui précède : ce qui est bloqué, c'est l'envoi *automatique par
+le serveur* ; la messagerie du chef, elle, fonctionne — c'est celle dont il se sert
+toute la journée. Le classement est fait par `blocAlerte` (`public/js/commun.js`) sur
+`(pointer: coarse)`, et *Copier le message* est là partout.
 
 ```
 Bonjour Paul,
@@ -537,7 +549,7 @@ server/
   indicateurs.js Suivi des chefs : assiduité, retards, fiches renvoyées
   calendrier.js Vue mensuelle par personne, et registre des congés
   visa.js       Liens signés du conducteur de travaux, visa et renvoi
-  alerte.js     Message SMS / WhatsApp prévenant le conducteur — sans aucun lien
+  alerte.js     Message prévenant le conducteur (SMS, WhatsApp, courriel) — sans aucun lien
   courriel.js   Envoi SMTP, et dépôt sur disque à défaut de serveur d'envoi
   fournisseurs-courriel.js  Réglages SMTP devinés depuis les MX du domaine
   index.js      API HTTP et service des fichiers statiques
@@ -551,7 +563,7 @@ public/
   calendrier.html Calendrier du mois   + js/calendrier.js
   visa.html       Visa du conducteur   + js/visa.js  (sans compte, par lien signé)
   js/regles.js  Règles métier partagées avec le serveur (heures, semaines, contrôles)
-  js/commun.js  API, signature tactile, file d'attente en cas de coupure réseau
+  js/commun.js  API, signature tactile, file d'attente réseau, boutons d'alerte selon l'appareil
 test/
   domaine.test.js       Conversion des heures, semaines ISO, contrôles de cohérence
   paie.test.js          Majorations 25 / 50 %, grand déplacement, découpage des mois

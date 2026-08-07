@@ -232,6 +232,51 @@ async function deconnexion() {
 }
 
 /*
+ * Prevenir le conducteur : les boutons d'envoi, classes selon l'appareil.
+ *
+ * Une fiche se remplit au telephone, mais elle se corrige aussi depuis un PC de
+ * bureau, et la direction relance depuis le sien. Or `sms:` n'y mene le plus
+ * souvent nulle part — sous Windows il faut un telephone Android apparie — et un
+ * bouton qui ne fait rien est pire que pas de bouton du tout : on croit avoir
+ * prevenu.
+ *
+ * On classe donc les moyens par ce qui fonctionne sur l'appareil qu'on a en
+ * main. Sur un PC, c'est la messagerie de celui qui est devant l'ecran qui prend
+ * le relais : ce n'est pas elle qui est bloquee, c'est l'envoi automatique
+ * depuis le serveur. « Copier le message » reste la, et marche partout.
+ */
+const surTelephone = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+
+function blocAlerte(alerte, attributCopier = 'data-copier') {
+  const lien = (href, libelle, nouvelOnglet) =>
+    href
+      ? `<a class="bouton-lien" href="${echapper(href)}"${
+          nouvelOnglet ? ' target="_blank" rel="noopener"' : ''
+        }>${libelle}</a>`
+      : '';
+
+  // L'ordre compte : le premier bouton est celui qui aboutit a coup sur ici.
+  const moyens = (
+    surTelephone
+      ? [lien(alerte.sms, 'SMS'), lien(alerte.whatsapp, 'WhatsApp', true), lien(alerte.courriel, 'Courriel')]
+      : [lien(alerte.courriel, 'Courriel'), lien(alerte.whatsapp, 'WhatsApp', true)]
+  ).filter(Boolean);
+
+  const note = surTelephone
+    ? ''
+    : `<p class="aide" style="margin-top:8px">Depuis un ordinateur, le SMS n’est pas disponible. ${
+        alerte.courriel
+          ? '<strong>Courriel</strong> ouvre votre messagerie avec le message déjà écrit : c’est la vôtre qui l’envoie, pas le serveur.'
+          : 'Copiez le message et envoyez-le par le moyen de votre choix.'
+      }</p>`;
+
+  return `<div class="rangee" style="margin-top:12px">
+        ${moyens.join('\n        ')}
+        <button class="petit" type="button" ${attributCopier}>Copier le message</button>
+      </div>${note}`;
+}
+
+/*
  * Le service worker mettait la coquille de l'application en cache pour un mode
  * hors ligne dont les chefs d'equipe n'ont pas besoin : ils sont connectes en
  * permanence. En echange, il pouvait servir une page d'une version et son

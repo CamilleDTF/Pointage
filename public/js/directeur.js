@@ -204,11 +204,7 @@ function afficherLienVisa(visa) {
         il lui suffit de savoir qu'une fiche l'attend.
       </p>
       <textarea readonly style="min-height:130px;font-size:0.86rem">${echapper(alerte.texte || '')}</textarea>
-      <div class="rangee" style="margin-top:12px">
-        ${alerte.whatsapp ? `<a class="bouton-lien" href="${echapper(alerte.whatsapp)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
-        ${alerte.sms ? `<a class="bouton-lien" href="${echapper(alerte.sms)}">SMS</a>` : ''}
-        <button class="petit" type="button" data-copier-message>Copier le message</button>
-      </div>
+      ${blocAlerte(alerte, 'data-copier-message')}
       <details style="margin-top:14px">
         <summary class="aide" style="cursor:pointer">
           Il a perdu sa page ? Transmettre le lien de cette fiche

@@ -176,8 +176,8 @@ function preparerAlerte() {
   source = adapter(source, "const D = require('./domaine');", 'const D = globalThis.Regles;', 'regles partagees');
   source = adapter(
     source,
-    'module.exports = { alerteVisa, texteAlerte, numeroInternational };',
-    'globalThis.Alerte = { alerteVisa, texteAlerte, numeroInternational };',
+    'module.exports = { alerteVisa, texteAlerte, objetAlerte, numeroInternational };',
+    'globalThis.Alerte = { alerteVisa, texteAlerte, objetAlerte, numeroInternational };',
     "exposition de l'alerte"
   );
   return `(function () {\n${source}\n})();`;

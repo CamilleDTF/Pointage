@@ -148,7 +148,8 @@ function construireChoixConducteur() {
   poser('aide-conducteur', (aide) => {
     aide.textContent = conducteurs.length
       ? "Il verra la fiche dans sa page « Fiches à viser » dès la transmission, et pourra la viser " +
-        'ou vous la renvoyer avec un commentaire. Vous pourrez le prévenir par SMS ou WhatsApp.'
+        'ou vous la renvoyer avec un commentaire. Vous pourrez le prévenir juste après, ' +
+        (surTelephone ? 'par SMS ou WhatsApp.' : 'par courriel ou WhatsApp.')
       : '';
   });
 }
@@ -956,10 +957,8 @@ function proposerAlerte(alerte) {
         « Fiches à viser », celle qu'il garde en favori.
       </p>
       <textarea readonly style="min-height:150px;font-size:0.86rem">${echapper(alerte.texte)}</textarea>
+      ${blocAlerte(alerte)}
       <div class="rangee" style="margin-top:12px">
-        ${alerte.whatsapp ? `<a class="bouton-lien" href="${echapper(alerte.whatsapp)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
-        ${alerte.sms ? `<a class="bouton-lien" href="${echapper(alerte.sms)}">SMS</a>` : ''}
-        <button class="petit" type="button" data-copier>Copier le message</button>
         <span class="pousse"></span>
         <button class="petit principal" type="button" data-fermer>Fermer</button>
       </div>
