@@ -1122,3 +1122,91 @@ test('le lien personnel fonctionne encore, meme pour un conducteur connecte', as
   assert.equal(tableau.statut, 200, 'le jeton autorise, pas la session');
   assert.equal(tableau.corps.enAttente.length, 1);
 });
+
+/*
+ * Deux chantiers dans la meme semaine.
+ *
+ * La base l'autorisait depuis toujours — son unicite porte sur le chef, la
+ * semaine et le chantier — mais aucune porte ne permettait d'ouvrir la seconde
+ * fiche. Ce test verifie la porte, et surtout que les controles cessent de
+ * raisonner sur des moities de semaine.
+ */
+test('un chef ouvre une seconde fiche pour un autre chantier de la semaine', async () => {
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+
+  const premiere = (await a('POST', '/api/fiches/semaine', { annee: 2026, semaine: 15 })).corps;
+  assert.equal(premiere.fichesSemaine.length, 1);
+  await a('PUT', `/api/fiches/${premiere.fiche.id}`, { chantier: 'Lycee Jean Moulin', ville: 'Toulouse' });
+
+  // Sans nom, les deux fiches ne se distingueraient pas — jusque dans la base.
+  const sansNom = await a('POST', '/api/fiches/semaine/chantier', { annee: 2026, semaine: 15, chantier: '  ' });
+  assert.equal(sansNom.statut, 400);
+  assert.match(sansNom.corps.erreur, /nom du second chantier/);
+
+  const seconde = await a('POST', '/api/fiches/semaine/chantier', {
+    annee: 2026, semaine: 15, chantier: 'Gymnase Sud',
+  });
+  assert.equal(seconde.statut, 200);
+  assert.equal(seconde.corps.fiche.chantier, 'Gymnase Sud');
+  assert.equal(seconde.corps.fichesSemaine.length, 2);
+
+  // Deux fois le meme chantier n'aurait aucun sens, et la base le refuserait.
+  const doublon = await a('POST', '/api/fiches/semaine/chantier', {
+    annee: 2026, semaine: 15, chantier: 'gymnase sud',
+  });
+  assert.equal(doublon.statut, 409);
+
+  // La fiche de la semaine reste la premiere ouverte : on ne perd pas sa place.
+  const rouvert = (await a('POST', '/api/fiches/semaine', { annee: 2026, semaine: 15 })).corps;
+  assert.equal(rouvert.fiche.id, premiere.fiche.id);
+  assert.equal(rouvert.fichesSemaine.length, 2);
+
+  // Un autre chef ne voit rien de tout cela.
+  const b = await connexion('chefb', '2222');
+  const sienne = (await b('POST', '/api/fiches/semaine', { annee: 2026, semaine: 15 })).corps;
+  assert.equal(sienne.fichesSemaine.length, 1);
+  assert.notEqual(sienne.fiche.id, premiere.fiche.id);
+  assert.equal((await b('GET', `/api/fiches/${seconde.corps.fiche.id}`)).statut, 403);
+});
+
+/*
+ * Le controle qui protege la paie, joue en vrai : le meme operateur sur les deux
+ * fiches, avec cinq jours de grand deplacement declares de chaque cote.
+ */
+test('les GD declares sur deux fiches se comptent ensemble', async () => {
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+
+  const salarie = db.prepare("SELECT id FROM salaries WHERE nom = 'ANDRE'").get().id;
+  const semaineComplete = (gd) => ({
+    salarie_id: salarie,
+    nom_affiche: 'ANDRE Alain',
+    nb_gd72: gd,
+    signature: 'data:image/png;base64,xxx',
+    jours: Array.from({ length: 7 }, (_, j) => ({ jour: j, minutes: j <= 4 ? 450 : 0, saisi: 1 })),
+  });
+
+  const une = (await a('POST', '/api/fiches/semaine', { annee: 2026, semaine: 16 })).corps.fiche;
+  await a('PUT', `/api/fiches/${une.id}`, {
+    chantier: 'Lycee Jean Moulin', ville: 'Toulouse', lignes: [semaineComplete(5)],
+  });
+
+  const deux = (await a('POST', '/api/fiches/semaine/chantier', {
+    annee: 2026, semaine: 16, chantier: 'Gymnase Sud',
+  })).corps.fiche;
+  const apres = await a('PUT', `/api/fiches/${deux.id}`, {
+    chantier: 'Gymnase Sud', ville: 'Toulouse', lignes: [semaineComplete(5)],
+  });
+
+  const gd = apres.corps.anomalies.find((x) => /grand deplacement/.test(x.message));
+  assert.ok(gd, `le cumul doit etre vu : ${JSON.stringify(apres.corps.anomalies)}`);
+  assert.equal(gd.niveau, 'bloquant');
+  assert.match(gd.message, /10 jours de grand deplacement/);
+  assert.match(gd.message, /« Lycee Jean Moulin »/);
+
+  // Et le plafond de 48 h, qu'aucune des deux fiches ne depassait seule.
+  const plafond = apres.corps.anomalies.find((x) => /plafond/.test(x.message));
+  assert.ok(plafond, 'deux fois 37h30 font 75h sur la semaine');
+  assert.match(plafond.message, /75h00/);
+});

@@ -56,6 +56,20 @@
       </div>
       <p class="aide" id="periode"></p>
       <p class="aide masque" id="motif-rejet" style="color:var(--rouge);font-weight:600"></p>
+
+      <!--
+        Une fiche par chantier, comme sur le papier. Ce bloc reste invisible tant
+        que la semaine n'en compte qu'une : la plupart des semaines n'ont rien a
+        choisir, et un selecteur a une seule entree n'aide personne.
+      -->
+      <div class="masque" id="bloc-chantiers" style="margin-top:10px">
+        <label>Chantiers de la semaine</label>
+        <div class="rangee" id="onglets-chantiers"></div>
+      </div>
+      <div class="rangee" style="margin-top:8px">
+        <button class="petit" id="btn-second-chantier" type="button">+ Autre chantier cette semaine</button>
+        <span class="aide" id="aide-second-chantier"></span>
+      </div>
     </section>
 
     <div id="contenu" class="masque">

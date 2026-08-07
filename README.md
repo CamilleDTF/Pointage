@@ -123,6 +123,41 @@ qui ouvrirait directement l'adresse de la fiche d'un collègue reçoit un refus.
 Une fiche transmise se reprend d'un clic tant qu'elle n'est pas validée ; le directeur
 peut la corriger, la valider, ou la renvoyer au chef avec un motif.
 
+## Deux chantiers dans la même semaine
+
+Un chef d'équipe peut en tenir deux à la fois. Il ouvre alors **une fiche par
+chantier** — comme sur le papier, où c'était déjà une feuille par chantier — avec le
+bouton *Autre chantier cette semaine*. Le nom du chantier est demandé dès l'ouverture :
+c'est lui qui distingue les deux fiches, jusque dans la contrainte d'unicité de la base.
+
+La seconde fiche s'ouvre **vide**, sans l'équipe pré-remplie. C'est voulu : on ne
+l'ouvre que parce qu'une *partie* du monde est ailleurs, et y reporter tout l'effectif
+vaudrait une anomalie par personne et par jour pour des gens qui n'ont jamais mis les
+pieds sur ce chantier.
+
+### Les contrôles comptent la semaine, pas la feuille
+
+Un même opérateur peut travailler sur les deux chantiers. Les contrôles reçoivent donc
+**ce qui est déjà pointé ailleurs dans la semaine** (`optionsControle`, `server/fiches.js`),
+et non plus la seule fiche ouverte. Sans cela :
+
+| | Ce qui se passait | Ce qui se passe |
+|---|---|---|
+| **Plafond de 48 h** | 30 h ici, 25 h là-bas : deux fiches conformes | 55 h signalées, en nommant l'autre chantier |
+| **Grand déplacement** | 5 jours déclarés de chaque côté = 10 jours dans une semaine de 5 | Bloqué, avec le détail du cumul |
+| **Journée non renseignée** | Les jours passés sur l'autre chantier réclamaient un 0 | Silence : la journée est pointée ailleurs |
+
+Le grand déplacement est le plus important des trois, et le moins visible. Le panier
+repas vaut *jours travaillés − jours de GD*, avec un plancher à zéro : des GD comptés
+deux fois ne produisent donc pas un montant absurde qu'on remarquerait — ils font
+**disparaître les paniers en silence**. D'où un blocage, et non une simple alerte.
+
+Le contexte de la semaine part avec la fiche vers le navigateur : le chef travaille sur
+chantier, souvent sans réseau, et ses contrôles doivent être exactement ceux du serveur.
+Le plafond de 48 h se compte sur **toutes** les fiches de la semaine, y compris celles
+d'un autre chef — c'est la semaine d'un homme, pas celle d'une équipe — mais seuls les
+chantiers du chef lui-même sont nommés dans les messages.
+
 ## Le circuit d'une fiche
 
 ```
@@ -579,6 +614,7 @@ test/
   courriel.test.js      Un serveur muet ne bloque pas la transmission d'une fiche
   alerte.test.js        Le message envoyé par le chef ne porte ni lien ni secret
   migration-conducteurs.test.js  Les conducteurs deviennent des comptes sans perdre une fiche
+  semaine-partagee.test.js  Un operateur sur deux chantiers : plafonds et primes de la semaine
 scripts/
   tester-courriel.js    Essai d'envoi, et diagnostic des réglages SMTP
   importer-effectif.js  Chargement de l'effectif depuis le tableau d'affectation

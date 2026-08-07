@@ -71,6 +71,52 @@
     return Boolean(j.saisi) || (Number(j.minutes) || 0) > 0 || Boolean(String(j.code_absence || '').trim());
   }
 
+  /*
+   * Comment une personne se reconnait d'une fiche a l'autre.
+   *
+   * Un chef peut tenir deux chantiers la meme semaine, et le meme operateur
+   * figurer sur les deux. Pour recouper ses journees il faut une cle stable :
+   * son numero de salarie quand il en a un, son nom sinon — un renfort saisi a
+   * la main n'est rattache a personne.
+   */
+  function clePointage(ligne) {
+    const l = ligne || {};
+    return l.salarie_id
+      ? `id:${l.salarie_id}`
+      : `nom:${sansAccents(String(l.nom_affiche || '')).trim().toLowerCase()}`;
+  }
+
+  /** Ce qui est pointe ailleurs dans la semaine pour cette personne. */
+  function pointageAilleurs(options, ligne) {
+    const trouve = ((options || {}).ailleurs || {})[clePointage(ligne)];
+    return {
+      minutes: [0, 0, 0, 0, 0, 0, 0],
+      minutesTotal: 0,
+      joursTravailles: 0,
+      joursGD: 0,
+      joursZone: 0,
+      chantiers: [],
+      autresEquipes: false,
+      ...(trouve || {}),
+    };
+  }
+
+  /*
+   * Comment nommer « l'autre chantier » dans un message.
+   *
+   * Les chantiers du chef lui-meme se nomment : il les reconnait, et savoir
+   * lequel lui evite de chercher. Ceux d'un autre chef ne se nomment pas —
+   * qu'un de ses operateurs ait travaille ailleurs le regarde, ou il a
+   * travaille ne le regarde pas.
+   */
+  function nommerAilleurs(ailleurs) {
+    const nommes = ailleurs.chantiers.map((c) => `« ${c} »`);
+    if (ailleurs.autresEquipes) nommes.push('un autre chantier');
+    if (!nommes.length) return 'un autre chantier';
+    if (nommes.length === 1) return nommes[0];
+    return `${nommes.slice(0, -1).join(', ')} et ${nommes[nommes.length - 1]}`;
+  }
+
   /** 450 -> 7.5 (colonnes numeriques des exports Excel) */
   function versDecimal(minutes) {
     return Math.round(((Number(minutes) || 0) / 60) * 100) / 100;
@@ -426,20 +472,30 @@
 
     for (const { ligne, index } of remplies) {
       const nom = ligne.nom_affiche.trim();
+      const ailleurs = pointageAilleurs(options, ligne);
+      const autresChantiers = nommerAilleurs(ailleurs);
       let totalSemaine = 0;
+      let joursTravailles = 0;
 
       for (let j = 0; j < 7; j += 1) {
         const jour = (ligne.jours || []).find((x) => x.jour === j) || { minutes: 0, code_absence: '' };
         const minutes = Number(jour.minutes) || 0;
         const code = String(jour.code_absence || '').trim().toUpperCase();
         totalSemaine += minutes;
+        if (minutes > 0 || ailleurs.minutes[j] > 0) joursTravailles += 1;
 
         if (code && !CODES_VALIDES.includes(code)) {
           bloquant(`${nom} - ${JOURS[j]} : code absence "${code}" inconnu.`, { ligne: index, jour: j });
         }
-        // Une journee non travaillee se declare en saisissant 0 : c'est ce qui
-        // permet de distinguer "il n'a pas travaille" de "j'ai oublie ce jour".
-        if (!jourRenseigne(jour) && j <= 4) {
+        /*
+         * Une journee non travaillee se declare en saisissant 0 : c'est ce qui
+         * permet de distinguer « il n'a pas travaille » de « j'ai oublie ce
+         * jour ». Mais une journee passee sur l'autre chantier de la semaine
+         * n'est ni l'un ni l'autre : elle est deja pointee ailleurs, et exiger
+         * un 0 ici obligerait le chef a declarer absent quelqu'un qui
+         * travaillait. On se tait donc, plutot que de reclamer un faux.
+         */
+        if (!jourRenseigne(jour) && j <= 4 && !ailleurs.minutes[j]) {
           bloquant(
             `${nom} - ${JOURS[j]} : journee non renseignee. Saisissez les heures, 0 si le jour n'est pas travaille, ou un code absence.`,
             { ligne: index, jour: j }
@@ -453,11 +509,57 @@
         }
       }
 
-      if (totalSemaine > 48 * 60) {
-        alerte(`${nom} : ${versTexte(totalSemaine)} sur la semaine, au-dela du plafond de 48h.`, { ligne: index });
+      /*
+       * Le plafond de 48 h porte sur la semaine d'un homme, pas sur une feuille
+       * de papier. Compte fiche par fiche, quelqu'un a 30 h ici et 25 h la-bas
+       * passait deux controles sans que ses 55 h apparaissent nulle part.
+       */
+      const semaineEntiere = totalSemaine + ailleurs.minutesTotal;
+      if (semaineEntiere > 48 * 60) {
+        alerte(
+          ailleurs.minutesTotal
+            ? `${nom} : ${versTexte(semaineEntiere)} sur la semaine en comptant ${autresChantiers}, au-dela du plafond de 48h.`
+            : `${nom} : ${versTexte(totalSemaine)} sur la semaine, au-dela du plafond de 48h.`,
+          { ligne: index }
+        );
       }
       if (ligne.jours_zone > 7) {
         bloquant(`${nom} : ${ligne.jours_zone} jours en zone declares pour une semaine de 7 jours.`, { ligne: index, champ: 'zone' });
+      }
+
+      /*
+       * Les primes comptees en jours — grands deplacements, jours en zone — se
+       * declarent sur chaque fiche. Deux chantiers dans la semaine, et les voila
+       * additionnes : cinq jours de GD ici et cinq la-bas font dix jours de
+       * grand deplacement dans une semaine qui n'en compte que cinq.
+       *
+       * Le panier repas se calcule en « jours travailles moins jours de GD »,
+       * plancher a zero : des GD comptes deux fois ne produisent donc pas un
+       * montant absurde qu'on remarquerait, ils font disparaitre les paniers
+       * sans rien dire. D'ou un blocage, et non une simple alerte.
+       */
+      const gdFiche = (Number(ligne.nb_gd72) || 0) + (Number(ligne.nb_gd80) || 0);
+      const gdSemaine = gdFiche + ailleurs.joursGD;
+      if (gdSemaine > joursTravailles) {
+        bloquant(
+          ailleurs.joursGD
+            ? `${nom} : ${gdSemaine} jours de grand deplacement declares sur la semaine (dont ${ailleurs.joursGD} sur ${autresChantiers}) pour ${joursTravailles} jours travailles.`
+            : `${nom} : ${gdSemaine} jours de grand deplacement declares pour ${joursTravailles} jours travailles.`,
+          { ligne: index, champ: 'gd' }
+        );
+      }
+      /*
+       * Les jours en zone se cumulent de la meme facon, et gonflent la prime
+       * amiante. On ne signale que le cumul entre fiches : au-dela, le nombre de
+       * jours en zone d'une fiche isolee ne regarde que son chef, qui sait mieux
+       * que nous ce qui s'est passe sur son chantier.
+       */
+      const zoneSemaine = (Number(ligne.jours_zone) || 0) + ailleurs.joursZone;
+      if (ailleurs.joursZone && zoneSemaine > joursTravailles) {
+        alerte(
+          `${nom} : ${zoneSemaine} jours en zone declares sur la semaine (dont ${ailleurs.joursZone} sur ${autresChantiers}) pour ${joursTravailles} jours travailles.`,
+          { ligne: index, champ: 'zone' }
+        );
       }
       if (ligne.jours_zone > 0 && !ligne.type_masque) {
         bloquant(`${nom} : jours en zone declares sans type de masque (VA ou AA).`, { ligne: index, champ: 'masque' });
@@ -500,6 +602,7 @@
     zoneDepuisVille,
     semainesDuMois,
     sansAccents,
+    clePointage,
     separerNomPrenom,
     memePersonne,
     MOIS,

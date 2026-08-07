@@ -125,8 +125,8 @@
     return lui ? [lui, ...membres.filter((s) => s.id !== lui.id)] : membres;
   }
 
-  function nouvelleFiche(chefId, annee, semaine) {
-    const equipe = equipeDuChef(chefId);
+  function nouvelleFiche(chefId, annee, semaine, { avecEquipe = true } = {}) {
+    const equipe = avecEquipe ? equipeDuChef(chefId) : [];
     const fiche = {
       id: prochainId++,
       chef_id: chefId,
@@ -458,6 +458,62 @@
     return utilisateurs.find((u) => u.id === id) || CONDUCTEURS.find((c) => c.id === id) || null;
   }
 
+  /*
+   * Ce qui est pointe sur les AUTRES fiches de la semaine, par personne. Meme
+   * lecture que server/fiches.js : sans elle, les controles raisonneraient sur
+   * des moities de semaine des qu'un chef tient deux chantiers.
+   */
+  function pointagesDeLaSemaine(fiche) {
+    const parPersonne = {};
+    for (const autre of fiches) {
+      if (autre.id === fiche.id || autre.annee !== fiche.annee || autre.semaine !== fiche.semaine) continue;
+      for (const ligne of autre.lignes) {
+        if (!String(ligne.nom_affiche || '').trim()) continue;
+        const cle = R.clePointage(ligne);
+        const cumul = (parPersonne[cle] = parPersonne[cle] || {
+          minutes: [0, 0, 0, 0, 0, 0, 0],
+          minutesTotal: 0,
+          joursTravailles: 0,
+          joursGD: 0,
+          joursZone: 0,
+          chantiers: [],
+          autresEquipes: false,
+        });
+        for (const jour of ligne.jours) {
+          const minutes = Number(jour.minutes) || 0;
+          if (!minutes) continue;
+          if (!cumul.minutes[jour.jour]) cumul.joursTravailles += 1;
+          cumul.minutes[jour.jour] += minutes;
+          cumul.minutesTotal += minutes;
+        }
+        cumul.joursGD += (Number(ligne.nb_gd72) || 0) + (Number(ligne.nb_gd80) || 0);
+        cumul.joursZone += Number(ligne.jours_zone) || 0;
+
+        if (autre.chef_id !== fiche.chef_id) {
+          cumul.autresEquipes = true;
+        } else {
+          const nom = String(autre.chantier || '').trim();
+          if (nom && !cumul.chantiers.includes(nom)) cumul.chantiers.push(nom);
+        }
+      }
+    }
+    return parPersonne;
+  }
+
+  function optionsControle(fiche) {
+    return {
+      conducteursDisponibles: CONDUCTEURS.filter((c) => c.actif).length,
+      ailleurs: pointagesDeLaSemaine(fiche),
+    };
+  }
+
+  /* Les fiches d'un chef pour une semaine : une par chantier. */
+  function fichesDeLaSemaine(chefId, annee, semaine) {
+    return fiches
+      .filter((f) => f.chef_id === chefId && f.annee === annee && f.semaine === semaine)
+      .map((f) => ({ id: f.id, chantier: f.chantier, ville: f.ville, statut: f.statut, visa_statut: f.visa_statut }));
+  }
+
   function exigerDirecteur() {
     const u = exigerConnexion();
     if (u.role !== 'directeur') erreur(403, 'Action réservée au directeur.');
@@ -741,15 +797,39 @@
       }
       const chefId = u.role === 'directeur' ? Number(corps.chefId) : u.id;
       const existante = fiches.find((f) => f.chef_id === chefId && f.annee === annee && f.semaine === semaine);
-      return { fiche: enrichir(existante || nouvelleFiche(chefId, annee, semaine)) };
+      const fiche = enrichir(existante || nouvelleFiche(chefId, annee, semaine));
+      return { fiche, fichesSemaine: fichesDeLaSemaine(chefId, annee, semaine) };
+    }],
+
+    /*
+     * Un second chantier dans la meme semaine. La fiche s'ouvre vide : le chef
+     * la cree justement parce qu'une PARTIE de son monde est ailleurs.
+     */
+    ['POST', /^\/api\/fiches\/semaine\/chantier$/, (m, corps) => {
+      const u = exigerConnexion();
+      const annee = Number(corps.annee);
+      const semaine = Number(corps.semaine);
+      const chefId = u.role === 'directeur' ? Number(corps.chefId) : u.id;
+      const nom = String(corps.chantier || '').trim();
+      if (!nom) erreur(400, 'Donnez le nom du second chantier : c’est lui qui distingue les deux fiches.');
+
+      const deja = fichesDeLaSemaine(chefId, annee, semaine);
+      if (!deja.length) erreur(400, 'Ouvrez d’abord la fiche de la semaine.');
+      if (deja.some((f) => R.sansAccents(f.chantier).trim().toLowerCase() === R.sansAccents(nom).trim().toLowerCase())) {
+        erreur(409, `Une fiche existe déjà cette semaine pour « ${nom} ».`);
+      }
+
+      const fiche = nouvelleFiche(chefId, annee, semaine, { avecEquipe: false });
+      fiche.chantier = nom;
+      return { fiche: enrichir(fiche), fichesSemaine: fichesDeLaSemaine(chefId, annee, semaine) };
     }],
 
     ['GET', /^\/api\/fiches\/(\d+)$/, (m) => {
       const u = exigerConnexion();
       const fiche = enrichir(ficheAccessible(m[1], u));
-      fiche.anomalies = R.controlerFiche(fiche, fiche.lignes, {
-        conducteursDisponibles: CONDUCTEURS.filter((c) => c.actif).length,
-      });
+      const options = optionsControle(fiche);
+      fiche.anomalies = R.controlerFiche(fiche, fiche.lignes, options);
+      fiche.ailleurs = options.ailleurs;
       fiche.journal = [];
       return { fiche };
     }],
@@ -803,9 +883,7 @@
       const complet = enrichir(fiche);
       return {
         fiche: complet,
-        anomalies: R.controlerFiche(complet, complet.lignes, {
-          conducteursDisponibles: CONDUCTEURS.filter((c) => c.actif).length,
-        }),
+        anomalies: R.controlerFiche(complet, complet.lignes, optionsControle(complet)),
       };
     }],
 
@@ -813,9 +891,7 @@
       const u = exigerConnexion();
       const fiche = ficheAccessible(m[1], u);
       const complet = enrichir(fiche);
-      const anomalies = R.controlerFiche(complet, complet.lignes, {
-        conducteursDisponibles: CONDUCTEURS.filter((c) => c.actif).length,
-      });
+      const anomalies = R.controlerFiche(complet, complet.lignes, optionsControle(complet));
       if (anomalies.some((a) => a.niveau === 'bloquant')) {
         const e = new Error('La fiche est incomplète.');
         e.statut = 422;

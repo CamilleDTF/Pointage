@@ -323,19 +323,77 @@ async function changerCode() {
 
 /* --------------------------------- Chargement ----------------------------- */
 
+/* Les fiches de la semaine ouverte : une par chantier. */
+let fichesSemaine = [];
+
 async function ouvrirFiche(afficherMessage = true) {
   const annee = Number($('annee').value);
   const semaine = Number($('semaine').value);
   try {
     const reponse = await API.post('/api/fiches/semaine', { annee, semaine });
-    const detail = await API.get(`/api/fiches/${reponse.fiche.id}`);
-    fiche = detail.fiche;
-    afficher();
+    fichesSemaine = reponse.fichesSemaine || [];
+    await chargerFiche(reponse.fiche.id);
     if (afficherMessage) message(`Semaine ${semaine} ouverte.`, 'info', 2000);
   } catch (e) {
     message(e.message, 'erreur');
   }
 }
+
+async function chargerFiche(id) {
+  const detail = await API.get(`/api/fiches/${id}`);
+  fiche = detail.fiche;
+  afficher();
+}
+
+window.changerChantier = async (id) => {
+  if (Number(id) === fiche.id) return;
+  try {
+    await chargerFiche(Number(id));
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
+};
+
+/*
+ * Le selecteur de chantiers. Il ne s'affiche qu'a partir de deux : une semaine
+ * ordinaire n'a rien a choisir, et un onglet unique ne ferait qu'encombrer.
+ */
+function afficherChantiers() {
+  const bloc = $('bloc-chantiers');
+  if (!bloc) return;
+  bloc.classList.toggle('masque', fichesSemaine.length < 2);
+  $('onglets-chantiers').innerHTML = fichesSemaine
+    .map((f, i) => {
+      const nom = (f.chantier || '').trim() || `Chantier ${i + 1}`;
+      const actif = f.id === fiche.id ? ' actif' : '';
+      return `<button class="onglet${actif}" type="button" onclick="changerChantier(${f.id})">
+                ${echapper(nom)} ${badgeStatut(Regles.etatAffiche(f))}
+              </button>`;
+    })
+    .join('');
+
+  $('aide-second-chantier').textContent =
+    fichesSemaine.length < 2
+      ? 'Si vous tenez deux chantiers cette semaine, ouvrez une fiche pour chacun.'
+      : 'Les heures des deux fiches se cumulent : les contrôles comptent la semaine entière.';
+}
+
+surClic('btn-second-chantier', async () => {
+  const nom = prompt('Nom de l’autre chantier de cette semaine :');
+  if (nom === null) return;
+  try {
+    const reponse = await API.post('/api/fiches/semaine/chantier', {
+      annee: Number($('annee').value),
+      semaine: Number($('semaine').value),
+      chantier: nom,
+    });
+    fichesSemaine = reponse.fichesSemaine || [];
+    await chargerFiche(reponse.fiche.id);
+    message('Fiche ouverte pour « ' + reponse.fiche.chantier + ' ». Elle est vide : ajoutez-y les opérateurs concernés par ce chantier.', 'succes', 8000);
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
+});
 
 function afficher() {
   $('contenu').classList.remove('masque');
@@ -343,6 +401,7 @@ function afficher() {
 
   $('badge-statut').innerHTML = badgeStatut(Regles.etatAffiche(fiche));
   $('periode').textContent = `Du ${jourMois(fiche.dates[0])} au ${jourMois(fiche.dates[6])} ${fiche.annee}`;
+  afficherChantiers();
 
   const motif = $('motif-rejet');
   motif.classList.toggle('masque', fiche.statut !== 'rejetee' || !fiche.motif_rejet);
@@ -826,6 +885,9 @@ async function enregistrer() {
   afficherAnomalies(
     controlerFiche({ ...fiche, ...corps }, corps.lignes, {
       conducteursDisponibles: (reference.conducteurs || []).length,
+      // Ce qui est pointe sur l'autre chantier de la semaine : sans cela, les
+      // controles affiches ici differeraient de ceux du serveur.
+      ailleurs: fiche.ailleurs || {},
     })
   );
 
@@ -833,6 +895,11 @@ async function enregistrer() {
   try {
     const reponse = await API.put(`/api/fiches/${fiche.id}`, corps);
     fiche = { ...reponse.fiche, anomalies: reponse.anomalies };
+    const onglet = fichesSemaine.find((f) => f.id === fiche.id);
+    if (onglet && onglet.chantier !== fiche.chantier) {
+      onglet.chantier = fiche.chantier;
+      afficherChantiers();
+    }
     afficherAnomalies(reponse.anomalies || []);
     $('etat-sauvegarde').textContent = `Enregistré à ${new Date().toLocaleTimeString('fr-FR')}`;
   } catch (e) {

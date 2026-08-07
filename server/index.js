@@ -267,17 +267,37 @@ app.post('/api/fiches/semaine', A.exigerConnexion, (req, res) => {
   if (req.utilisateur.role === 'directeur' && !req.body.chefId) {
     return res.status(400).json({ erreur: "Precisez le chef d equipe concerne." });
   }
-  res.json({ fiche: F.obtenirOuCreerFicheSemaine(chefId, annee, semaine) });
+  const fiche = F.obtenirOuCreerFicheSemaine(chefId, annee, semaine);
+  // Les autres chantiers de la semaine, pour que le chef puisse passer de l'un
+  // a l'autre : il en a une par chantier, une seule le plus souvent.
+  res.json({ fiche, fichesSemaine: F.fichesDeLaSemaine(chefId, annee, semaine) });
 });
 
-/** Combien de conducteurs sont proposables : le controle en depend. */
-function optionsControle() {
-  return {
-    conducteursDisponibles: db
-      .prepare("SELECT COUNT(*) AS n FROM utilisateurs WHERE role = 'conducteur' AND actif = 1")
-      .get().n,
-  };
-}
+/*
+ * Un second chantier dans la meme semaine.
+ *
+ * La base l'autorisait depuis le debut — son unicite porte sur le chef, la
+ * semaine ET le chantier — mais rien ne permettait de l'ouvrir. Un chef qui
+ * tenait deux chantiers devait donc tout entasser sur une feuille, ce que la
+ * fiche papier n'a jamais demande.
+ */
+app.post('/api/fiches/semaine/chantier', A.exigerConnexion, (req, res) => {
+  const annee = Number(req.body.annee);
+  const semaine = Number(req.body.semaine);
+  if (!Number.isInteger(annee) || !Number.isInteger(semaine) || semaine < 1 || semaine > 53) {
+    return res.status(400).json({ erreur: 'Semaine invalide.' });
+  }
+  const chefId =
+    req.utilisateur.role === 'directeur' && req.body.chefId ? Number(req.body.chefId) : req.utilisateur.id;
+  if (req.utilisateur.role === 'directeur' && !req.body.chefId) {
+    return res.status(400).json({ erreur: "Precisez le chef d equipe concerne." });
+  }
+
+  const resultat = F.ouvrirFicheSupplementaire(chefId, annee, semaine, req.body.chantier);
+  if (resultat.erreur) return repondre(res, resultat);
+  res.json({ fiche: resultat.fiche, fichesSemaine: F.fichesDeLaSemaine(chefId, annee, semaine) });
+});
+
 
 app.get('/api/fiches/:id', A.exigerConnexion, (req, res) => {
   const fiche = F.obtenirFiche(Number(req.params.id));
@@ -285,7 +305,15 @@ app.get('/api/fiches/:id', A.exigerConnexion, (req, res) => {
   if (req.utilisateur.role === 'chef' && fiche.chef_id !== req.utilisateur.id) {
     return res.status(403).json({ erreur: 'Cette fiche appartient a un autre chef d equipe.' });
   }
-  fiche.anomalies = D.controlerFiche(fiche, fiche.lignes, optionsControle());
+  const options = F.optionsControle(fiche);
+  fiche.anomalies = D.controlerFiche(fiche, fiche.lignes, options);
+  /*
+   * Ce qui est pointe ailleurs dans la semaine part avec la fiche : le chef
+   * travaille sur chantier, souvent sans reseau, et ses controles doivent etre
+   * ceux du serveur. Sans cela il verrait s'afficher des oublis pour des
+   * journees deja pointees sur son autre chantier, jusqu'au prochain envoi.
+   */
+  fiche.ailleurs = options.ailleurs;
   fiche.journal = db
     .prepare(
       `SELECT j.action, j.detail, j.horodatage, u.nom AS auteur
@@ -298,7 +326,11 @@ app.get('/api/fiches/:id', A.exigerConnexion, (req, res) => {
 
 app.put('/api/fiches/:id', A.exigerConnexion, (req, res) => {
   const resultat = F.enregistrerFiche(Number(req.params.id), req.body, req.utilisateur);
-  if (resultat.fiche) resultat.anomalies = D.controlerFiche(resultat.fiche, resultat.fiche.lignes, optionsControle());
+  if (resultat.fiche) {
+    const options = F.optionsControle(resultat.fiche);
+    resultat.anomalies = D.controlerFiche(resultat.fiche, resultat.fiche.lignes, options);
+    resultat.fiche.ailleurs = options.ailleurs;
+  }
   repondre(res, resultat);
 });
 

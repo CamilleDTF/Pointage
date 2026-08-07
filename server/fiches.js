@@ -3,17 +3,91 @@
 const { db, journaliser } = require('./db');
 const D = require('./domaine');
 
-/**
- * Contexte des controles : le nombre de conducteurs de travaux proposables. Le
- * choix d'un conducteur n'est exige que s'il y en a — une organisation ou
- * personne n'est encore enregistre ne doit pas se retrouver bloquee.
+/*
+ * Ce que les regles ne peuvent pas savoir en regardant une seule fiche.
+ *
+ * Deux choses. Le nombre de conducteurs proposables, d'abord : le choix d'un
+ * conducteur n'est exige que s'il y en a — une organisation ou personne n'est
+ * encore enregistre ne doit pas se retrouver bloquee par une etape qui n'existe
+ * pas chez elle.
+ *
+ * Et surtout, ce qui est deja pointe AILLEURS dans la semaine pour les memes
+ * personnes. Un chef peut tenir deux chantiers a la fois, et un operateur
+ * travailler sur les deux. Les controles raisonnaient alors sur des moities de
+ * semaine : 30 h ici et 25 h la-bas passaient deux fois sous le plafond de 48 h,
+ * et cinq jours de grand deplacement declares de chaque cote en faisaient dix.
+ *
+ * La regle ne change pas de nature — elle reste la meme des deux cotes du
+ * reseau. Elle recoit simplement ce qu'elle ne pouvait pas deviner.
  */
-function optionsControle() {
+function optionsControle(fiche) {
   return {
     conducteursDisponibles: db
       .prepare("SELECT COUNT(*) AS n FROM utilisateurs WHERE role = 'conducteur' AND actif = 1")
       .get().n,
+    ailleurs: pointagesDeLaSemaine(fiche),
   };
+}
+
+/**
+ * Les journees pointees sur les AUTRES fiches de la semaine, par personne.
+ *
+ * Toutes les fiches de la semaine, pas seulement celles de ce chef : le plafond
+ * de 48 h porte sur la semaine d'un homme, quel que soit le nombre d'equipes
+ * qu'il a traversees. En revanche on ne nomme que les chantiers de ce chef —
+ * savoir qu'un operateur a travaille ailleurs suffit, connaitre le chantier d'un
+ * collegue ne le regarde pas.
+ */
+function pointagesDeLaSemaine(fiche) {
+  if (!fiche || !fiche.annee || !fiche.semaine) return {};
+
+  const lignes = db
+    .prepare(
+      `SELECT l.id, l.salarie_id, l.nom_affiche, l.jours_zone, l.nb_gd72, l.nb_gd80,
+              f.chantier, f.chef_id
+         FROM fiche_lignes l
+         JOIN fiches f ON f.id = l.fiche_id
+        WHERE f.annee = @annee AND f.semaine = @semaine AND f.id <> @id
+          AND TRIM(l.nom_affiche) <> ''`
+    )
+    .all({ annee: fiche.annee, semaine: fiche.semaine, id: fiche.id || 0 });
+  if (!lignes.length) return {};
+
+  const jours = db.prepare('SELECT jour, minutes FROM fiche_jours WHERE ligne_id = ?');
+  const parPersonne = {};
+
+  for (const ligne of lignes) {
+    const cle = D.clePointage(ligne);
+    const cumul = (parPersonne[cle] = parPersonne[cle] || {
+      minutes: [0, 0, 0, 0, 0, 0, 0],
+      minutesTotal: 0,
+      joursTravailles: 0,
+      joursGD: 0,
+      joursZone: 0,
+      chantiers: [],
+      autresEquipes: false,
+    });
+
+    for (const jour of jours.all(ligne.id)) {
+      const minutes = Number(jour.minutes) || 0;
+      if (!minutes) continue;
+      if (!cumul.minutes[jour.jour]) cumul.joursTravailles += 1;
+      cumul.minutes[jour.jour] += minutes;
+      cumul.minutesTotal += minutes;
+    }
+
+    cumul.joursGD += (Number(ligne.nb_gd72) || 0) + (Number(ligne.nb_gd80) || 0);
+    cumul.joursZone += Number(ligne.jours_zone) || 0;
+
+    if (ligne.chef_id !== fiche.chef_id) {
+      cumul.autresEquipes = true;
+    } else {
+      const nom = String(ligne.chantier || '').trim();
+      if (nom && !cumul.chantiers.includes(nom)) cumul.chantiers.push(nom);
+    }
+  }
+
+  return parPersonne;
 }
 
 const NB_LIGNES_FICHE = 11; // la fiche papier comporte 11 lignes de salaries (lignes 11 a 21).
@@ -162,20 +236,78 @@ function equipeDuChef(chefId) {
 function obtenirOuCreerFicheSemaine(chefId, annee, semaine) {
   const existante = db
     .prepare(
+      /*
+       * Ce qui reste a faire d'abord, puis la plus ancienne : depuis qu'une
+       * semaine peut porter deux chantiers, « id DESC » ouvrait la derniere
+       * creee, et le chef ne retrouvait plus sa fiche principale en revenant.
+       */
       `SELECT id FROM fiches
         WHERE chef_id = ? AND annee = ? AND semaine = ?
-        ORDER BY CASE statut WHEN 'brouillon' THEN 0 WHEN 'rejetee' THEN 1 ELSE 2 END, id DESC
+        ORDER BY CASE statut WHEN 'brouillon' THEN 0 WHEN 'rejetee' THEN 1 ELSE 2 END, id
         LIMIT 1`
     )
     .get(chefId, annee, semaine);
   if (existante) return obtenirFiche(existante.id);
+  return creerFicheSemaine(chefId, annee, semaine);
+}
 
-  const equipe = equipeDuChef(chefId);
+/**
+ * Les fiches d'un chef pour une semaine, dans l'ordre ou il les a ouvertes.
+ *
+ * Il y en a une par chantier. Une seule le plus souvent — mais un chef peut en
+ * tenir deux a la fois, et la fiche papier a toujours ete une feuille par
+ * chantier.
+ */
+function fichesDeLaSemaine(chefId, annee, semaine) {
+  return db
+    .prepare(
+      `SELECT id, chantier, ville, statut, visa_statut
+         FROM fiches WHERE chef_id = ? AND annee = ? AND semaine = ? ORDER BY id`
+    )
+    .all(chefId, annee, semaine);
+}
+
+/**
+ * Ouvre une fiche de plus pour la semaine, sur un second chantier.
+ *
+ * Le nom du chantier est demande des l'ouverture, et ce n'est pas une formalite :
+ * c'est lui qui distingue les fiches d'une meme semaine, jusque dans la
+ * contrainte d'unicite de la base. Deux fiches sans nom n'en feraient qu'une.
+ */
+function ouvrirFicheSupplementaire(chefId, annee, semaine, chantier) {
+  const nom = String(chantier || '').trim().slice(0, 200);
+  if (!nom) {
+    return { erreur: 'Donnez le nom du second chantier : c est lui qui distingue les deux fiches.', code: 400 };
+  }
+
+  const existantes = fichesDeLaSemaine(chefId, annee, semaine);
+  if (!existantes.length) {
+    return { erreur: 'Ouvrez d abord la fiche de la semaine.', code: 400 };
+  }
+  if (existantes.some((f) => D.sansAccents(f.chantier).trim().toLowerCase() === D.sansAccents(nom).trim().toLowerCase())) {
+    return { erreur: `Une fiche existe deja cette semaine pour « ${nom} ».`, code: 409 };
+  }
+
+  return { fiche: creerFicheSemaine(chefId, annee, semaine, nom, { avecEquipe: false }) };
+}
+
+/*
+ * `avecEquipe` distingue la premiere fiche de la semaine des suivantes.
+ *
+ * La premiere s'ouvre pre-remplie avec l'equipe : c'est la situation ordinaire,
+ * tout le monde est sur le meme chantier. Une seconde fiche, elle, s'ouvre vide.
+ * Y reporter l'equipe entiere serait a rebours de la raison meme de son
+ * existence — le chef l'ouvre parce qu'une PARTIE de son monde est ailleurs — et
+ * lui vaudrait une anomalie par personne et par jour pour des gens qui n'ont
+ * jamais mis les pieds sur ce chantier.
+ */
+function creerFicheSemaine(chefId, annee, semaine, chantier = '', { avecEquipe = true } = {}) {
+  const equipe = avecEquipe ? equipeDuChef(chefId) : [];
 
   const creer = db.transaction(() => {
     const res = db
-      .prepare('INSERT INTO fiches (chef_id, annee, semaine) VALUES (?, ?, ?)')
-      .run(chefId, annee, semaine);
+      .prepare('INSERT INTO fiches (chef_id, annee, semaine, chantier) VALUES (?, ?, ?, ?)')
+      .run(chefId, annee, semaine, chantier);
     const ficheId = res.lastInsertRowid;
     const insLigne = db.prepare(
       'INSERT INTO fiche_lignes (fiche_id, salarie_id, nom_affiche, ordre) VALUES (?, ?, ?, ?)'
@@ -191,7 +323,7 @@ function obtenirOuCreerFicheSemaine(chefId, annee, semaine) {
       );
       for (let j = 0; j < 7; j += 1) insJour.run(r.lastInsertRowid, j);
     }
-    journaliser(ficheId, chefId, 'creation', `Semaine ${semaine}/${annee}`);
+    journaliser(ficheId, chefId, 'creation', `Semaine ${semaine}/${annee}${chantier ? ` — ${chantier}` : ''}`);
     return ficheId;
   });
 
@@ -300,7 +432,7 @@ function soumettre(ficheId, utilisateur) {
     return { erreur: 'Fiche deja transmise.', code: 409 };
   }
 
-  const anomalies = D.controlerFiche(fiche, fiche.lignes, optionsControle());
+  const anomalies = D.controlerFiche(fiche, fiche.lignes, optionsControle(fiche));
   const bloquantes = anomalies.filter((a) => a.niveau === 'bloquant');
   if (bloquantes.length) return { erreur: 'La fiche est incomplete.', anomalies, code: 422 };
 
@@ -362,7 +494,9 @@ function statuer(ficheId, utilisateur, decision, motif = '') {
   if (!fiche) return { erreur: 'Fiche introuvable.', code: 404 };
 
   if (decision === 'valider') {
-    const bloquantes = D.controlerFiche(fiche, fiche.lignes, optionsControle()).filter((a) => a.niveau === 'bloquant');
+    const bloquantes = D.controlerFiche(fiche, fiche.lignes, optionsControle(fiche)).filter(
+      (a) => a.niveau === 'bloquant'
+    );
     if (bloquantes.length) {
       return { erreur: 'Fiche incomplete, validation impossible.', anomalies: bloquantes, code: 422 };
     }
@@ -457,6 +591,8 @@ module.exports = {
   equipeDuChef,
   obtenirFiche,
   obtenirOuCreerFicheSemaine,
+  fichesDeLaSemaine,
+  ouvrirFicheSupplementaire,
   enregistrerFiche,
   soumettre,
   reprendre,
