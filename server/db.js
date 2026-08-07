@@ -2,6 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('node:crypto');
+const D = require('./domaine');
 
 /*
  * better-sqlite3 est un composant compile. Un binaire precompile existe pour
@@ -42,7 +44,7 @@ CREATE TABLE IF NOT EXISTS utilisateurs (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   nom           TEXT    NOT NULL,
   identifiant   TEXT    NOT NULL UNIQUE,
-  role          TEXT    NOT NULL CHECK (role IN ('chef', 'directeur')),
+  role          TEXT    NOT NULL CHECK (role IN ('chef', 'directeur', 'conducteur')),
   pin_hash      TEXT    NOT NULL,
   actif         INTEGER NOT NULL DEFAULT 1,
   cree_le       TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -109,18 +111,6 @@ CREATE TABLE IF NOT EXISTS fiche_jours (
   UNIQUE (ligne_id, jour)
 );
 
-/*
- * Conducteurs de travaux. Ils visent les fiches avant le directeur, mais n'ont
- * pas de compte : tout passe par un lien signe recu par courriel. Un compte de
- * plus par personne, c'est un code de plus a retenir et a reinitialiser.
- */
-CREATE TABLE IF NOT EXISTS conducteurs (
-  id      INTEGER PRIMARY KEY AUTOINCREMENT,
-  nom     TEXT    NOT NULL,
-  courriel TEXT   NOT NULL,
-  actif   INTEGER NOT NULL DEFAULT 1
-);
-
 CREATE TABLE IF NOT EXISTS vehicules (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   immatriculation TEXT   NOT NULL UNIQUE,
@@ -177,6 +167,167 @@ function ajouterColonne(table, colonne, definition) {
   if (!existe) db.exec(`ALTER TABLE ${table} ADD COLUMN ${colonne} ${definition}`);
 }
 
+const colonneExiste = (table, colonne) =>
+  db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === colonne);
+
+const schemaDe = (nom) =>
+  db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(nom);
+
+/*
+ * Reconstruit une table en ne changeant de son schema que ce qu'on lui demande.
+ *
+ * SQLite ne sait modifier ni une contrainte CHECK ni une cle etrangere : il faut
+ * recreer la table, recopier, remplacer. Le schema neuf est obtenu en
+ * transformant l'ancien plutot qu'en le reecrivant a la main — une colonne
+ * ajoutee entre-temps par une migration precedente serait sinon perdue en
+ * chemin, sans que rien ne le signale.
+ */
+function reconstruireTable(nom, transformer) {
+  const ancien = schemaDe(nom);
+  const index = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL")
+    .all(nom);
+  const colonnes = db
+    .prepare(`PRAGMA table_info(${nom})`)
+    .all()
+    .map((c) => `"${c.name}"`)
+    .join(', ');
+
+  const neuf = transformer(ancien.sql).replace(`CREATE TABLE ${nom}`, `CREATE TABLE ${nom}_migration`);
+  if (neuf === ancien.sql) throw new Error(`Reconstruction de ${nom} : le schema n'a pas change.`);
+
+  db.exec(neuf);
+  db.exec(`INSERT INTO ${nom}_migration (${colonnes}) SELECT ${colonnes} FROM ${nom}`);
+  db.exec(`DROP TABLE ${nom}`);
+  db.exec(`ALTER TABLE ${nom}_migration RENAME TO ${nom}`);
+  // Les index disparaissent avec la table : on les repose tels quels.
+  index.forEach((i) => db.exec(i.sql));
+}
+
+/** Un identifiant de connexion tire du nom, libre de tout homonyme. */
+function identifiantLibre(nomComplet) {
+  const { nom, prenom } = D.separerNomPrenom(nomComplet);
+  const net = (t) => D.sansAccents(String(t || '')).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const base = `${net(prenom).slice(0, 1)}${net(nom)}` || 'conducteur';
+  const pris = db.prepare('SELECT 1 FROM utilisateurs WHERE identifiant = ?');
+
+  let candidat = base;
+  let suffixe = 2;
+  while (pris.get(candidat)) {
+    candidat = `${base}${suffixe}`;
+    suffixe += 1;
+  }
+  return candidat;
+}
+
+/*
+ * Les conducteurs de travaux deviennent des comptes a part entiere.
+ *
+ * Ils vivaient dans une table separee, concue pour des liens sans compte : un
+ * nom, une adresse, un secret. Puisqu'ils se connectent desormais comme les
+ * chefs et le directeur, ils rejoignent le meme registre — une personne y vit a
+ * un seul endroit, et s'y desactive une seule fois.
+ *
+ * Aucun d'eux ne recoit de code : la migration ne peut pas inventer un secret
+ * que le directeur connaitrait. Elle laisse l'empreinte vide — un compte qui
+ * existe mais n'ouvre rien — et c'est le directeur qui donnera un code depuis
+ * Parametres. L'ecran le lui rappelle tant que ce n'est pas fait.
+ */
+function migrerConducteursVersComptes() {
+  const ancienneTable = Boolean(schemaDe('conducteurs'));
+  const roleOuvert = /CHECK \(role IN \([^)]*'conducteur'/.test(schemaDe('utilisateurs').sql);
+  if (roleOuvert && !ancienneTable) return;
+
+  // Une base anterieure au lien personnel n'a pas ces colonnes ; on les pose
+  // avant de lire, plutot que de deviner ce qu'elle contient.
+  if (ancienneTable) {
+    ajouterColonne('conducteurs', 'jeton', 'TEXT');
+    ajouterColonne('conducteurs', 'telephone', "TEXT NOT NULL DEFAULT ''");
+  }
+  const anciens = ancienneTable ? db.prepare('SELECT * FROM conducteurs ORDER BY id').all() : [];
+
+  // Les cles etrangeres se taisent pendant l'operation : le temps de la
+  // reconstruction, les references designent forcement des tables absentes.
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.transaction(() => {
+      if (!roleOuvert) {
+        reconstruireTable('utilisateurs', (sql) =>
+          sql
+            .replace(
+              "CHECK (role IN ('chef', 'directeur'))",
+              "CHECK (role IN ('chef', 'directeur', 'conducteur'))"
+            )
+            .replace(/REFERENCES conducteurs\(id\)/g, 'REFERENCES utilisateurs(id)')
+        );
+      }
+
+      ajouterColonne('utilisateurs', 'courriel', "TEXT NOT NULL DEFAULT ''");
+      ajouterColonne('utilisateurs', 'telephone', "TEXT NOT NULL DEFAULT ''");
+      ajouterColonne('utilisateurs', 'jeton', 'TEXT');
+
+      const correspondance = new Map();
+      const inserer = db.prepare(
+        `INSERT INTO utilisateurs (nom, identifiant, role, pin_hash, actif, courriel, telephone, jeton)
+         VALUES (@nom, @identifiant, 'conducteur', @pin_hash, @actif, @courriel, @telephone, @jeton)`
+      );
+      for (const c of anciens) {
+        const r = inserer.run({
+          nom: c.nom,
+          identifiant: identifiantLibre(c.nom),
+          pin_hash: '',
+          actif: c.actif,
+          courriel: c.courriel || '',
+          telephone: c.telephone || '',
+          jeton: c.jeton || null,
+        });
+        correspondance.set(Number(c.id), Number(r.lastInsertRowid));
+      }
+
+      if (schemaDe('fiches').sql.includes('REFERENCES conducteurs(id)')) {
+        reconstruireTable('fiches', (sql) =>
+          sql.replace(/REFERENCES conducteurs\(id\)/g, 'REFERENCES utilisateurs(id)')
+        );
+      }
+
+      /*
+       * Reecriture en une seule passe, par CASE plutot que par une suite de
+       * UPDATE : un ancien numero de conducteur peut valoir un nouveau numero de
+       * compte, et deux mises a jour successives se rattraperaient l'une l'autre.
+       */
+      if (correspondance.size) {
+        const cas = [...correspondance].map(([a, n]) => `WHEN ${a} THEN ${n}`).join(' ');
+        const liste = [...correspondance.keys()].join(', ');
+        for (const table of ['utilisateurs', 'fiches']) {
+          if (!colonneExiste(table, 'conducteur_id')) continue;
+          db.exec(
+            `UPDATE ${table} SET conducteur_id = CASE conducteur_id ${cas} END
+              WHERE conducteur_id IN (${liste})`
+          );
+        }
+      }
+
+      if (ancienneTable) db.exec('DROP TABLE conducteurs');
+
+      const rompues = db.pragma('foreign_key_check');
+      if (rompues.length) {
+        throw new Error(`Migration des conducteurs : ${rompues.length} reference(s) rompue(s).`);
+      }
+    })();
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
+
+  if (anciens.length) {
+    console.log(
+      `Conducteurs de travaux : ${anciens.length} compte(s) cree(s). ` +
+        'Donnez-leur un code depuis Parametres — ils ne peuvent pas encore se connecter.'
+    );
+  }
+}
+
+migrerConducteursVersComptes();
+
 /*
  * `saisi` distingue une journee mise a zero par le chef d'equipe — le salarie
  * n'a pas travaille ce jour-la — d'une journee qu'il n'a pas encore remplie.
@@ -231,7 +382,7 @@ ajouterColonne('fiches', 'visa_envoye_le', 'TEXT');
  * Le conducteur de travaux dont depend un chef d'equipe : c'est le choix
  * propose par defaut sur ses fiches.
  */
-ajouterColonne('utilisateurs', 'conducteur_id', 'INTEGER REFERENCES conducteurs(id) ON DELETE SET NULL');
+ajouterColonne('utilisateurs', 'conducteur_id', 'INTEGER REFERENCES utilisateurs(id) ON DELETE SET NULL');
 
 /*
  * Date de la PREMIERE demande de validation.
@@ -249,32 +400,25 @@ ajouterColonne('fiches', 'premiere_soumission_le', 'TEXT');
  * sous le meme : le chantier de la semaine decide, et c'est lui qui sait. Son
  * rattachement habituel ne sert plus que de proposition.
  */
-ajouterColonne('fiches', 'conducteur_id', 'INTEGER REFERENCES conducteurs(id) ON DELETE SET NULL');
+ajouterColonne('fiches', 'conducteur_id', 'INTEGER REFERENCES utilisateurs(id) ON DELETE SET NULL');
+
+/*
+ * Adresse et telephone d'un conducteur de travaux, sur son compte.
+ *
+ * Le courriel lui annonce qu'une fiche l'attend ; le telephone permet au chef
+ * d'equipe de le prevenir lui-meme quand l'envoi automatique ne part pas. Ni
+ * l'un ni l'autre ne donne acces a quoi que ce soit — c'est le compte qui ouvre.
+ */
+ajouterColonne('utilisateurs', 'courriel', "TEXT NOT NULL DEFAULT ''");
+ajouterColonne('utilisateurs', 'telephone', "TEXT NOT NULL DEFAULT ''");
 
 /*
  * Lien personnel et durable d'un conducteur de travaux.
  *
- * Le courriel restait le seul maillon dependant de quelque chose qu'on ne
- * maitrise pas : un serveur d'envoi, un port ouvert, une autorisation a
- * demander. Ce secret-la donne au conducteur une adresse a mettre en favori,
- * qui lui montre les fiches attendant SON visa. Il se transmet une fois, comme
- * on donne un numero de telephone, et se revoque en le regenerant.
- *
- * Il n'ouvre que cela : la liste de ses fiches en attente, sans aucun montant.
+ * Il precede les comptes : il donnait un acces a qui n'en avait pas. Il vit
+ * encore le temps que l'ecran du conducteur existe, et disparaitra avec lui.
  */
-ajouterColonne('conducteurs', 'jeton', 'TEXT');
-
-/*
- * Numero de telephone du conducteur de travaux.
- *
- * Le lien personnel lui donne l'acces ; il ne le previent pas. Le courriel s'en
- * chargeait, et c'est justement lui qui manque. Le chef d'equipe envoie donc un
- * message depuis son propre telephone, par le moyen qu'ils utilisent deja —
- * SMS, WhatsApp — et ce message ne contient aucun lien : le conducteur ouvre sa
- * page, qu'il a en favori. Rien de secret ne transite par le chef, qui pourrait
- * sinon viser ses propres fiches.
- */
-ajouterColonne('conducteurs', 'telephone', "TEXT NOT NULL DEFAULT ''");
+ajouterColonne('utilisateurs', 'jeton', 'TEXT');
 
 /*
  * Jours de grand deplacement, saisis par le chef d'equipe, ligne par ligne.
@@ -294,9 +438,11 @@ ajouterColonne('fiche_lignes', 'nb_gd80', 'INTEGER NOT NULL DEFAULT 0');
 
 // Les conducteurs deja enregistres n'en avaient pas : on leur en pose un.
 {
-  const sansJeton = db.prepare("SELECT id FROM conducteurs WHERE jeton IS NULL OR jeton = ''").all();
-  const poser = db.prepare('UPDATE conducteurs SET jeton = ? WHERE id = ?');
-  for (const c of sansJeton) poser.run(require('crypto').randomBytes(24).toString('base64url'), c.id);
+  const sansJeton = db
+    .prepare("SELECT id FROM utilisateurs WHERE role = 'conducteur' AND (jeton IS NULL OR jeton = '')")
+    .all();
+  const poser = db.prepare('UPDATE utilisateurs SET jeton = ? WHERE id = ?');
+  for (const c of sansJeton) poser.run(crypto.randomBytes(24).toString('base64url'), c.id);
 }
 
 const PARC_INITIAL = [

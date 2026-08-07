@@ -81,9 +81,16 @@
   const fiches = [];
   let prochainId = 1;
   let session = null;
+  /*
+   * Les conducteurs sont des comptes, dans le meme registre que les chefs : leurs
+   * numeros ne peuvent donc pas recouper les leurs. La demonstration garde deux
+   * listes pour rester lisible, mais numerote comme le ferait l'application.
+   */
   const CONDUCTEURS = [
-    { id: 1, nom: 'MOREAU Paul', courriel: 'paul.moreau@exemple.fr', telephone: '06 12 34 56 78', actif: 1, jeton: 'demo-paul' },
-    { id: 2, nom: 'RENAUD Sophie', courriel: 'sophie.renaud@exemple.fr', telephone: '06 98 76 54 32', actif: 1, jeton: 'demo-sophie' },
+    { id: 101, nom: 'MOREAU Paul', identifiant: 'pmoreau', role: 'conducteur', courriel: 'paul.moreau@exemple.fr',
+      telephone: '06 12 34 56 78', actif: 1, jeton: 'demo-paul', codeADefinir: false },
+    { id: 102, nom: 'RENAUD Sophie', identifiant: 'srenaud', role: 'conducteur', courriel: 'sophie.renaud@exemple.fr',
+      telephone: '06 98 76 54 32', actif: 1, jeton: 'demo-sophie', codeADefinir: true },
   ];
   // Un chef sur deux depend d'un conducteur : la demonstration montre les deux
   // circuits, avec et sans etape de visa.
@@ -205,7 +212,7 @@
       chantier: 'Lycée Jean Moulin - Bâtiment C',
       ville: 'Toulouse',
       zone_deplacement: 'AUTRE',
-      conducteur_id: 1,
+      conducteur_id: CONDUCTEURS[0].id,
       conducteur_vehicule: 'BENALI Karim',
       type_vehicule: 'Renault Master',
       immatriculation: 'HA-409-XC',
@@ -232,7 +239,7 @@
       immatriculation: 'GR-707-YM',
       statut: 'soumise',
       soumise_le: maintenant(),
-      conducteur_id: 1,
+      conducteur_id: CONDUCTEURS[0].id,
       visa_statut: 'attente',
       visa_courriel: 'paul.moreau@exemple.fr',
       visa_envoye_le: maintenant(),
@@ -260,7 +267,7 @@
       statut: 'validee',
       soumise_le: maintenant(),
       validee_le: maintenant(),
-      conducteur_id: 1,
+      conducteur_id: CONDUCTEURS[0].id,
       visa_statut: 'vise',
       visa_le: maintenant(),
       visa_commentaire: 'Conforme à ce que j’ai constaté sur place.',
@@ -444,6 +451,11 @@
         totalMinutes: lignes.reduce((t, l) => t + (l.total_minutes || 0), 0),
       }),
     };
+  }
+
+  /* Un compte, qu'il soit chef, directeur ou conducteur de travaux. */
+  function compteDeLaDemo(id) {
+    return utilisateurs.find((u) => u.id === id) || CONDUCTEURS.find((c) => c.id === id) || null;
   }
 
   function exigerDirecteur() {
@@ -925,6 +937,43 @@
       erreur(400, 'Création de comptes désactivée dans la démonstration.');
     }],
 
+    /*
+     * Les conducteurs sont des comptes comme les autres : ils passent par les
+     * memes routes que les chefs et le directeur.
+     */
+    ['PUT', /^\/api\/admin\/utilisateurs\/(\d+)$/, (m, corps) => {
+      exigerDirecteur();
+      const compte = compteDeLaDemo(Number(m[1]));
+      if (!compte) erreur(404, 'Compte introuvable.');
+      const ancien = R.separerNomPrenom(compte.nom);
+      if (corps.nom !== undefined || corps.prenom !== undefined) {
+        const nom = String(corps.nom !== undefined ? corps.nom : ancien.nom).trim();
+        const prenom = String(corps.prenom !== undefined ? corps.prenom : ancien.prenom).trim();
+        if (!nom) erreur(400, 'Le nom ne peut pas être vide.');
+        compte.nom = `${nom} ${prenom}`.trim();
+      }
+      for (const champ of ['identifiant', 'courriel', 'telephone']) {
+        if (corps[champ] !== undefined) compte[champ] = String(corps[champ]).trim();
+      }
+      return { ok: true };
+    }],
+
+    ['POST', /^\/api\/admin\/utilisateurs\/(\d+)\/code$/, (m, corps) => {
+      exigerDirecteur();
+      const compte = compteDeLaDemo(Number(m[1]));
+      if (!compte) erreur(404, 'Compte introuvable.');
+      if (!/^\d{4,8}$/.test(String(corps.pin || ''))) erreur(400, 'Le code doit comporter 4 à 8 chiffres.');
+      compte.codeADefinir = false;
+      return { ok: true };
+    }],
+
+    ['POST', /^\/api\/admin\/utilisateurs\/(\d+)\/actif$/, (m, corps) => {
+      exigerDirecteur();
+      const compte = compteDeLaDemo(Number(m[1]));
+      if (compte) compte.actif = corps.actif ? 1 : 0;
+      return { ok: true };
+    }],
+
     ['GET', /^\/api\/admin\/vehicules$/, () => {
       exigerDirecteur();
       return { vehicules: VEHICULES };
@@ -945,7 +994,10 @@
     ['GET', /^\/api\/admin\/conducteurs$/, () => {
       exigerDirecteur();
       return {
-        conducteurs: CONDUCTEURS.map((c) => ({ ...c, lien: `https://votre-adresse/conducteur.html?cle=${c.jeton}` })),
+        conducteurs: CONDUCTEURS.map((c) => ({
+          ...c,
+          lien: `https://votre-adresse/conducteur.html?cle=${c.jeton}`,
+        })),
         chefs: utilisateurs
           .filter((u) => u.role === 'chef')
           .map((u) => ({

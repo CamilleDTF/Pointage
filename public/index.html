@@ -36,11 +36,30 @@
     const formulaire = document.getElementById('formulaire');
     const aide = document.getElementById('aide');
 
+    /*
+     * Vers quel espace envoyer celui qui vient d'entrer.
+     *
+     * Le conducteur de travaux a desormais un compte, mais pas encore d'ecran :
+     * on le laisse sur cette page avec un mot d'explication, plutot que de
+     * l'envoyer sur celui des chefs, ou il ne verrait qu'une suite de refus.
+     */
+    function orienter(utilisateur) {
+      if (utilisateur.role === 'conducteur') {
+        formulaire.classList.add('masque');
+        aide.classList.remove('masque');
+        aide.style.color = '';
+        aide.innerHTML =
+          `Bonjour ${echapper(utilisateur.nom)}. Votre compte est bien actif, mais votre espace ` +
+          "n'est pas encore ouvert : il arrive prochainement.<br><br>En attendant, continuez " +
+          'à viser vos fiches par le lien personnel que la direction vous a transmis.';
+        return;
+      }
+      location.href = utilisateur.role === 'directeur' ? '/directeur.html' : '/chef.html';
+    }
+
     // Session encore valide : on renvoie directement vers le bon espace.
     API.get('/api/moi')
-      .then(({ utilisateur }) => {
-        location.href = utilisateur.role === 'directeur' ? '/directeur.html' : '/chef.html';
-      })
+      .then(({ utilisateur }) => orienter(utilisateur))
       .catch(() => {});
 
     formulaire.addEventListener('submit', async (e) => {
@@ -52,7 +71,7 @@
           identifiant: document.getElementById('identifiant').value,
           pin: document.getElementById('pin').value,
         });
-        location.href = utilisateur.role === 'directeur' ? '/directeur.html' : '/chef.html';
+        orienter(utilisateur);
       } catch (erreur) {
         aide.textContent = erreur.message;
         aide.style.color = 'var(--rouge)';

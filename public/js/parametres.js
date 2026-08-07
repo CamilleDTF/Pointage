@@ -123,17 +123,26 @@ async function chargerConducteurs() {
       'message à chaque transmission, remplissez les lignes SMTP de <code>configuration.txt</code> ' +
       '(voir <code>TESTER-COURRIEL.bat</code>).';
 
-  const champ = (c, nom, largeur, type = 'text') =>
-    `<input type="${type}" value="${echapper(c[nom])}" style="width:${largeur}"
+  const champ = (c, nom, valeur, largeur, type = 'text') =>
+    `<input type="${type}" value="${echapper(valeur)}" style="width:${largeur}"
             onchange="corrigerConducteur(${c.id}, '${nom}', this.value, this)">`;
 
   table.querySelector('tbody').innerHTML = conducteurs.length
     ? conducteurs
-        .map(
-          (c) => `<tr style="${c.actif ? '' : 'opacity:.5'}">
-            <td>${champ(c, 'nom', '190px')}</td>
-            <td>${champ(c, 'courriel', '240px', 'email')}</td>
-            <td>${champ(c, 'telephone', '140px', 'tel')}</td>
+        .map((c) => {
+          const { nom, prenom } = Regles.separerNomPrenom(c.nom);
+          return `<tr style="${c.actif ? '' : 'opacity:.5'}">
+            <td>${champ(c, 'nom', nom, '130px')}</td>
+            <td>${champ(c, 'prenom', prenom, '110px')}</td>
+            <td>${champ(c, 'identifiant', c.identifiant, '110px')}</td>
+            <td>${champ(c, 'courriel', c.courriel, '210px', 'email')}</td>
+            <td>${champ(c, 'telephone', c.telephone, '130px', 'tel')}</td>
+            <td>
+              <button class="petit" onclick="definirCode(${c.id}, '${echapper(c.nom)}')">${
+                c.codeADefinir ? 'Donner un code' : 'Réinitialiser'
+              }</button>
+              ${c.codeADefinir ? '<div class="jauge moyen" style="margin-top:4px">Sans code</div>' : ''}
+            </td>
             <td>
               <div class="lien-conducteur">
                 <input readonly value="${echapper(c.lien)}" id="lien-${c.id}"
@@ -146,10 +155,10 @@ async function chargerConducteurs() {
             <td><button class="petit" onclick="basculerConducteur(${c.id}, ${c.actif ? 0 : 1})">${
               c.actif ? 'Désactiver' : 'Réactiver'
             }</button></td>
-          </tr>`
-        )
+          </tr>`;
+        })
         .join('')
-    : '<tr><td colspan="5" class="vide">Aucun conducteur de travaux enregistré.</td></tr>';
+    : '<tr><td colspan="8" class="vide">Aucun conducteur de travaux enregistré.</td></tr>';
 
   const options = (selectionne) =>
     `<option value="">— aucun, transmission directe à la direction</option>${conducteurs
@@ -233,20 +242,46 @@ window.regenererLien = async (id, nom) => {
   }
 };
 
+/*
+ * Un conducteur est un compte : il se corrige par la meme route que les chefs.
+ * Le nom et le prenom voyagent ensemble, sans quoi corriger l'un effacerait
+ * l'autre — le compte n'en porte qu'un seul champ, « NOM Prenom ».
+ */
 window.corrigerConducteur = async (id, champ, valeur, element) => {
   const ancienne = element.defaultValue;
+  const propre = valeur.trim();
+  if (propre === ancienne) return;
   try {
-    await API.put(`/api/admin/conducteurs/${id}`, { [champ]: valeur.trim() });
-    element.defaultValue = valeur.trim();
-    message('Conducteur mis à jour.', 'succes', 2500);
+    await API.put(`/api/admin/utilisateurs/${id}`, { [champ]: propre });
+    element.defaultValue = propre;
+    await chargerConducteurs();
+    message(
+      champ === 'identifiant'
+        ? 'Identifiant modifié. Prévenez l’intéressé : c’est avec celui-là qu’il se connectera.'
+        : 'Conducteur mis à jour.',
+      'succes',
+      champ === 'identifiant' ? 7000 : 2500
+    );
   } catch (e) {
     element.value = ancienne;
     message(e.message, 'erreur');
   }
 };
 
+window.definirCode = async (id, nom) => {
+  const pin = prompt(`Code de connexion de ${nom} (4 à 8 chiffres) :`);
+  if (pin === null) return;
+  try {
+    await API.post(`/api/admin/utilisateurs/${id}/code`, { pin: pin.trim() });
+    await chargerConducteurs();
+    message(`Code enregistré. Transmettez-le à ${nom} — lui seul doit le connaître.`, 'succes', 7000);
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
+};
+
 window.basculerConducteur = async (id, actif) => {
-  await API.put(`/api/admin/conducteurs/${id}`, { actif });
+  await API.post(`/api/admin/utilisateurs/${id}/actif`, { actif });
   await chargerConducteurs();
 };
 
@@ -261,14 +296,20 @@ window.rattacherChef = async (chefId, conducteurId) => {
 
 surClic('btn-ajout-conducteur', async () => {
   try {
-    await API.post('/api/admin/conducteurs', {
+    await API.post('/api/admin/utilisateurs', {
+      role: 'conducteur',
       nom: $('c-nom').value,
+      prenom: $('c-prenom').value,
+      identifiant: $('c-identifiant').value,
+      pin: $('c-pin').value,
       courriel: $('c-courriel').value,
       telephone: $('c-telephone').value,
     });
-    $('c-nom').value = $('c-courriel').value = $('c-telephone').value = '';
+    for (const id of ['c-nom', 'c-prenom', 'c-identifiant', 'c-pin', 'c-courriel', 'c-telephone']) {
+      $(id).value = '';
+    }
     await chargerConducteurs();
-    message('Conducteur de travaux ajouté.', 'succes');
+    message('Conducteur de travaux ajouté. Transmettez-lui son identifiant et son code.', 'succes', 7000);
   } catch (e) {
     message(e.message, 'erreur');
   }

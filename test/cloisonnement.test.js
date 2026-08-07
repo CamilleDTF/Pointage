@@ -493,6 +493,23 @@ test('la page Parametres est servie, mais ses donnees restent reservees au direc
 
 /* ------------------ Visa du conducteur de travaux ------------------------- */
 
+/*
+ * Un conducteur de travaux est desormais un compte : il se cree par la route
+ * commune des comptes, avec un identifiant et un code comme les autres.
+ */
+let numeroConducteur = 0;
+async function creerConducteur(directeur, champs) {
+  numeroConducteur += 1;
+  const reponse = await directeur('POST', '/api/admin/utilisateurs', {
+    role: 'conducteur',
+    identifiant: `conduc${numeroConducteur}`,
+    pin: '4321',
+    ...champs,
+  });
+  assert.equal(reponse.statut, 200, (reponse.corps || {}).erreur);
+  return reponse.corps;
+}
+
 async function ficheTransmise(chef, semaine, conducteurId) {
   const fiche = (await chef('POST', '/api/fiches/semaine', { annee: 2026, semaine })).corps.fiche;
   // Comme l'ecran du chef : l'identifiant du salarie suit le nom saisi, sinon
@@ -509,7 +526,7 @@ async function ficheTransmise(chef, semaine, conducteurId) {
   const conducteur =
     conducteurId !== undefined
       ? conducteurId
-      : (db.prepare('SELECT id FROM conducteurs WHERE actif = 1 ORDER BY id LIMIT 1').get() || {}).id || null;
+      : (db.prepare("SELECT id FROM utilisateurs WHERE role = 'conducteur' AND actif = 1 ORDER BY id LIMIT 1").get() || {}).id || null;
   await chef('PUT', `/api/fiches/${fiche.id}`, {
     chantier: 'Chantier visa', ville: 'Toulouse', zone_deplacement: 'AUTRE',
     conducteur_id: conducteur, lignes,
@@ -533,9 +550,9 @@ test('un conducteur choisi met la fiche en attente de son visa', async () => {
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
 
-  const conducteur = (await d('POST', '/api/admin/conducteurs', {
+  const conducteur = await creerConducteur(d, {
     nom: 'MOREAU Paul', courriel: 'paul.moreau@exemple.fr',
-  })).corps;
+  });
   const chefA = db.prepare("SELECT id FROM utilisateurs WHERE identifiant = 'chefa'").get().id;
   assert.equal((await d('PUT', `/api/admin/chefs/${chefA}/conducteur`, { conducteur_id: conducteur.id })).statut, 200);
 
@@ -670,14 +687,14 @@ test('le chef choisit lui-meme le conducteur, et son choix l emporte', async () 
   const d = await connexion('dir', '9999');
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
-  db.exec('DELETE FROM conducteurs');
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
 
-  const habituel = (await d('POST', '/api/admin/conducteurs', {
+  const habituel = await creerConducteur(d, {
     nom: 'MOREAU Paul', courriel: 'paul@exemple.fr',
-  })).corps;
-  const autre = (await d('POST', '/api/admin/conducteurs', {
+  });
+  const autre = await creerConducteur(d, {
     nom: 'RENAUD Sophie', courriel: 'sophie@exemple.fr',
-  })).corps;
+  });
 
   const chefA = db.prepare("SELECT id FROM utilisateurs WHERE identifiant = 'chefa'").get().id;
   await d('PUT', `/api/admin/chefs/${chefA}/conducteur`, { conducteur_id: habituel.id });
@@ -723,7 +740,7 @@ test('le calendrier du mois montre tout l effectif, jour par jour', async () => 
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
   db.exec('DELETE FROM conges');
-  db.exec('DELETE FROM conducteurs');
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
 
   // Semaine 27 de 2026 : du lundi 29 juin au dimanche 5 juillet.
   await ficheTransmise(a, 27);
@@ -813,14 +830,14 @@ test('le lien personnel montre au conducteur ses fiches, et rien d autre', async
   const a = await connexion('chefa', '1111');
   const b = await connexion('chefb', '2222');
   db.exec('DELETE FROM fiches');
-  db.exec('DELETE FROM conducteurs');
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
 
-  const paul = (await d('POST', '/api/admin/conducteurs', {
+  const paul = await creerConducteur(d, {
     nom: 'MOREAU Paul', courriel: 'paul@exemple.fr',
-  })).corps;
-  const sophie = (await d('POST', '/api/admin/conducteurs', {
+  });
+  const sophie = await creerConducteur(d, {
     nom: 'RENAUD Sophie', courriel: 'sophie@exemple.fr',
-  })).corps;
+  });
 
   // Le lien nait avec le conducteur : pas d'etape « activer son acces ».
   assert.match(paul.lien, /\/conducteur\.html\?cle=/);
@@ -878,11 +895,11 @@ test('un chef reprend sa fiche transmise, et le visa en cours tombe', async () =
   const a = await connexion('chefa', '1111');
   const b = await connexion('chefb', '2222');
   db.exec('DELETE FROM fiches');
-  db.exec('DELETE FROM conducteurs');
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
 
-  const paul = (await d('POST', '/api/admin/conducteurs', {
+  const paul = await creerConducteur(d, {
     nom: 'MOREAU Paul', courriel: 'paul@exemple.fr',
-  })).corps;
+  });
   const { id } = await ficheTransmise(a, 45, paul.id);
 
   const avant = db.prepare('SELECT statut, visa_statut, visa_jeton FROM fiches WHERE id = ?').get(id);
@@ -1004,11 +1021,11 @@ test('le chef recoit de quoi prevenir le conducteur, jamais de quoi viser', asyn
   const d = await connexion('dir', '9999');
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
-  db.exec('DELETE FROM conducteurs');
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
 
-  const paul = (await d('POST', '/api/admin/conducteurs', {
+  const paul = await creerConducteur(d, {
     nom: 'MOREAU Paul', courriel: 'paul@exemple.fr', telephone: '06 12 34 56 78',
-  })).corps;
+  });
 
   const { visa } = await ficheTransmise(a, 46, paul.id);
   assert.equal(visa.demande, true);
@@ -1031,4 +1048,77 @@ test('le chef recoit de quoi prevenir le conducteur, jamais de quoi viser', asyn
   const relance = (await d('POST', `/api/fiches/${(await ficheTransmise(a, 47, paul.id)).id}/relancer-visa`)).corps;
   assert.match(relance.visa.lien, /visa\.html\?jeton=/);
   assert.ok(relance.visa.alerte.texte.length > 50);
+});
+
+/*
+ * Etape 1 des comptes de conducteurs : le role existe, son espace n'est pas
+ * encore ouvert.
+ *
+ * C'est la promesse de cette etape — creer les comptes ne peut ouvrir aucune
+ * porte par megarde. Le test compte donc pour rien les routes reservees au
+ * directeur, qui refuseraient de toute facon : il vise celles qui acceptent
+ * n'importe quel compte connecte, et qui se branchent sur « chef » ou
+ * « directeur ». Un role de plus y tomberait dans la branche du directeur.
+ */
+test('un conducteur connecte n obtient encore rien', async () => {
+  const d = await connexion('dir', '9999');
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+  const paul = await creerConducteur(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
+  await d('POST', `/api/admin/utilisateurs/${paul.id}/code`, { pin: '5555' });
+
+  const identifiant = db.prepare('SELECT identifiant FROM utilisateurs WHERE id = ?').get(paul.id).identifiant;
+  const c = await connexion(identifiant, '5555');
+
+  // Les routes ouvertes a tout compte connecte : ce sont elles qui laisseraient
+  // passer un role inattendu.
+  const fermees = [
+    ['GET', '/api/fiches'],
+    ['GET', '/api/fiches?annee=2026&semaine=20'],
+    ['POST', '/api/fiches/semaine', { annee: 2026, semaine: 20 }],
+    ['GET', '/api/fiches/1'],
+    ['PUT', '/api/fiches/1', { chantier: 'Detourne' }],
+    ['POST', '/api/fiches/1/reprendre'],
+    ['POST', '/api/fiches/1/soumettre'],
+    ['GET', '/api/reference'],
+    ['GET', '/api/calendrier?annee=2026&mois=8'],
+    ['PUT', '/api/salaries/1/nom', { nom: 'DETOURNE' }],
+    ['GET', '/api/admin/utilisateurs'],
+    ['GET', '/api/mois?annee=2026&mois=8'],
+  ];
+  for (const [methode, chemin, corps] of fermees) {
+    const r = await c(methode, chemin, corps);
+    assert.equal(r.statut, 403, `${methode} ${chemin} devrait etre ferme`);
+  }
+
+  // Et surtout : rien n'a ete cree a son nom au passage.
+  const siennes = db.prepare('SELECT COUNT(*) n FROM fiches WHERE chef_id = ?').get(paul.id).n;
+  assert.equal(siennes, 0, 'aucune fiche ne doit naitre d une tentative');
+
+  // Ce qui le concerne lui reste joignable : sinon il ne pourrait pas se
+  // deconnecter, ni changer le code qu'on vient de lui donner.
+  assert.equal((await c('GET', '/api/moi')).statut, 200);
+  assert.equal((await c('POST', '/api/mon-code', { actuel: '5555', nouveau: '6666' })).statut, 200);
+});
+
+/*
+ * Le lien personnel doit survivre a la fermeture : c'est encore le seul moyen
+ * dont dispose un conducteur pour viser, tant que son ecran n'existe pas.
+ */
+test('le lien personnel fonctionne encore, meme pour un conducteur connecte', async () => {
+  const d = await connexion('dir', '9999');
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+
+  const paul = await creerConducteur(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
+  await d('POST', `/api/admin/utilisateurs/${paul.id}/code`, { pin: '5555' });
+  await ficheTransmise(a, 48, paul.id);
+
+  const cle = db.prepare('SELECT jeton FROM utilisateurs WHERE id = ?').get(paul.id).jeton;
+  const identifiant = db.prepare('SELECT identifiant FROM utilisateurs WHERE id = ?').get(paul.id).identifiant;
+  const c = await connexion(identifiant, '5555');
+
+  const tableau = await c('GET', `/api/conducteur/${cle}`);
+  assert.equal(tableau.statut, 200, 'le jeton autorise, pas la session');
+  assert.equal(tableau.corps.enAttente.length, 1);
 });

@@ -136,11 +136,14 @@ peut la corriger, la valider, ou la renvoyer au chef avec un motif.
     (SMS, WhatsApp, courriel)   └── renvoyée avec commentaire ──► retour au chef
 ```
 
-Le conducteur de travaux vise **avant** la direction. Il n'a pas de compte : il a un
-**lien personnel**, qu'il garde en favori, où l'attendent les fiches à viser — le
-pointage sous les yeux et deux actions, *viser* ou *renvoyer avec un commentaire*.
-C'est un choix délibéré : un compte de plus par conducteur, ce serait un code de plus
-à distribuer, à retenir et à réinitialiser, pour deux clics par semaine.
+Le conducteur de travaux vise **avant** la direction. Il a désormais un **compte**,
+avec son identifiant et son code, dans le même registre que les chefs d'équipe et la
+direction — une personne y vit à un seul endroit, et s'y désactive une seule fois.
+
+> **Son espace est en cours d'ouverture.** Les comptes existent et se gèrent depuis
+> *Paramètres*, mais aucune route ne leur est encore ouverte : un conducteur connecté
+> n'obtient rien de plus qu'un visiteur, et arrive sur un écran qui le lui dit. En
+> attendant, il vise par son **lien personnel**, qu'il garde en favori.
 
 **C'est le chef d'équipe qui désigne le conducteur**, en bas de sa fiche, juste avant
 de transmettre. D'une semaine à l'autre le chantier peut relever de quelqu'un d'autre,
@@ -541,7 +544,7 @@ server/
   domaine.js    Point d'entrée des règles métier (réexporte public/js/regles.js)
   configuration.js  Lecture de configuration.txt, avant tout le reste
   db.js         Schéma SQLite et journal des actions
-  auth.js       Sessions signées, codes PIN, limitation des tentatives
+  auth.js       Sessions signées, codes PIN, limitation des tentatives, fermeture par rôle
   fiches.js     Cycle de vie d'une fiche : création, saisie, transmission, validation
   export.js     Génération des classeurs Excel et du CSV
   mensuel.js    Agrégation d'un mois et valorisation de la paie
@@ -575,6 +578,7 @@ test/
   fournisseurs.test.js  Reconnaissance de l'hébergeur d'une adresse professionnelle
   courriel.test.js      Un serveur muet ne bloque pas la transmission d'une fiche
   alerte.test.js        Le message envoyé par le chef ne porte ni lien ni secret
+  migration-conducteurs.test.js  Les conducteurs deviennent des comptes sans perdre une fiche
 scripts/
   tester-courriel.js    Essai d'envoi, et diagnostic des réglages SMTP
   importer-effectif.js  Chargement de l'effectif depuis le tableau d'affectation

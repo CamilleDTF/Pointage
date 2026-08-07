@@ -121,6 +121,34 @@ function exigerConnexion(req, res, next) {
   next();
 }
 
+/*
+ * Le role conducteur existe ; son espace n'est pas encore ouvert.
+ *
+ * Ce garde-fou est ferme par defaut, et c'est tout son interet. Les routes
+ * ouvertes a tout compte connecte se branchent sur « chef » ou « directeur » :
+ * un role de plus tomberait dans la branche du directeur et verrait passer
+ * toutes les fiches de la maison. Plutot que de corriger chaque route — en en
+ * oubliant une — on refuse tout, et on ouvrira deliberement, une par une, quand
+ * ses pouvoirs seront decides.
+ *
+ * Restent joignables : ce qui ne concerne que lui, et les liens signes, qui ne
+ * doivent rien a la session — c'est le jeton qui autorise, pas le compte.
+ */
+const ouvertAuConducteur = (chemin) =>
+  ['/api/moi', '/api/deconnexion', '/api/mon-code'].includes(chemin) ||
+  chemin.startsWith('/api/visa/') ||
+  chemin.startsWith('/api/conducteur/');
+
+function espaceConducteurFerme(req, res, next) {
+  const conducteur = req.utilisateur && req.utilisateur.role === 'conducteur';
+  if (conducteur && req.path.startsWith('/api/') && !ouvertAuConducteur(req.path)) {
+    return res.status(403).json({
+      erreur: "Votre espace n'est pas encore ouvert. La direction vous préviendra.",
+    });
+  }
+  next();
+}
+
 function exigerDirecteur(req, res, next) {
   if (!req.utilisateur) return res.status(401).json({ erreur: 'Session expiree, reconnectez-vous.' });
   if (req.utilisateur.role !== 'directeur') {
@@ -203,7 +231,17 @@ function reinitialiserTentatives(cle) {
 }
 
 const hacherPin = (pin) => bcrypt.hashSync(String(pin), 10);
-const verifierPin = (pin, hash) => bcrypt.compareSync(String(pin), hash);
+
+/*
+ * Un compte peut exister sans code : ceux des conducteurs de travaux, nes de la
+ * migration, attendent que le directeur leur en donne un. L'empreinte vide dit
+ * exactement cela, et ne peut correspondre a aucune saisie — la comparaison la
+ * refuserait de toute facon, mais mieux vaut que le refus soit ecrit ici que
+ * confie au comportement d'une bibliotheque.
+ */
+const SANS_CODE = '';
+const codeUtilisable = (hash) => Boolean(hash);
+const verifierPin = (pin, hash) => codeUtilisable(hash) && bcrypt.compareSync(String(pin), hash);
 
 module.exports = {
   // Partage avec server/visa.js, qui signe les liens envoyes aux conducteurs
@@ -214,10 +252,13 @@ module.exports = {
   fermerSession,
   exigerConnexion,
   exigerDirecteur,
+  espaceConducteurFerme,
   delivrerBilletPaie,
   consommerBilletPaie,
   hacherPin,
   verifierPin,
+  codeUtilisable,
+  SANS_CODE,
   tropDeTentatives,
   enregistrerEchec,
   reinitialiserTentatives,

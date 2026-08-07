@@ -5,6 +5,7 @@
 require('./configuration');
 
 const path = require('path');
+const crypto = require('node:crypto');
 const express = require('express');
 
 const { db, journaliser } = require('./db');
@@ -33,6 +34,7 @@ const VERSION = require('../package.json').version;
 app.disable('x-powered-by');
 app.use(express.json({ limit: '8mb' })); // les signatures manuscrites sont transmises en PNG base64.
 app.use(A.session);
+app.use(A.espaceConducteurFerme);
 
 const asyncRoute = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -124,7 +126,9 @@ app.get('/api/reference', A.exigerConnexion, (req, res) => {
       .all(),
     zonesDeplacement: D.ZONES_DEPLACEMENT,
     // Le chef choisit lui-meme qui doit viser sa fiche : il lui faut la liste.
-    conducteurs: db.prepare('SELECT id, nom FROM conducteurs WHERE actif = 1 ORDER BY nom').all(),
+    conducteurs: db
+      .prepare("SELECT id, nom FROM utilisateurs WHERE role = 'conducteur' AND actif = 1 ORDER BY nom")
+      .all(),
     conducteurParDefaut: req.utilisateur.conducteur_id || null,
   });
 });
@@ -269,7 +273,9 @@ app.post('/api/fiches/semaine', A.exigerConnexion, (req, res) => {
 /** Combien de conducteurs sont proposables : le controle en depend. */
 function optionsControle() {
   return {
-    conducteursDisponibles: db.prepare('SELECT COUNT(*) AS n FROM conducteurs WHERE actif = 1').get().n,
+    conducteursDisponibles: db
+      .prepare("SELECT COUNT(*) AS n FROM utilisateurs WHERE role = 'conducteur' AND actif = 1")
+      .get().n,
   };
 }
 
@@ -412,42 +418,37 @@ app.get('/api/conducteur/:cle', (req, res) => {
 
 /* ------------------------ Conducteurs de travaux --------------------------- */
 
+/*
+ * Les conducteurs sont des comptes comme les autres : ils se creent, se
+ * renomment, se desactivent et changent de code par les routes communes
+ * `/api/admin/utilisateurs`. Il ne reste ici que ce qui leur est propre — la
+ * liste de leur ecran, et le lien personnel qui precede les comptes.
+ */
 app.get('/api/admin/conducteurs', A.exigerDirecteur, (req, res) => {
   res.json({
     // Le lien personnel est monte ici : c'est au directeur de le transmettre,
     // jamais au chef d'equipe, qui pourrait sinon viser ses propres fiches.
     conducteurs: db
-      .prepare('SELECT * FROM conducteurs ORDER BY nom')
+      .prepare("SELECT * FROM utilisateurs WHERE role = 'conducteur' ORDER BY nom")
       .all()
-      .map((c) => ({ ...c, lien: V.lienConducteur(c) })),
+      .map(({ pin_hash: empreinte, ...c }) => ({
+        ...c,
+        lien: V.lienConducteur(c),
+        // Un compte migre porte une empreinte que personne ne peut retrouver :
+        // tant que le directeur n'a pas donne de code, il ne peut pas entrer.
+        codeADefinir: !A.codeUtilisable(empreinte),
+      })),
     // Qui depend de qui : le rattachement se regle dans le meme ecran.
     chefs: db
       .prepare(
         `SELECT u.id, u.nom, u.conducteur_id, c.nom AS conducteur_nom
            FROM utilisateurs u
-           LEFT JOIN conducteurs c ON c.id = u.conducteur_id
+           LEFT JOIN utilisateurs c ON c.id = u.conducteur_id
           WHERE u.role = 'chef' AND u.actif = 1 ORDER BY u.nom`
       )
       .all(),
     envoiConfigure: C.ACTIF,
   });
-});
-
-app.post('/api/admin/conducteurs', A.exigerDirecteur, (req, res) => {
-  const nom = String(req.body.nom || '').trim();
-  const courriel = String(req.body.courriel || '').trim();
-  if (!nom) return res.status(400).json({ erreur: 'Le nom est obligatoire.' });
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(courriel)) {
-    return res.status(400).json({ erreur: 'Adresse de courriel invalide.' });
-  }
-  // Le lien personnel nait avec le conducteur : il n'y a pas d'etape « activer
-  // son acces », qui serait une occasion de plus de l'oublier.
-  const jeton = require('crypto').randomBytes(24).toString('base64url');
-  const r = db
-    .prepare('INSERT INTO conducteurs (nom, courriel, telephone, jeton) VALUES (?, ?, ?, ?)')
-    .run(nom, courriel, String(req.body.telephone || '').trim().slice(0, 30), jeton);
-  const conducteur = db.prepare('SELECT * FROM conducteurs WHERE id = ?').get(r.lastInsertRowid);
-  res.json({ id: r.lastInsertRowid, lien: V.lienConducteur(conducteur) });
 });
 
 /*
@@ -459,16 +460,6 @@ app.post('/api/admin/conducteurs/:id/lien', A.exigerDirecteur, (req, res) => {
   if (resultat.erreur) return repondre(res, resultat);
   journaliser(null, req.utilisateur.id, 'lien_conducteur', resultat.conducteur.nom);
   res.json({ lien: V.lienConducteur(resultat.conducteur) });
-});
-
-app.put('/api/admin/conducteurs/:id', A.exigerDirecteur, (req, res) => {
-  const champs = ['nom', 'courriel', 'telephone', 'actif'];
-  const maj = {};
-  for (const champ of champs) if (req.body[champ] !== undefined) maj[champ] = req.body[champ];
-  if (!Object.keys(maj).length) return res.json({ ok: true });
-  const set = Object.keys(maj).map((c) => `${c} = @${c}`).join(', ');
-  db.prepare(`UPDATE conducteurs SET ${set} WHERE id = @id`).run({ ...maj, id: Number(req.params.id) });
-  res.json({ ok: true });
 });
 
 app.put('/api/admin/chefs/:id/conducteur', A.exigerDirecteur, (req, res) => {
@@ -705,8 +696,13 @@ app.get('/api/tableau', A.exigerDirecteur, (req, res) => {
 
 app.get('/api/admin/utilisateurs', A.exigerDirecteur, (req, res) => {
   res.json({
+    // Les conducteurs ont leur propre onglet : les melanger ici brouillerait
+    // deux circuits qui n'ont pas les memes pouvoirs.
     utilisateurs: db
-      .prepare('SELECT id, nom, identifiant, role, actif FROM utilisateurs ORDER BY role DESC, nom')
+      .prepare(
+        `SELECT id, nom, identifiant, role, actif FROM utilisateurs
+          WHERE role IN ('chef', 'directeur') ORDER BY role DESC, nom`
+      )
       .all(),
     salaries: db
       .prepare(
@@ -717,18 +713,33 @@ app.get('/api/admin/utilisateurs', A.exigerDirecteur, (req, res) => {
   });
 });
 
+const ROLES = ['chef', 'directeur', 'conducteur'];
+
 app.post('/api/admin/utilisateurs', A.exigerDirecteur, (req, res) => {
-  const nom = String(req.body.nom || '').trim();
+  const nom = `${String(req.body.nom || '').trim()} ${String(req.body.prenom || '').trim()}`.trim();
   const identifiant = String(req.body.identifiant || '').trim().toLowerCase();
   const pin = String(req.body.pin || '');
-  const role = req.body.role === 'directeur' ? 'directeur' : 'chef';
+  const role = ROLES.includes(req.body.role) ? req.body.role : 'chef';
+  const courriel = String(req.body.courriel || '').trim();
   if (!nom || !identifiant) return res.status(400).json({ erreur: 'Nom et identifiant obligatoires.' });
   if (!/^\d{4,8}$/.test(pin)) return res.status(400).json({ erreur: 'Le code doit comporter 4 a 8 chiffres.' });
+  if (courriel && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(courriel)) {
+    return res.status(400).json({ erreur: 'Adresse de courriel invalide.' });
+  }
+
+  // Le lien personnel nait avec le conducteur : pas d'etape « activer son
+  // acces », qui serait une occasion de plus de l'oublier.
+  const jeton = role === 'conducteur' ? crypto.randomBytes(24).toString('base64url') : null;
   try {
     const r = db
-      .prepare('INSERT INTO utilisateurs (nom, identifiant, role, pin_hash) VALUES (?, ?, ?, ?)')
-      .run(nom, identifiant, role, A.hacherPin(pin));
-    res.json({ id: r.lastInsertRowid });
+      .prepare(
+        `INSERT INTO utilisateurs (nom, identifiant, role, pin_hash, courriel, telephone, jeton)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(nom, identifiant, role, A.hacherPin(pin), courriel, String(req.body.telephone || '').trim().slice(0, 30), jeton);
+    // Le lien part avec la reponse : le directeur vient de creer le compte,
+    // c'est le moment ou il a la personne en tete pour le lui transmettre.
+    res.json({ id: r.lastInsertRowid, lien: jeton ? V.lienConducteur({ jeton }) : undefined });
   } catch (e) {
     res.status(409).json({ erreur: 'Cet identifiant existe deja.' });
   }
@@ -770,6 +781,15 @@ app.put('/api/admin/utilisateurs/:id', A.exigerDirecteur, (req, res) => {
     }
     maj.identifiant = identifiant;
   }
+  // Coordonnees : elles ne servent qu'a prevenir, jamais a ouvrir quoi que ce soit.
+  if (req.body.courriel !== undefined) {
+    const courriel = String(req.body.courriel).trim();
+    if (courriel && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(courriel)) {
+      return res.status(400).json({ erreur: 'Adresse de courriel invalide.' });
+    }
+    maj.courriel = courriel;
+  }
+  if (req.body.telephone !== undefined) maj.telephone = String(req.body.telephone).trim().slice(0, 30);
   if (!Object.keys(maj).length) return res.json({ ok: true });
 
   try {

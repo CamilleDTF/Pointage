@@ -10,7 +10,9 @@ const D = require('./domaine');
  */
 function optionsControle() {
   return {
-    conducteursDisponibles: db.prepare('SELECT COUNT(*) AS n FROM conducteurs WHERE actif = 1').get().n,
+    conducteursDisponibles: db
+      .prepare("SELECT COUNT(*) AS n FROM utilisateurs WHERE role = 'conducteur' AND actif = 1")
+      .get().n,
   };
 }
 

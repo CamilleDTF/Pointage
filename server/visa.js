@@ -58,9 +58,9 @@ function verifier(jeton) {
 function conducteurDuChef(chefId) {
   return db
     .prepare(
-      `SELECT c.* FROM conducteurs c
+      `SELECT c.* FROM utilisateurs c
          JOIN utilisateurs u ON u.conducteur_id = c.id
-        WHERE u.id = ? AND c.actif = 1`
+        WHERE u.id = ? AND c.role = 'conducteur' AND c.actif = 1`
     )
     .get(chefId);
 }
@@ -75,7 +75,9 @@ function conducteurDuChef(chefId) {
  */
 function conducteurDeLaFiche(fiche) {
   if (fiche && fiche.conducteur_id) {
-    const choisi = db.prepare('SELECT * FROM conducteurs WHERE id = ? AND actif = 1').get(fiche.conducteur_id);
+    const choisi = db
+      .prepare("SELECT * FROM utilisateurs WHERE id = ? AND role = 'conducteur' AND actif = 1")
+      .get(fiche.conducteur_id);
     if (choisi) return choisi;
   }
   return conducteurDuChef(fiche ? fiche.chef_id : null);
@@ -263,14 +265,19 @@ function lienConducteur(conducteur) {
 /** Regenere le secret : l'ancien lien cesse aussitot de fonctionner. */
 function regenererJeton(conducteurId) {
   const jeton = crypto.randomBytes(24).toString('base64url');
-  const resultat = db.prepare('UPDATE conducteurs SET jeton = ? WHERE id = ?').run(jeton, conducteurId);
+  const resultat = db
+    .prepare("UPDATE utilisateurs SET jeton = ? WHERE id = ? AND role = 'conducteur'")
+    .run(jeton, conducteurId);
   if (!resultat.changes) return { erreur: 'Conducteur de travaux inconnu.', code: 404 };
-  return { conducteur: db.prepare('SELECT * FROM conducteurs WHERE id = ?').get(conducteurId) };
+  return { conducteur: db.prepare('SELECT * FROM utilisateurs WHERE id = ?').get(conducteurId) };
 }
 
 function conducteurDuJeton(cle) {
   if (!cle || typeof cle !== 'string') return null;
-  return db.prepare('SELECT * FROM conducteurs WHERE jeton = ? AND actif = 1').get(cle) || null;
+  return (
+    db.prepare("SELECT * FROM utilisateurs WHERE jeton = ? AND role = 'conducteur' AND actif = 1").get(cle) ||
+    null
+  );
 }
 
 /**

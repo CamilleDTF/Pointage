@@ -70,10 +70,15 @@
       <h2>Conducteurs de travaux</h2>
       <p class="aide" id="aide-envoi"></p>
       <p class="aide">
-        Ils visent les fiches avant vous, sans compte ni code. Chacun a un
-        <strong>lien personnel</strong> à lui transmettre une fois — par message, par courriel,
-        ou de vive voix : il l'ouvre, il voit les fiches qui attendent son visa, il vise. Qu'il
-        le mette en favori sur son téléphone et l'affaire est réglée pour de bon.
+        Ils visent les fiches avant vous. Chacun a désormais un <strong>compte</strong>, avec son
+        identifiant et son code, comme vous et les chefs d'équipe. Un compte marqué
+        <span class="jauge moyen">Sans code</span> existe mais n'ouvre rien : donnez-lui un code,
+        puis transmettez-le-lui.
+      </p>
+      <p class="aide">
+        <strong>Leur espace n'est pas encore ouvert</strong> — il arrive à la prochaine étape. En
+        attendant, ils continuent de viser par leur <strong>lien personnel</strong>, à leur
+        transmettre une fois et à garder en favori.
       </p>
       <p class="aide">
         Ce lien ne doit <strong>jamais passer par un chef d'équipe</strong> : il permet de viser,
@@ -88,13 +93,19 @@
         sorte que rien de secret ne passe par le chef.
       </p>
       <div class="enveloppe-table"><table id="table-conducteurs">
-        <thead><tr><th>Nom</th><th>Adresse de courriel</th><th>Téléphone</th><th>Lien personnel</th><th></th></tr></thead>
+        <thead><tr>
+          <th>Nom</th><th>Prénom</th><th>Identifiant</th><th>Adresse de courriel</th>
+          <th>Téléphone</th><th>Code</th><th>Lien personnel</th><th></th>
+        </tr></thead>
         <tbody></tbody>
       </table></div>
       <div class="rangee" style="margin-top:10px">
-        <input id="c-nom" placeholder="NOM Prénom" style="flex:1;min-width:140px">
-        <input id="c-courriel" type="email" placeholder="prenom.nom@societe.fr" style="flex:2;min-width:200px">
-        <input id="c-telephone" type="tel" placeholder="06 12 34 56 78" style="width:150px">
+        <input id="c-nom" placeholder="NOM" style="flex:1;min-width:110px">
+        <input id="c-prenom" placeholder="Prénom" style="flex:1;min-width:110px">
+        <input id="c-identifiant" placeholder="identifiant" style="flex:1;min-width:110px">
+        <input id="c-pin" placeholder="code" inputmode="numeric" style="width:90px">
+        <input id="c-courriel" type="email" placeholder="prenom.nom@societe.fr" style="flex:2;min-width:180px">
+        <input id="c-telephone" type="tel" placeholder="06 12 34 56 78" style="width:140px">
         <button class="petit principal" id="btn-ajout-conducteur" type="button">Ajouter</button>
       </div>
 
