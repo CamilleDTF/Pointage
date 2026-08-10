@@ -579,6 +579,52 @@ app.post('/api/fiches/:id/decision', A.exigerDirecteur, (req, res) => {
   repondre(res, F.statuer(Number(req.params.id), req.utilisateur, req.body.decision, req.body.motif));
 });
 
+/*
+ * L'historique d'une fiche : ses versions validees, et ce que chacun y a change.
+ *
+ * C'est ce qu'on ouvre quand un montant est conteste. Le chef d'equipe y a droit
+ * pour sa propre fiche — ce sont ses operateurs qui ont signe, et c'est lui
+ * qu'on interrogera en premier.
+ */
+app.get('/api/fiches/:id/historique', A.exigerConnexion, (req, res) => {
+  const id = Number(req.params.id);
+  const fiche = db.prepare('SELECT id, chef_id, version FROM fiches WHERE id = ?').get(id);
+  if (!fiche) return res.status(404).json({ erreur: 'Fiche introuvable.' });
+  if (req.utilisateur.role !== 'directeur' && fiche.chef_id !== req.utilisateur.id) {
+    return res.status(403).json({ erreur: 'Cette fiche appartient a un autre chef d equipe.' });
+  }
+
+  const journal = db
+    .prepare(
+      `SELECT j.action, j.detail, j.horodatage, u.nom AS auteur
+         FROM journal j
+         LEFT JOIN utilisateurs u ON u.id = j.user_id
+        WHERE j.fiche_id = ? ORDER BY j.id`
+    )
+    .all(id);
+
+  res.json({ version: fiche.version || 1, versions: F.versionsDeLaFiche(id), journal });
+});
+
+/*
+ * Le contenu d'une version archivee : la fiche telle qu'elle a ete validee.
+ *
+ * Elle porte les signatures : elle ne sort donc que pour la direction et pour le
+ * chef de la fiche, comme la fiche elle-meme.
+ */
+app.get('/api/fiches/:id/versions/:version', A.exigerConnexion, (req, res) => {
+  const id = Number(req.params.id);
+  const fiche = db.prepare('SELECT id, chef_id FROM fiches WHERE id = ?').get(id);
+  if (!fiche) return res.status(404).json({ erreur: 'Fiche introuvable.' });
+  if (req.utilisateur.role !== 'directeur' && fiche.chef_id !== req.utilisateur.id) {
+    return res.status(403).json({ erreur: 'Cette fiche appartient a un autre chef d equipe.' });
+  }
+
+  const archivee = F.versionArchivee(id, req.params.version);
+  if (!archivee) return res.status(404).json({ erreur: 'Version introuvable.' });
+  res.json({ fiche: archivee });
+});
+
 /* -------------------- Visa du conducteur de travaux ----------------------- */
 
 /*

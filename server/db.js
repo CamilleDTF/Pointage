@@ -141,6 +141,31 @@ CREATE TABLE IF NOT EXISTS conges (
   cree_le    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+/*
+ * Les versions validees d'une fiche.
+ *
+ * Une fiche validee part en paie : elle justifie des heures et porte les
+ * signatures des operateurs. La reecrire apres coup effacait ce que la direction
+ * avait valide, et le journal disait « fiche corrigee » sans dire quoi. On ne
+ * pouvait donc plus repondre a la seule question qui compte devant un
+ * desaccord : qu'est-ce qui a ete valide, exactement, et quand ?
+ *
+ * Chaque validation depose donc une copie complete et figee de la fiche —
+ * en-tete, lignes, journees, signatures. Elle n'est jamais modifiee ensuite :
+ * corriger une fiche validee ouvre un RECTIFICATIF, qui deviendra la version
+ * suivante et laissera la precedente intacte a cote.
+ */
+CREATE TABLE IF NOT EXISTS fiche_versions (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  fiche_id    INTEGER NOT NULL REFERENCES fiches(id) ON DELETE CASCADE,
+  version     INTEGER NOT NULL,
+  contenu     TEXT    NOT NULL,
+  validee_le  TEXT    NOT NULL DEFAULT (datetime('now')),
+  validee_par INTEGER REFERENCES utilisateurs(id),
+  motif       TEXT    NOT NULL DEFAULT '',
+  UNIQUE (fiche_id, version)
+);
+
 CREATE TABLE IF NOT EXISTS journal (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
   fiche_id  INTEGER REFERENCES fiches(id) ON DELETE CASCADE,
@@ -520,6 +545,12 @@ ajouterColonne('fiche_lignes', 'nb_gd80', 'INTEGER NOT NULL DEFAULT 0');
  * serait pire que de l'admettre. Leur signature tombera donc a la premiere
  * reecriture de la fiche.
  */
+/*
+ * Le numero de version d'une fiche : 1 tant qu'elle n'a jamais ete rouverte
+ * apres validation, puis un de plus a chaque rectificatif.
+ */
+ajouterColonne('fiches', 'version', 'INTEGER NOT NULL DEFAULT 1');
+
 ajouterColonne('fiche_lignes', 'signature_cle', "TEXT NOT NULL DEFAULT ''");
 ajouterColonne('fiche_lignes', 'signature_empreinte', "TEXT NOT NULL DEFAULT ''");
 

@@ -644,8 +644,34 @@ function enregistrerFiche(ficheId, corps, utilisateur) {
     };
   }
 
-  // Ce qu'on relira apres coup pour dire ce qui a change.
-  const avant = estConducteur ? obtenirFiche(ficheId) : null;
+  /*
+   * Une fiche validee ne se reecrit pas — pour personne, directeur compris.
+   *
+   * Elle justifie des heures deja parties en paie, et porte les signatures des
+   * operateurs. La corriger en place effacait ce qui avait ete valide, sans
+   * qu'aucune trace ne dise quoi. La corriger reste possible, mais par la porte
+   * prevue : rouvrir la fiche ouvre un rectificatif, qui deviendra la version
+   * suivante et laissera celle-ci intacte.
+   */
+  if (fiche.statut === 'validee') {
+    return {
+      erreur:
+        'Cette fiche est validee : elle n est plus modifiable. Ouvrez un rectificatif pour la corriger.',
+      code: 409,
+      rectificatifPossible: estDirecteur,
+    };
+  }
+
+  /*
+   * Ce qu'on relira apres coup pour dire ce qui a change.
+   *
+   * On le fait des que ce n'est pas le chef sur son propre brouillon : une
+   * correction venue d'ailleurs doit se lire, et un rectificatif se justifie
+   * ligne par ligne. Le brouillon du chef, lui, s'enregistre au fil de la
+   * frappe — un releve par demi-seconde n'apprendrait rien a personne.
+   */
+  const suivi = estConducteur || estDirecteur || (fiche.version || 1) > 1;
+  const avant = suivi ? obtenirFiche(ficheId) : null;
 
   // Une mise a jour qui ne porte que sur l entete ne touche pas aux lignes :
   // sans ce garde-fou, un PUT partiel effacerait toute la saisie de la semaine.
@@ -742,19 +768,25 @@ function enregistrerFiche(ficheId, corps, utilisateur) {
       }
     }
 
-    if (estDirecteur && fiche.chef_id !== utilisateur.id) {
-      journaliser(ficheId, utilisateur.id, 'correction_directeur', 'Fiche corrigee par le directeur');
-    }
-    if (estConducteur) {
-      /*
-       * Les operateurs ont signe une version du pointage. Corriger apres coup
-       * est le role meme du controle, mais cela decale leur signature de ce qui
-       * partira en paie : le directeur et le chef doivent pouvoir lire ce qui a
-       * bouge, sans avoir a comparer deux ecrans.
-       */
+    /*
+     * Les operateurs ont signe une version du pointage. Corriger apres coup est
+     * le role meme du controle, mais cela decale leur signature de ce qui
+     * partira en paie : le chef et le directeur doivent pouvoir lire ce qui a
+     * bouge, sans avoir a comparer deux ecrans.
+     *
+     * Le directeur y a droit comme les autres. Son « Fiche corrigee par le
+     * directeur » ne disait rien : c'etait la trace d'un geste, pas de son
+     * contenu, et elle ne permettait de repondre a aucune question.
+     */
+    if (suivi) {
       const changements = comparerFiches(avant, obtenirFiche(ficheId));
       if (changements.length) {
-        journaliser(ficheId, utilisateur.id, 'correction_conducteur', changements.join(' ; ').slice(0, 2000));
+        const action = estConducteur
+          ? 'correction_conducteur'
+          : estDirecteur
+            ? 'correction_directeur'
+            : 'correction_rectificatif';
+        journaliser(ficheId, utilisateur.id, action, changements.join(' ; ').slice(0, 2000));
       }
     }
   });
@@ -830,11 +862,53 @@ function reprendre(ficheId, utilisateur) {
   return { fiche: obtenirFiche(ficheId), visaAnnule: visaEnCours };
 }
 
+/* ------------------------- Versions et rectificatifs ----------------------- */
+
+/**
+ * La copie figee d'une fiche au moment ou elle est validee.
+ *
+ * Tout y est : l'en-tete, les lignes, les journees, les signatures. C'est la
+ * piece justificative — celle qu'on ressortira si un montant est conteste six
+ * mois plus tard — et elle ne doit rien devoir a l'etat courant de la fiche.
+ */
+function archiverVersion(ficheId, utilisateur, motif = '') {
+  const fiche = obtenirFiche(ficheId);
+  if (!fiche) return null;
+
+  db.prepare(
+    `INSERT INTO fiche_versions (fiche_id, version, contenu, validee_par, motif)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(ficheId, fiche.version || 1, JSON.stringify(fiche), utilisateur.id, String(motif).slice(0, 1000));
+  return fiche;
+}
+
+/** Les versions archivees d'une fiche, de la plus recente a la plus ancienne. */
+function versionsDeLaFiche(ficheId) {
+  return db
+    .prepare(
+      `SELECT v.id, v.version, v.validee_le, v.motif, u.nom AS validee_par
+         FROM fiche_versions v
+         LEFT JOIN utilisateurs u ON u.id = v.validee_par
+        WHERE v.fiche_id = ? ORDER BY v.version DESC`
+    )
+    .all(ficheId);
+}
+
+/** Le contenu complet d'une version archivee. */
+function versionArchivee(ficheId, version) {
+  const ligne = db
+    .prepare('SELECT contenu FROM fiche_versions WHERE fiche_id = ? AND version = ?')
+    .get(ficheId, Number(version));
+  return ligne ? JSON.parse(ligne.contenu) : null;
+}
+
 function statuer(ficheId, utilisateur, decision, motif = '') {
   const fiche = obtenirFiche(ficheId);
   if (!fiche) return { erreur: 'Fiche introuvable.', code: 404 };
 
   if (decision === 'valider') {
+    if (fiche.statut === 'validee') return { erreur: 'Cette fiche est deja validee.', code: 409 };
+
     const bloquantes = D.controlerFiche(fiche, fiche.lignes, optionsControle(fiche)).filter(
       (a) => a.niveau === 'bloquant'
     );
@@ -845,7 +919,32 @@ function statuer(ficheId, utilisateur, decision, motif = '') {
       `UPDATE fiches SET statut = 'validee', validee_le = datetime('now'), validee_par = ?,
               motif_rejet = '', maj_le = datetime('now') WHERE id = ?`
     ).run(utilisateur.id, ficheId);
-    journaliser(ficheId, utilisateur.id, 'validation', '');
+
+    /*
+     * La copie est deposee APRES le changement de statut : elle doit porter la
+     * fiche telle qu'elle est validee, date et validateur compris.
+     */
+    archiverVersion(ficheId, utilisateur, fiche.motif_rectificatif || '');
+    journaliser(ficheId, utilisateur.id, 'validation', `version ${fiche.version || 1}`);
+
+    /*
+     * Un rectificatif se lit par rapport a ce qu'il rectifie. Le releve est
+     * ecrit au moment ou la nouvelle version est arretee, pas avant : c'est
+     * seulement la qu'on sait ce qui, au total, aura change.
+     */
+    const precedente = versionArchivee(ficheId, (fiche.version || 1) - 1);
+    if (precedente) {
+      const changements = comparerFiches(precedente, obtenirFiche(ficheId));
+      journaliser(
+        ficheId,
+        utilisateur.id,
+        'rectificatif_valide',
+        (changements.length
+          ? `Version ${fiche.version} — ${changements.join(' ; ')}`
+          : `Version ${fiche.version} — aucun changement de pointage`
+        ).slice(0, 2000)
+      );
+    }
   } else if (decision === 'rejeter') {
     if (!String(motif).trim()) return { erreur: 'Indiquez le motif du renvoi au chef d equipe.', code: 400 };
     db.prepare(
@@ -854,11 +953,32 @@ function statuer(ficheId, utilisateur, decision, motif = '') {
     ).run(String(motif).trim().slice(0, 1000), ficheId);
     journaliser(ficheId, utilisateur.id, 'rejet', String(motif).trim().slice(0, 1000));
   } else if (decision === 'rouvrir') {
+    /*
+     * Rouvrir une fiche validee, c'est ouvrir un RECTIFICATIF.
+     *
+     * La version validee reste archivee telle quelle : on ne la reecrit pas, on
+     * en prepare une suivante. Le motif est exige — une fiche partie en paie ne
+     * se rouvre pas sans raison, et cette raison est la premiere chose qu'on
+     * cherchera dans six mois.
+     */
+    const rectificatif = fiche.statut === 'validee';
+    if (rectificatif && !String(motif).trim()) {
+      return { erreur: 'Indiquez le motif du rectificatif : cette fiche a deja ete validee.', code: 400 };
+    }
+
     db.prepare(
       `UPDATE fiches SET statut = 'brouillon', validee_le = NULL, validee_par = NULL,
-              soumise_le = NULL, maj_le = datetime('now') WHERE id = ?`
-    ).run(ficheId);
-    journaliser(ficheId, utilisateur.id, 'reouverture', '');
+              soumise_le = NULL, version = version + ?, maj_le = datetime('now') WHERE id = ?`
+    ).run(rectificatif ? 1 : 0, ficheId);
+
+    journaliser(
+      ficheId,
+      utilisateur.id,
+      rectificatif ? 'rectificatif_ouvert' : 'reouverture',
+      rectificatif
+        ? `Version ${(fiche.version || 1) + 1} ouverte — ${String(motif).trim().slice(0, 900)}`
+        : ''
+    );
   } else {
     return { erreur: 'Decision inconnue.', code: 400 };
   }
@@ -941,6 +1061,9 @@ module.exports = {
   soumettre,
   reprendre,
   statuer,
+  archiverVersion,
+  versionsDeLaFiche,
+  versionArchivee,
   listerFiches,
   lignesPourExport,
 };
