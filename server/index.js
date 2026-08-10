@@ -91,7 +91,19 @@ app.post('/api/mon-code', A.exigerConnexion, (req, res) => {
   const u = db.prepare('SELECT pin_hash FROM utilisateurs WHERE id = ?').get(req.utilisateur.id);
   if (!A.verifierPin(actuel, u.pin_hash)) return res.status(401).json({ erreur: 'Code actuel incorrect.' });
   db.prepare('UPDATE utilisateurs SET pin_hash = ? WHERE id = ?').run(A.hacherPin(nouveau), req.utilisateur.id);
-  res.json({ ok: true });
+
+  /*
+   * Changer son code ferme les sessions ouvertes avec l'ancien — c'est tout
+   * l'interet du geste quand on le fait parce qu'on craint qu'il ait ete vu.
+   * Sauf celle-ci : on rend immediatement une session valable au navigateur qui
+   * vient de faire la demarche, sinon il se retrouverait deconnecte par sa
+   * propre precaution.
+   */
+  const generation = A.revoquerSessions(req.utilisateur.id);
+  A.ouvrirSession(req, res, { ...req.utilisateur, session_generation: generation });
+
+  journaliser(null, req.utilisateur.id, 'code_change', 'sessions precedentes fermees');
+  res.json({ ok: true, sessionsFermees: true });
 });
 
 /* ------------------------------- References ------------------------------- */
@@ -1051,8 +1063,20 @@ app.put('/api/admin/utilisateurs/:id', A.exigerDirecteur, (req, res) => {
 app.post('/api/admin/utilisateurs/:id/code', A.exigerDirecteur, (req, res) => {
   const pin = String(req.body.pin || '');
   if (!/^\d{4,8}$/.test(pin)) return res.status(400).json({ erreur: 'Le code doit comporter 4 a 8 chiffres.' });
-  db.prepare('UPDATE utilisateurs SET pin_hash = ? WHERE id = ?').run(A.hacherPin(pin), Number(req.params.id));
-  res.json({ ok: true });
+  const id = Number(req.params.id);
+  db.prepare('UPDATE utilisateurs SET pin_hash = ? WHERE id = ?').run(A.hacherPin(pin), id);
+
+  // Le directeur attribue un code neuf souvent parce que l'ancien a fuite, ou
+  // que le telephone a ete perdu : les sessions ouvertes avec doivent tomber.
+  A.revoquerSessions(id);
+  // Sauf si c'est le sien qu'il vient de changer : on lui rend sa session.
+  if (id === req.utilisateur.id) {
+    const compte = db.prepare('SELECT * FROM utilisateurs WHERE id = ?').get(id);
+    A.ouvrirSession(req, res, compte);
+  }
+
+  journaliser(null, req.utilisateur.id, 'code_reinitialise', `compte ${id} — sessions fermees`);
+  res.json({ ok: true, sessionsFermees: true });
 });
 
 app.post('/api/admin/utilisateurs/:id/actif', A.exigerDirecteur, (req, res) => {
@@ -1106,6 +1130,19 @@ app.put('/api/salaries/:id/nom', A.exigerConnexion, (req, res) => {
   const id = Number(req.params.id);
   const salarie = db.prepare('SELECT * FROM salaries WHERE id = ?').get(id);
   if (!salarie) return res.status(404).json({ erreur: 'Salarie introuvable.' });
+
+  /*
+   * « Un de SES operateurs » : la route ne le verifiait pas, et n'importe quel
+   * chef pouvait donc renommer n'importe qui dans le fichier du personnel — y
+   * compris quelqu'un qu'il n'a jamais vu. Corriger le nom d'un homme qu'on a
+   * devant soi est une chose ; modifier le referentiel de toute l'entreprise en
+   * est une autre.
+   */
+  if (req.utilisateur.role !== 'directeur' && salarie.chef_id !== req.utilisateur.id) {
+    return res.status(403).json({
+      erreur: "Ce salarie n'est pas de votre equipe : signalez la correction a la direction.",
+    });
+  }
 
   const nom = String(req.body.nom || '').trim();
   const prenom = String(req.body.prenom || '').trim();

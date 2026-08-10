@@ -62,11 +62,34 @@ function session(req, res, next) {
   const donnees = jeton ? verifier(jeton) : null;
   if (donnees) {
     const u = db
-      .prepare('SELECT id, nom, identifiant, role, actif, conducteur_id FROM utilisateurs WHERE id = ?')
+      .prepare(
+        `SELECT id, nom, identifiant, role, actif, conducteur_id, session_generation
+           FROM utilisateurs WHERE id = ?`
+      )
       .get(donnees.uid);
-    if (u && u.actif) req.utilisateur = u;
+    /*
+     * La generation doit correspondre : un jeton emis avant un changement de
+     * code ne vaut plus rien, meme s'il est parfaitement signe et pas encore
+     * expire. C'est ce qui donne au changement de code son effet immediat.
+     */
+    if (u && u.actif && (donnees.gen || 0) === (u.session_generation || 0)) req.utilisateur = u;
   }
   next();
+}
+
+/**
+ * Ferme toutes les sessions ouvertes d'un compte, ou qu'elles soient.
+ *
+ * Renvoie la nouvelle generation, pour pouvoir immediatement redonner une
+ * session valable au navigateur qui vient de changer son code : on revoque
+ * partout ailleurs sans deconnecter celui qui fait le geste.
+ */
+function revoquerSessions(utilisateurId) {
+  db.prepare(
+    'UPDATE utilisateurs SET session_generation = session_generation + 1 WHERE id = ?'
+  ).run(utilisateurId);
+  return db.prepare('SELECT session_generation FROM utilisateurs WHERE id = ?').get(utilisateurId)
+    .session_generation;
 }
 
 /**
@@ -82,7 +105,12 @@ function connexionChiffree(req) {
 let avertissementEmis = false;
 
 function ouvrirSession(req, res, utilisateur) {
-  const jeton = signer({ uid: utilisateur.id, role: utilisateur.role, exp: Date.now() + DUREE_SESSION_MS });
+  const jeton = signer({
+    uid: utilisateur.id,
+    role: utilisateur.role,
+    gen: utilisateur.session_generation || 0,
+    exp: Date.now() + DUREE_SESSION_MS,
+  });
 
   /*
    * L'attribut Secure est pose selon la facon dont l'application est REELLEMENT
@@ -267,6 +295,7 @@ module.exports = {
   session,
   ouvrirSession,
   fermerSession,
+  revoquerSessions,
   exigerConnexion,
   exigerDirecteur,
   exigerDirecteurOuConducteur,

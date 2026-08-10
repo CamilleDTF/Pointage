@@ -455,6 +455,22 @@ ajouterColonne('utilisateurs', 'courriel', "TEXT NOT NULL DEFAULT ''");
 ajouterColonne('utilisateurs', 'telephone', "TEXT NOT NULL DEFAULT ''");
 
 /*
+ * Le numero de generation des sessions.
+ *
+ * Une session est un jeton signe, valable trente jours, que le serveur ne
+ * conserve nulle part : il lui suffit de verifier sa signature. Pratique, mais
+ * cela voulait dire que changer son code ne revoquait RIEN — un code compromis
+ * restait utilisable un mois entier par qui detenait deja un jeton, et la seule
+ * chose qu'on pouvait faire etait de desactiver le compte.
+ *
+ * Ce compteur est inscrit dans le jeton et relu a chaque requete. L'incrementer
+ * — au changement de code, ou quand le directeur en attribue un nouveau —
+ * invalide d'un coup tous les jetons deja emis, sans avoir a tenir un registre
+ * de sessions.
+ */
+ajouterColonne('utilisateurs', 'session_generation', 'INTEGER NOT NULL DEFAULT 0');
+
+/*
  * Les secrets d'acces du conducteur de travaux ont disparu avec les comptes.
  *
  * `utilisateurs.jeton` etait son lien personnel, `fiches.visa_jeton` le secret

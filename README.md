@@ -81,6 +81,15 @@ node scripts/creer-compte.js --nom "Direction travaux" \
 Chacun change ensuite son code depuis le bouton **Code** de l'en-tête ; le
 directeur peut réinitialiser n'importe quel code depuis l'écran **Paramètres**.
 
+**Changer un code ferme les sessions ouvertes avec l'ancien.** Une session est un jeton
+signé valable trente jours, que le serveur ne conserve nulle part : changer son code ne
+révoquait donc rien, et un code vu par-dessus l'épaule restait utilisable un mois entier
+par qui détenait déjà un jeton. Un numéro de génération est désormais inscrit dans le
+jeton et relu à chaque requête ; le changer invalide tout d'un coup — sans registre de
+sessions à tenir. Seul l'appareil qui fait la démarche reste connecté : on ne se
+déconnecte pas soi-même par précaution. Le directeur qui réinitialise un code produit le
+même effet, ce qu'on attend justement d'un téléphone perdu.
+
 `npm run seed -- --demo` reste disponible pour peupler une base d'essai avec
 8 chefs fictifs, leurs équipes et une fiche d'exemple.
 
@@ -120,6 +129,12 @@ Le code saisi à la connexion détermine entièrement ce qui s'affiche :
 Le cloisonnement est appliqué côté serveur, pas seulement à l'affichage : un chef
 qui ouvrirait directement l'adresse de la fiche d'un collègue reçoit un refus.
 `test/cloisonnement.test.js` le vérifie à chaque modification du code.
+
+Un chef corrige l'orthographe d'un nom **dans sa propre équipe** — il a la personne
+devant les yeux, et remonter au directeur pour une lettre serait un aller-retour de
+trop. Au-delà, non : modifier le fichier du personnel de toute l'entreprise reste une
+fonction de direction. Le bouton ne s'affiche pas pour un renfort venu d'une autre
+équipe, et le serveur refuserait de toute façon.
 
 Une fiche transmise se reprend d'un clic tant qu'elle n'est pas validée ; le directeur
 peut la corriger, la valider, ou la renvoyer au chef avec un motif.
@@ -730,6 +745,12 @@ Le classeur Excel contient trois choses dans un seul fichier :
 L'export CSV reprend l'onglet `Récap hebdo`, en `;` et UTF-8 avec BOM (Excel
 français l'ouvre directement).
 
+Une cellule qui commencerait par `=`, `+`, `-` ou `@` est précédée d'une apostrophe :
+un tableur lit ces caractères comme le début d'une **formule** à l'ouverture du fichier,
+et un nom de chantier saisi `=1+1` suffit à le montrer. L'apostrophe dit « ceci est du
+texte » et ne s'affiche pas dans la cellule. Les nombres négatifs en sont exclus — les
+neutraliser en ferait du texte, et la colonne cesserait de s'additionner.
+
 ## Organisation du code
 
 ```
@@ -781,6 +802,7 @@ test/
   non-productif.test.js Le mois à 7 h par jour, ses écarts, ses primes
   signatures.test.js    Une signature ne survit ni au changement de personne ni à celui du pointage
   identite.test.js      Le registre tranche : nom relu, numéro non honoré retiré
+  export-csv.test.js    Le CSV n'ouvre pas une formule chez le comptable
   paie-non-productif.test.js  Leur valorisation : mensualisation, majorations, indemnités
 scripts/
   tester-courriel.js    Essai d'envoi, et diagnostic des réglages SMTP

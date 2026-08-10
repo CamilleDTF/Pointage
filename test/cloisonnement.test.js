@@ -48,6 +48,17 @@ test.after(() => {
   fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true });
 });
 
+/** Le cookie brut d'une connexion, quand le test doit le manipuler lui-meme. */
+async function cookieDe(identifiant, pin) {
+  const reponse = await fetch(`${base}/api/connexion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifiant, pin }),
+  });
+  assert.equal(reponse.status, 200, `connexion ${identifiant} refusee`);
+  return reponse.headers.getSetCookie()[0].split(';')[0];
+}
+
 async function connexion(identifiant, pin) {
   const reponse = await fetch(`${base}/api/connexion`, {
     method: 'POST',
@@ -498,6 +509,107 @@ test('un code refuse ne se confond pas avec une session expiree', async () => {
   assert.equal((await protegee.json()).sessionExpiree, true);
 });
 
+/*
+ * Changer son code doit fermer les sessions ouvertes avec l'ancien.
+ *
+ * Une session est un jeton signe valable trente jours, que le serveur ne
+ * conserve nulle part. Changer son code ne revoquait donc rien : un code
+ * compromis restait utilisable un mois entier par qui detenait deja un jeton.
+ */
+test('changer son code ferme les sessions ouvertes ailleurs, pas la sienne', async () => {
+  const identifiant = 'chefsession';
+  const id = creerUtilisateur('CHEF SESSION', identifiant, '7777', 'chef');
+
+  // Deux appareils connectes avec le meme compte : un telephone, un PC.
+  const telephone = await connexion(identifiant, '7777');
+  const cookiePc = await cookieDe(identifiant, '7777');
+  assert.equal((await telephone('GET', '/api/moi')).statut, 200);
+
+  /*
+   * Le chef change son code depuis le PC. On passe par un appel direct pour
+   * relire le cookie renvoye : un navigateur remplace le sien a ce moment-la,
+   * la ou l'aide de test garde celui de la connexion.
+   */
+  const reponse = await fetch(`${base}/api/mon-code`, {
+    method: 'POST',
+    headers: { Cookie: cookiePc, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ actuel: '7777', nouveau: '8888' }),
+  });
+  assert.equal(reponse.status, 200);
+  assert.equal((await reponse.json()).sessionsFermees, true);
+
+  // Le PC repart avec une session neuve, delivree dans la reponse.
+  const rafraichi = reponse.headers.getSetCookie()[0].split(';')[0];
+  assert.notEqual(rafraichi, cookiePc, 'un nouveau jeton est remis');
+  const pc = async (methode, chemin) => {
+    const r = await fetch(`${base}${chemin}`, { method: methode, headers: { Cookie: rafraichi } });
+    return { statut: r.status, corps: await r.json() };
+  };
+
+  // Le telephone ne vaut plus rien, et c'est bien une session finie qu'on lui dit.
+  const refus = await telephone('GET', '/api/moi');
+  assert.equal(refus.statut, 401);
+  assert.equal(refus.corps.sessionExpiree, true);
+
+  // L'ancien code non plus.
+  const ancien = await fetch(`${base}/api/connexion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifiant, pin: '7777' }),
+  });
+  assert.equal(ancien.status, 401);
+
+  // Mais celui qui a fait la demarche n'est pas deconnecte par sa propre precaution.
+  assert.equal((await pc('GET', '/api/moi')).statut, 200);
+
+  db.exec(`DELETE FROM journal WHERE user_id = ${id}`);
+  db.exec(`DELETE FROM utilisateurs WHERE id = ${id}`);
+});
+
+/*
+ * Le directeur attribue un code neuf souvent parce que l'ancien a fuite, ou
+ * qu'un telephone a ete perdu. Les sessions ouvertes doivent tomber avec.
+ */
+test('un code reinitialise par le directeur ferme les sessions du compte', async () => {
+  const identifiant = 'chefperdu';
+  const id = creerUtilisateur('CHEF PERDU', identifiant, '7777', 'chef');
+  const telephone = await connexion(identifiant, '7777');
+  assert.equal((await telephone('GET', '/api/moi')).statut, 200);
+
+  const d = await connexion('dir', '9999');
+  assert.equal((await d('POST', `/api/admin/utilisateurs/${id}/code`, { pin: '1234' })).statut, 200);
+
+  assert.equal((await telephone('GET', '/api/moi')).statut, 401, 'le telephone perdu n ouvre plus rien');
+  // Et le directeur, lui, reste connecte : ce n'est pas son compte.
+  assert.equal((await d('GET', '/api/moi')).statut, 200);
+
+  db.exec(`DELETE FROM journal WHERE user_id = ${id}`);
+  db.exec(`DELETE FROM utilisateurs WHERE id = ${id}`);
+});
+
+/*
+ * Corriger le nom d'un homme qu'on a devant soi est une chose ; modifier le
+ * referentiel du personnel de toute l'entreprise en est une autre.
+ */
+test('un chef ne corrige que les noms de sa propre equipe', async () => {
+  const a = await connexion('chefa', '1111');
+  const d = await connexion('dir', '9999');
+  const andre = db.prepare("SELECT id FROM salaries WHERE nom = 'ANDRE' ORDER BY id LIMIT 1").get();
+  const bertin = db.prepare("SELECT id FROM salaries WHERE nom = 'BERTIN' ORDER BY id LIMIT 1").get();
+
+  // Le sien : il corrige.
+  assert.equal((await a('PUT', `/api/salaries/${andre.id}/nom`, { nom: 'ANDRÉ', prenom: 'Alain' })).statut, 200);
+
+  // Celui d'un autre chef : refuse.
+  const refus = await a('PUT', `/api/salaries/${bertin.id}/nom`, { nom: 'PIRATE', prenom: 'Zoe' });
+  assert.equal(refus.statut, 403);
+  assert.equal(db.prepare('SELECT nom FROM salaries WHERE id = ?').get(bertin.id).nom, 'BERTIN');
+
+  // Le directeur, lui, tient le referentiel.
+  assert.equal((await d('PUT', `/api/salaries/${bertin.id}/nom`, { nom: 'BERTIN', prenom: 'Bruno' })).statut, 200);
+  await a('PUT', `/api/salaries/${andre.id}/nom`, { nom: 'ANDRE', prenom: 'Alain' });
+});
+
 test('les ecrans de parametrage et les montants restent fermes aux chefs', async () => {
   const a = await connexion('chefa', '1111');
   for (const [methode, chemin] of [
@@ -655,7 +767,13 @@ test('le directeur peut valider sans attendre le visa', async () => {
   assert.equal(db.prepare('SELECT statut FROM fiches WHERE id = ?').get(id).statut, 'validee');
 });
 
-test('un chef d equipe corrige le nom d un operateur pour tout l effectif', async () => {
+/*
+ * Le chef corrige l'orthographe d'un de SES operateurs : il l'a devant les yeux,
+ * et le faire remonter au directeur pour une lettre serait un aller-retour de
+ * trop. La correction vaut ensuite partout — c'est le meme homme. Le perimetre,
+ * lui, est verifie par « un chef ne corrige que les noms de sa propre equipe ».
+ */
+test('un chef d equipe corrige le nom d un de ses operateurs', async () => {
   const a = await connexion('chefa', '1111');
   const andre = db.prepare("SELECT id FROM salaries WHERE nom = 'ANDRE'").get();
 
@@ -676,7 +794,7 @@ test('le chef choisit lui-meme le conducteur, et son choix l emporte', async () 
   const d = await connexion('dir', '9999');
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
-  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+  effacerConducteurs();
 
   const habituel = await creerConducteur(d, {
     nom: 'MOREAU Paul', courriel: 'paul@exemple.fr',
@@ -729,7 +847,7 @@ test('le calendrier du mois montre tout l effectif, jour par jour', async () => 
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
   db.exec('DELETE FROM conges');
-  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+  effacerConducteurs();
 
   // Semaine 27 de 2026 : du lundi 29 juin au dimanche 5 juillet.
   await ficheTransmise(a, 27);
@@ -819,7 +937,7 @@ test('un chef reprend sa fiche transmise, et le visa en cours tombe', async () =
   const a = await connexion('chefa', '1111');
   const b = await connexion('chefb', '2222');
   db.exec('DELETE FROM fiches');
-  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+  effacerConducteurs();
 
   const paul = await creerConducteur(d, {
     nom: 'MOREAU Paul', courriel: 'paul@exemple.fr',
@@ -944,7 +1062,7 @@ test('le chef recoit de quoi prevenir le conducteur, jamais de quoi viser', asyn
   const d = await connexion('dir', '9999');
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
-  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+  effacerConducteurs();
 
   const paul = await creerConducteur(d, {
     nom: 'MOREAU Paul', courriel: 'paul@exemple.fr', telephone: '06 12 34 56 78',
@@ -991,7 +1109,7 @@ test('le chef recoit de quoi prevenir le conducteur, jamais de quoi viser', asyn
  */
 test('un conducteur connecte n obtient encore rien', async () => {
   const d = await connexion('dir', '9999');
-  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+  effacerConducteurs();
   const paul = await creerConducteur(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
   await d('POST', `/api/admin/utilisateurs/${paul.id}/code`, { pin: '5555' });
 
@@ -1120,6 +1238,19 @@ test('les GD declares sur deux fiches se comptent ensemble', async () => {
 /* ------------------ Espace du conducteur de travaux ------------------------ */
 
 /** Un conducteur avec un code, prêt à se connecter. */
+/*
+ * Retire les conducteurs d'essai.
+ *
+ * Le journal reference son auteur : un changement de code, par exemple, y laisse
+ * une ligne qui ne tient a aucune fiche et ne disparait donc pas avec elles.
+ * L'application ne supprime jamais un compte — elle le desactive — mais les
+ * tests, si : ils doivent nettoyer derriere eux dans le bon ordre.
+ */
+function effacerConducteurs() {
+  db.exec("DELETE FROM journal WHERE user_id IN (SELECT id FROM utilisateurs WHERE role = 'conducteur')");
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+}
+
 async function conducteurConnecte(directeur, champs) {
   const compte = await creerConducteur(directeur, champs);
   await directeur('POST', `/api/admin/utilisateurs/${compte.id}/code`, { pin: '5555' });
@@ -1138,7 +1269,7 @@ test('un conducteur ne voit que les fiches ou le chef l a designe', async () => 
   const d = await connexion('dir', '9999');
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
-  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+  effacerConducteurs();
 
   const paul = await conducteurConnecte(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
   const sophie = await conducteurConnecte(d, { nom: 'RENAUD Sophie', courriel: 'sophie@exemple.fr' });
@@ -1178,7 +1309,7 @@ test('le conducteur vise depuis son compte, et la fiche poursuit sa route', asyn
   const d = await connexion('dir', '9999');
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
-  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+  effacerConducteurs();
 
   const paul = await conducteurConnecte(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
   const { id } = await ficheTransmise(a, 12, paul.id);
@@ -1212,7 +1343,7 @@ test('le conducteur corrige toute la fiche, tant qu elle attend son visa', async
   const d = await connexion('dir', '9999');
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
-  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+  effacerConducteurs();
 
   const paul = await conducteurConnecte(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
   const { id } = await ficheTransmise(a, 13, paul.id);
@@ -1296,7 +1427,7 @@ test('le conducteur renvoie la fiche au chef, avec son commentaire', async () =>
   const d = await connexion('dir', '9999');
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
-  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+  effacerConducteurs();
 
   const paul = await conducteurConnecte(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
   const { id } = await ficheTransmise(a, 14, paul.id);
@@ -1320,7 +1451,7 @@ test('le calendrier des presences s ouvre au conducteur, la paie non', async () 
   // Les fiches d'abord : le journal garde le nom de qui a vise, et retient donc
   // le compte correspondant. C'est bien ce qu'on lui demande.
   db.exec('DELETE FROM fiches');
-  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+  effacerConducteurs();
   const paul = await conducteurConnecte(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
 
   assert.equal((await paul.appeler('GET', '/api/calendrier-mensuel?annee=2026&mois=8')).statut, 200);
@@ -1349,7 +1480,7 @@ test('corriger un pointage signe fait tomber la signature, elle ne migre jamais'
   const d = await connexion('dir', '9999');
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
-  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+  effacerConducteurs();
 
   const paul = await conducteurConnecte(d, { nom: 'MOREAU Paul', courriel: 'p@exemple.fr' });
   const { id } = await ficheTransmise(a, 27, paul.id);
@@ -1412,7 +1543,7 @@ test('le chef et le directeur voient ce que le conducteur a corrige', async () =
   const d = await connexion('dir', '9999');
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
-  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+  effacerConducteurs();
 
   const paul = await conducteurConnecte(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
   const { id } = await ficheTransmise(a, 20, paul.id);

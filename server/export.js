@@ -437,8 +437,23 @@ function exporterCsv(lignes) {
     'total_heures', 'heures_route_100', 'heures_trajet_50', 'jours_zone',
     'type_masque', 'nb_deplacement', 'codes_absence', 'statut',
   ];
+  /*
+   * Deux dangers dans une cellule CSV, et ils ne se traitent pas pareil.
+   *
+   * Le point-virgule, le guillemet et le retour a la ligne cassent le format :
+   * on entoure de guillemets. Mais une cellule qui COMMENCE par =, +, - ou @
+   * est autre chose : Excel et LibreOffice la lisent comme une formule a
+   * l'ouverture du fichier. Un nom de chantier saisi « =1+1 » suffit a le
+   * montrer ; d'autres formules savent lire des cellules ou appeler l'exterieur.
+   * On fait donc preceder ces valeurs d'une apostrophe, qui dit au tableur de
+   * les traiter comme du texte — et qui ne s'affiche pas dans la cellule.
+   */
   const echapper = (v) => {
-    const s = String(v ?? '');
+    let s = String(v ?? '');
+    // Un nombre negatif commence aussi par « - » : le neutraliser en ferait du
+    // texte, et la colonne cesserait de s'additionner. Seul ce qui n'est pas un
+    // nombre est traite.
+    if (/^[=+\-@\t\r]/.test(s) && !Number.isFinite(Number(s))) s = `'${s}`;
     return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const rangs = lignes.map((ligne) =>

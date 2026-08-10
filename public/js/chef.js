@@ -551,12 +551,19 @@ function cablerCorrectionNom(conteneur) {
     return id ? (reference.effectif || []).find((s) => s.id === id) : null;
   };
 
+  // Corriger le fichier du personnel ne vaut que pour sa propre equipe : le
+  // serveur refuse le reste, et un bouton qui mene a un refus n'a rien a faire
+  // la. Un renfort venu d'ailleurs se signale a la direction.
+  const sienne = (s) => (reference.equipe || []).some((membre) => membre.id === s.id);
+
   const rafraichir = () => {
     const s = salarie();
     const saisi = libre.value.trim();
     // Le bouton n'apparait que si le nom saisi differe de la fiche du salarie
     // rattache, et qu'il ne designe pas quelqu'un d'autre de l'effectif.
-    const utile = Boolean(s) && saisi !== '' && !Regles.memePersonne(`${s.nom} ${s.prenom}`, saisi) && !salarieParNom(saisi);
+    const utile =
+      Boolean(s) && sienne(s) && saisi !== ''
+      && !Regles.memePersonne(`${s.nom} ${s.prenom}`, saisi) && !salarieParNom(saisi);
     bouton.classList.toggle('masque', !utile);
     if (utile) bouton.title = `Corriger l'identité de ${s.nom} ${s.prenom} dans le fichier du personnel`;
   };
