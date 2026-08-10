@@ -240,7 +240,7 @@ function bouton(lien, libelle, fond, couleur = '#ffffff') {
  * rien par eux-memes. Un antivirus de messagerie qui visite les liens d'un
  * courriel viserait sinon les fiches a la place du conducteur.
  */
-function messageVisa({ fiche, lignes, conducteur, chefNom, lien }) {
+function messageVisa({ fiche, lignes, conducteur, chefNom, adresse }) {
   const dates = D.datesDeLaSemaine(fiche.annee, fiche.semaine);
   const periode = `du ${D.jourMois(dates[0])} au ${D.jourMois(dates[6])} ${fiche.annee}`;
 
@@ -298,14 +298,12 @@ function messageVisa({ fiche, lignes, conducteur, chefNom, lien }) {
       </tr></tfoot>
     </table>
 
-    <p style="margin:0 0 14px;font-size:15px">Que souhaitez-vous faire ?</p>
-    ${bouton(`${lien}&action=viser`, '✓ Viser cette fiche', '#1e7a46')}
-    ${bouton(`${lien}&action=renvoyer`, '↩ Renvoyer avec un commentaire', '#c0392b')}
+    ${bouton(adresse, 'Ouvrir mes fiches à viser', '#1e7a46')}
 
     <p style="margin:20px 0 0;font-size:13px;color:#5a6472">
-      Les deux boutons ouvrent la fiche complète dans votre navigateur : rien n'est décidé
-      tant que vous n'avez pas confirmé. Ce lien vous est personnel et cesse de fonctionner
-      si le chef d'équipe modifie puis retransmet sa fiche.
+      Connectez-vous avec votre identifiant et votre code : vous y retrouverez cette fiche
+      et toutes celles qui attendent votre visa. Ce message ne contient aucun lien de
+      décision — c'est votre compte qui vous identifie, et lui seul.
     </p>
   </div>
 </div>`;
@@ -315,7 +313,7 @@ function messageVisa({ fiche, lignes, conducteur, chefNom, lien }) {
     `${chefNom} — chantier ${fiche.chantier}${fiche.ville ? ` (${fiche.ville})` : ''}`,
     `Total de la semaine : ${D.versTexte(total)}`,
     '',
-    `Viser ou renvoyer : ${lien}`,
+    `Connectez-vous pour la viser : ${adresse}`,
   ].join('\n');
 
   return {

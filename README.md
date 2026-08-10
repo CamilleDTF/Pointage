@@ -201,8 +201,11 @@ aucune ligne de code n'écrit ces champs-là. Et chaque correction est inscrite 
 **sous son nom, avec l'avant et l'après** : les opérateurs ont signé une version du
 pointage, la direction doit pouvoir savoir ce qui a changé depuis.
 
-Le lien personnel continue de fonctionner en parallèle, en lecture seule — il n'ouvre
-pas la correction, puisqu'un jeton prouve un droit et non une identité.
+Il n'y a **qu'une porte d'entrée** : le compte. Les liens signés qui tenaient lieu
+d'identité au conducteur — son lien personnel, et un secret par fiche envoyé par
+courriel — ont disparu avec lui. Un secret qui circule est un secret qui s'égare, et
+un jeton prouve un droit sans jamais dire qui l'exerce : le journal peut désormais
+nommer qui a visé.
 
 **C'est le chef d'équipe qui désigne le conducteur**, en bas de sa fiche, juste avant
 de transmettre. D'une semaine à l'autre le chantier peut relever de quelqu'un d'autre,
@@ -212,15 +215,9 @@ un conducteur est enregistré : une organisation qui n'en a encore aucun n'est p
 bloquée par une étape qui n'existe pas chez elle.
 
 Quand l'envoi de courriels est configuré, chaque transmission lui adresse en plus un
-message qui porte un lien direct vers la fiche. Ce que ce lien-là autorise est
-volontairement étroit : **une seule fiche**, **deux actions**, et seulement **tant
-qu'elle attend ce visa**. Une fiche modifiée puis retransmise reçoit un nouveau secret,
-ce qui condamne aussitôt les liens précédents.
-
-Les liens du courriel **ouvrent une page, ils ne décident de rien**. La décision
-passe par un envoi depuis cette page. Sans cette précaution, l'antivirus d'une
-messagerie d'entreprise — qui visite les liens des messages pour les analyser —
-viserait les fiches à la place du conducteur.
+message : *une fiche vous attend, connectez-vous*. Il ne porte **aucun lien de
+décision** — rien qui, ouvert par l'antivirus d'une messagerie d'entreprise, viserait
+une fiche à la place du conducteur.
 
 Tant qu'**aucun conducteur n'est enregistré**, les fiches partent directement à la
 direction : l'étape est sautée sans blocage. Et le directeur peut toujours **valider sans le
@@ -264,12 +261,11 @@ Ouvrez votre page « Fiches à viser » (celle que la direction vous a transmise
 ```
 
 **Ce message ne contient aucun lien**, et c'est tout l'édifice qui repose là-dessus.
-Un chef d'équipe qui transporterait le lien personnel du conducteur pourrait viser ses
-propres fiches, et le contrôle ne serait plus qu'une formalité. Le message dit ce qu'il
-faut savoir — qui, quelle semaine, quel chantier, combien d'heures — et rien de plus ;
-le conducteur ouvre sa page depuis ses favoris. `test/alerte.test.js` vérifie qu'aucune
-adresse web ni aucun secret n'y figure, et `test/cloisonnement.test.js` qu'un chef ne
-reçoit jamais de lien de visa dans ses réponses.
+Un chef d'équipe qui transporterait de quoi viser pourrait viser ses propres fiches, et
+le contrôle ne serait plus qu'une formalité. Le message dit ce qu'il faut savoir — qui,
+quelle semaine, quel chantier, combien d'heures — et rien de plus ; le conducteur ouvre
+son espace lui-même. `test/alerte.test.js` vérifie qu'aucune adresse web ni aucun secret
+n'y figure, et `test/cloisonnement.test.js` qu'il n'en passe aucun vers un chef.
 
 ### Envoi des courriels
 
@@ -357,7 +353,7 @@ déposer les messages sur disque. Une bibliothèque d'envoi absente ne doit pas 
 l'application entière.
 
 **Sans SMTP configuré, rien ne casse** : le message est écrit dans
-`DATA_DIR/courriels/`, le conducteur passe par son lien personnel, et le chef le
+`DATA_DIR/courriels/`, le conducteur retrouve ses fiches en se connectant, et le chef le
 prévient par SMS ou WhatsApp (voir *Prévenir le conducteur sans courriel*). Ce n'est
 pas une dégradation silencieuse — c'est ce qui permet de faire tourner toute la chaîne
 sans jamais attendre que le service informatique fournisse un compte d'envoi.
@@ -624,7 +620,7 @@ public/
   mensuel.html    Tableau mensuel      + js/mensuel.js
   calendrier.html Calendrier du mois   + js/calendrier.js
   conducteur.html Ses fiches à viser   + js/conducteur.js
-  visa.html       Une fiche à viser     + js/visa.js  (par compte, ou par lien signé)
+  visa.html       Une fiche à viser     + js/visa.js
   js/regles.js  Règles métier partagées avec le serveur (heures, semaines, contrôles)
   js/commun.js  API, signature tactile, file d'attente réseau, boutons d'alerte selon l'appareil
 test/
@@ -665,8 +661,8 @@ brouillon ──transmettre──► soumise ──valider──► validée
 Un chef ne modifie que ses propres fiches. Une fiche transmise se **reprend d'un
 clic** tant qu'elle n'est pas validée : il ne faut plus attendre une réouverture de
 la direction pour une virgule. La reprise **annule le visa en cours** — un conducteur
-qui a visé une version ne doit pas se retrouver signataire d'une autre — et le secret
-de la fiche tombe avec lui, ce qui condamne les liens déjà envoyés. Une fois validée,
+qui a visé une version ne doit pas se retrouver signataire d'une autre, et la fiche
+quitte aussitôt sa liste. Une fois validée,
 la fiche est partie en paie : la rouvrir redevient une décision de la direction.
 
 Le directeur peut corriger n'importe quelle fiche à tout moment ; chaque correction
@@ -732,7 +728,7 @@ suivi par git.
 | `COOKIE_SECURE` | `true` force le cookie `Secure`, même joint en HTTP | déduit du protocole utilisé |
 | `DEBUT_SERVICE` | Première semaine attendue dans l'application (`AAAA-MM-JJ`) | `2026-09-01` |
 | `DELAI_TRANSMISSION_JOURS` | Délai attendu, en jours après le dimanche (1 = le lundi) | `1` |
-| `ADRESSE_PUBLIQUE` | Adresse publique, pour les liens envoyés aux conducteurs | `http://localhost:PORT` |
+| `ADRESSE_PUBLIQUE` | Adresse publique, rappelée aux conducteurs dans le courriel | `http://localhost:PORT` |
 | `SMTP_HOTE`, `SMTP_PORT` | Serveur d'envoi des courriels | — (messages déposés sur disque) |
 | `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE` | Identifiants du serveur d'envoi (facultatifs) | — |
 | `SMTP_DELAI_MS` | Plafond de temps sur un envoi, en millisecondes | `20000` |

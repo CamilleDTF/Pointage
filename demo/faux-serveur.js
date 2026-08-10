@@ -88,9 +88,9 @@
    */
   const CONDUCTEURS = [
     { id: 101, nom: 'MOREAU Paul', identifiant: 'pmoreau', role: 'conducteur', courriel: 'paul.moreau@exemple.fr',
-      telephone: '06 12 34 56 78', actif: 1, jeton: 'demo-paul', codeADefinir: false },
+      telephone: '06 12 34 56 78', actif: 1, codeADefinir: false },
     { id: 102, nom: 'RENAUD Sophie', identifiant: 'srenaud', role: 'conducteur', courriel: 'sophie.renaud@exemple.fr',
-      telephone: '06 98 76 54 32', actif: 1, jeton: 'demo-sophie', codeADefinir: true },
+      telephone: '06 98 76 54 32', actif: 1, codeADefinir: true },
   ];
   // Un chef sur deux depend d'un conducteur : la demonstration montre les deux
   // circuits, avec et sans etape de visa.
@@ -433,7 +433,7 @@
    * demonstration : c'est le cas qu'il faut montrer, celui ou le courriel ne
    * part pas et ou le chef previent lui-meme par SMS ou WhatsApp.
    */
-  function resumeVisa(fiche, conducteur, { avecLien = false } = {}) {
+  function resumeVisa(fiche, conducteur) {
     if (!conducteur) return { demande: false };
     const complet = enrichir(fiche);
     const lignes = complet.lignes.filter((l) => String(l.nom_affiche || '').trim());
@@ -442,7 +442,6 @@
       conducteur: conducteur.nom,
       courriel: conducteur.courriel,
       envoye: false,
-      lien: avecLien ? 'https://votre-adresse/visa.html?jeton=…(démonstration)' : undefined,
       alerte: racine.Alerte.alerteVisa({
         fiche: complet,
         conducteur,
@@ -612,32 +611,6 @@
           rejetee: compter('rejetee'),
           validee: compter('validee'),
         },
-      };
-    }],
-
-    ['GET', /^\/api\/conducteur\/([^/]+)$/, (m) => {
-      const cle = decodeURIComponent(m[1]);
-      const conducteur = CONDUCTEURS.find((c) => c.jeton === cle && c.actif);
-      if (!conducteur) erreur(403, 'Ce lien n\u2019est plus valable. Demandez-en un nouveau \u00e0 la direction.');
-
-      const sienne = (f) => {
-        const chef = utilisateurs.find((u) => u.id === f.chef_id);
-        return (f.conducteur_id || (chef && chef.conducteur_id)) === conducteur.id;
-      };
-      const resume = (f) => ({
-        id: f.id, annee: f.annee, semaine: f.semaine, chantier: f.chantier, ville: f.ville,
-        chef_nom: (utilisateurs.find((u) => u.id === f.chef_id) || {}).nom || '',
-        nb_salaries: f.lignes.filter((l) => l.nom_affiche.trim()).length,
-        total_minutes: f.lignes.reduce((t, l) => t + R.totalMinutesLigne(l), 0),
-        lien: `/visa.html?jeton=demo-${f.id}`,
-      });
-
-      return {
-        conducteur: { nom: conducteur.nom },
-        enAttente: fiches.filter((f) => f.statut === 'soumise' && f.visa_statut === 'attente' && sienne(f)).map(resume),
-        recentes: fiches
-          .filter((f) => f.visa_statut === 'vise' && sienne(f))
-          .map((f) => ({ ...resume(f), visa_le: f.visa_le, statut: f.statut })),
       };
     }],
 
@@ -1070,10 +1043,7 @@
     ['GET', /^\/api\/admin\/conducteurs$/, () => {
       exigerDirecteur();
       return {
-        conducteurs: CONDUCTEURS.map((c) => ({
-          ...c,
-          lien: `https://votre-adresse/conducteur.html?cle=${c.jeton}`,
-        })),
+        conducteurs: CONDUCTEURS,
         chefs: utilisateurs
           .filter((u) => u.role === 'chef')
           .map((u) => ({
@@ -1082,16 +1052,6 @@
           })),
         envoiConfigure: false,
       };
-    }],
-
-    // Regenerer un lien se voit : l'ancien jeton cesse aussitot de repondre,
-    // ce qui est precisement ce que la demonstration doit rendre credible.
-    ['POST', /^\/api\/admin\/conducteurs\/(\d+)\/lien$/, (m) => {
-      exigerDirecteur();
-      const c = CONDUCTEURS.find((x) => x.id === Number(m[1]));
-      if (!c) erreur(404, 'Conducteur introuvable.');
-      c.jeton = `demo-${Math.random().toString(36).slice(2, 10)}`;
-      return { lien: `https://votre-adresse/conducteur.html?cle=${c.jeton}` };
     }],
 
     ['PUT', /^\/api\/admin\/conducteurs\/(\d+)$/, (m, corps) => {
@@ -1119,7 +1079,7 @@
       if (!fiche) erreur(404, 'Fiche introuvable.');
       const conducteur = conducteurDeLaFiche(fiche);
       if (!conducteur) return { visa: { demande: false } };
-      return { visa: resumeVisa(fiche, conducteur, { avecLien: true }), fiche: enrichir(fiche) };
+      return { visa: resumeVisa(fiche, conducteur), fiche: enrichir(fiche) };
     }],
 
     ['GET', /^\/api\/admin\/indicateurs$/, () => {

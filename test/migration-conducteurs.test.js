@@ -102,8 +102,10 @@ test('chaque conducteur devient un compte, avec ses coordonnees', () => {
   assert.equal(paul.role, 'conducteur');
   assert.equal(paul.courriel, 'paul@exemple.fr');
   assert.equal(paul.telephone, '0612345678');
-  assert.equal(paul.jeton, 'jeton-paul', 'le lien personnel doit survivre : il sert encore');
   assert.equal(paul.actif, 1);
+  // Le lien personnel ne survit pas : il precedait les comptes, et un secret
+  // mort qui reste en base finit par repartir dans une reponse d'API.
+  assert.equal('jeton' in paul, false, 'aucun secret d acces ne subsiste');
 
   // Un conducteur desactive le reste : la migration transporte, elle ne decide pas.
   assert.equal(compte('GARNIER Luc').actif, 0);

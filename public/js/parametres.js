@@ -113,15 +113,15 @@ async function chargerConducteurs() {
   if (!table) return;
   const { conducteurs, chefs, envoiConfigure } = await API.get('/api/admin/conducteurs');
 
-  // L'envoi de courriels est devenu un confort : le lien personnel suffit a
-  // faire tourner le circuit. On le dit ainsi, plutot qu'en alarme.
+  // L'envoi de courriels est un confort : le conducteur se connecte de toute
+  // facon a son espace. On le dit ainsi, plutot qu'en alarme.
   $('aide-envoi').innerHTML = envoiConfigure
     ? '<span class="jauge bon">Envoi de courriels configuré</span> — chaque transmission prévient ' +
-      'le conducteur par courriel, en plus de son lien personnel.'
+      'le conducteur par courriel qu’une fiche l’attend.'
     : '<span class="jauge moyen">Pas d’envoi de courriels</span> — le circuit fonctionne quand même : ' +
-      'chaque conducteur passe par son lien personnel ci-dessous. Pour qu’ils reçoivent en plus un ' +
-      'message à chaque transmission, remplissez les lignes SMTP de <code>configuration.txt</code> ' +
-      '(voir <code>TESTER-COURRIEL.bat</code>).';
+      'chaque conducteur retrouve ses fiches en se connectant, et le chef d’équipe peut le prévenir ' +
+      'par SMS ou WhatsApp. Pour qu’ils reçoivent en plus un message à chaque transmission, remplissez ' +
+      'les lignes SMTP de <code>configuration.txt</code> (voir <code>TESTER-COURRIEL.bat</code>).';
 
   const champ = (c, nom, valeur, largeur, type = 'text') =>
     `<input type="${type}" value="${echapper(valeur)}" style="width:${largeur}"
@@ -143,22 +143,13 @@ async function chargerConducteurs() {
               }</button>
               ${c.codeADefinir ? '<div class="jauge moyen" style="margin-top:4px">Sans code</div>' : ''}
             </td>
-            <td>
-              <div class="lien-conducteur">
-                <input readonly value="${echapper(c.lien)}" id="lien-${c.id}"
-                       onfocus="this.select()" title="Lien personnel de ${echapper(c.nom)}">
-                <button class="petit" onclick="copierLien(${c.id}, this)">Copier</button>
-                <button class="petit" onclick="regenererLien(${c.id}, '${echapper(c.nom)}')"
-                        title="Rend l’ancien lien inutilisable">Régénérer</button>
-              </div>
-            </td>
             <td><button class="petit" onclick="basculerConducteur(${c.id}, ${c.actif ? 0 : 1})">${
               c.actif ? 'Désactiver' : 'Réactiver'
             }</button></td>
           </tr>`;
         })
         .join('')
-    : '<tr><td colspan="8" class="vide">Aucun conducteur de travaux enregistré.</td></tr>';
+    : '<tr><td colspan="7" class="vide">Aucun conducteur de travaux enregistré.</td></tr>';
 
   const options = (selectionne) =>
     `<option value="">— aucun, transmission directe à la direction</option>${conducteurs
@@ -207,46 +198,6 @@ window.corrigerCompte = async (id, champ, valeur, element) => {
   }
 };
 
-/*
- * Copier plutot que faire recopier : ce lien fait une centaine de caracteres,
- * et une seule lettre fausse le rend inutilisable sans dire pourquoi.
- */
-window.copierLien = async (id, bouton) => {
-  const champ = $(`lien-${id}`);
-  if (!champ) return;
-  try {
-    await navigator.clipboard.writeText(champ.value);
-  } catch {
-    // Presse-papiers refuse (page non securisee, navigateur ancien) : la
-    // selection permet au moins un Ctrl+C.
-    champ.focus();
-    champ.select();
-    message('Copiez le lien sélectionné avec Ctrl+C.', 'info');
-    return;
-  }
-  const libelle = bouton.textContent;
-  bouton.textContent = 'Copié';
-  setTimeout(() => { bouton.textContent = libelle; }, 1500);
-};
-
-window.regenererLien = async (id, nom) => {
-  if (!confirm(`Régénérer le lien de ${nom} ?\n\nL'ancien cessera aussitôt de fonctionner : il faudra lui transmettre le nouveau.`)) {
-    return;
-  }
-  try {
-    await API.post(`/api/admin/conducteurs/${id}/lien`);
-    message('Nouveau lien créé. Transmettez-le à l’intéressé.', 'succes', 6000);
-    await chargerConducteurs();
-  } catch (e) {
-    message(e.message, 'erreur');
-  }
-};
-
-/*
- * Un conducteur est un compte : il se corrige par la meme route que les chefs.
- * Le nom et le prenom voyagent ensemble, sans quoi corriger l'un effacerait
- * l'autre — le compte n'en porte qu'un seul champ, « NOM Prenom ».
- */
 window.corrigerConducteur = async (id, champ, valeur, element) => {
   const ancienne = element.defaultValue;
   const propre = valeur.trim();

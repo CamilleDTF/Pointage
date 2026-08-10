@@ -240,10 +240,7 @@ function migrerConducteursVersComptes() {
 
   // Une base anterieure au lien personnel n'a pas ces colonnes ; on les pose
   // avant de lire, plutot que de deviner ce qu'elle contient.
-  if (ancienneTable) {
-    ajouterColonne('conducteurs', 'jeton', 'TEXT');
-    ajouterColonne('conducteurs', 'telephone', "TEXT NOT NULL DEFAULT ''");
-  }
+  if (ancienneTable) ajouterColonne('conducteurs', 'telephone', "TEXT NOT NULL DEFAULT ''");
   const anciens = ancienneTable ? db.prepare('SELECT * FROM conducteurs ORDER BY id').all() : [];
 
   // Les cles etrangeres se taisent pendant l'operation : le temps de la
@@ -264,12 +261,11 @@ function migrerConducteursVersComptes() {
 
       ajouterColonne('utilisateurs', 'courriel', "TEXT NOT NULL DEFAULT ''");
       ajouterColonne('utilisateurs', 'telephone', "TEXT NOT NULL DEFAULT ''");
-      ajouterColonne('utilisateurs', 'jeton', 'TEXT');
 
       const correspondance = new Map();
       const inserer = db.prepare(
-        `INSERT INTO utilisateurs (nom, identifiant, role, pin_hash, actif, courriel, telephone, jeton)
-         VALUES (@nom, @identifiant, 'conducteur', @pin_hash, @actif, @courriel, @telephone, @jeton)`
+        `INSERT INTO utilisateurs (nom, identifiant, role, pin_hash, actif, courriel, telephone)
+         VALUES (@nom, @identifiant, 'conducteur', @pin_hash, @actif, @courriel, @telephone)`
       );
       for (const c of anciens) {
         const r = inserer.run({
@@ -279,7 +275,6 @@ function migrerConducteursVersComptes() {
           actif: c.actif,
           courriel: c.courriel || '',
           telephone: c.telephone || '',
-          jeton: c.jeton || null,
         });
         correspondance.set(Number(c.id), Number(r.lastInsertRowid));
       }
@@ -366,13 +361,8 @@ ajouterColonne('fiches', 'zone_deplacement', "TEXT NOT NULL DEFAULT ''");
  * reste "soumise" pendant tout ce temps, et le visa est une seconde dimension —
  * ce qui evite de reecrire la contrainte de statut, et laisse le directeur
  * valider sans visa quand le conducteur est absent.
- *
- * `visa_jeton` est le secret du lien envoye par courriel. Il est regenere a
- * chaque transmission : un lien d'une version anterieure de la fiche cesse
- * aussitot de fonctionner.
  */
 ajouterColonne('fiches', 'visa_statut', "TEXT NOT NULL DEFAULT ''"); // '', 'attente', 'vise'
-ajouterColonne('fiches', 'visa_jeton', 'TEXT');
 ajouterColonne('fiches', 'visa_le', 'TEXT');
 ajouterColonne('fiches', 'visa_courriel', "TEXT NOT NULL DEFAULT ''");
 ajouterColonne('fiches', 'visa_commentaire', "TEXT NOT NULL DEFAULT ''");
@@ -413,12 +403,20 @@ ajouterColonne('utilisateurs', 'courriel', "TEXT NOT NULL DEFAULT ''");
 ajouterColonne('utilisateurs', 'telephone', "TEXT NOT NULL DEFAULT ''");
 
 /*
- * Lien personnel et durable d'un conducteur de travaux.
+ * Les secrets d'acces du conducteur de travaux ont disparu avec les comptes.
  *
- * Il precede les comptes : il donnait un acces a qui n'en avait pas. Il vit
- * encore le temps que l'ecran du conducteur existe, et disparaitra avec lui.
+ * `utilisateurs.jeton` etait son lien personnel, `fiches.visa_jeton` le secret
+ * du lien de visa envoye par courriel. Les laisser en place ne serait pas
+ * neutre : `obtenirFiche` lit la fiche entiere, et un secret mort continuerait
+ * de partir dans les reponses de l'API — un test l'a d'ailleurs surpris a le
+ * faire. Une colonne inutile qui transporte encore un secret n'est pas une
+ * colonne inutile, c'est une fuite.
  */
-ajouterColonne('utilisateurs', 'jeton', 'TEXT');
+function retirerColonne(table, colonne) {
+  if (colonneExiste(table, colonne)) db.exec(`ALTER TABLE ${table} DROP COLUMN ${colonne}`);
+}
+retirerColonne('utilisateurs', 'jeton');
+retirerColonne('fiches', 'visa_jeton');
 
 /*
  * Jours de grand deplacement, saisis par le chef d'equipe, ligne par ligne.
@@ -435,15 +433,6 @@ ajouterColonne('utilisateurs', 'jeton', 'TEXT');
  */
 ajouterColonne('fiche_lignes', 'nb_gd72', 'INTEGER NOT NULL DEFAULT 0');
 ajouterColonne('fiche_lignes', 'nb_gd80', 'INTEGER NOT NULL DEFAULT 0');
-
-// Les conducteurs deja enregistres n'en avaient pas : on leur en pose un.
-{
-  const sansJeton = db
-    .prepare("SELECT id FROM utilisateurs WHERE role = 'conducteur' AND (jeton IS NULL OR jeton = '')")
-    .all();
-  const poser = db.prepare('UPDATE utilisateurs SET jeton = ? WHERE id = ?');
-  for (const c of sansJeton) poser.run(crypto.randomBytes(24).toString('base64url'), c.id);
-}
 
 const PARC_INITIAL = [
   ['GR-686-YM', 'Renault', 'Trafic', 'Diesel'],

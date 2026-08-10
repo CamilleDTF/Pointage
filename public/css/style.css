@@ -548,21 +548,6 @@ input[readonly] { background: #f7f9fc; color: var(--gris-texte); }
 .visa-passe .semaine { font-weight: 700; color: var(--vert); font-variant-numeric: tabular-nums; }
 .visa-passe .aide { margin: 0 0 0 auto; }
 
-/* Le lien personnel, dans l'écran Paramètres du directeur. */
-.lien-conducteur {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.lien-conducteur input {
-  flex: 1 1 220px;
-  min-width: 0;
-  font-size: 0.78rem;
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  background: #f7f9fb;
-}
-
 /* ------------------- Calendrier mensuel de la direction ------------------- */
 
 /* Trente-et-une colonnes ne tiennent sur aucun écran : la grille défile, et la

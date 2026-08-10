@@ -560,98 +560,15 @@ test('un conducteur choisi met la fiche en attente de son visa', async () => {
   assert.equal(visa.demande, true);
   assert.equal(visa.conducteur, 'MOREAU Paul');
 
-  const enBase = db.prepare('SELECT statut, visa_statut, visa_jeton FROM fiches WHERE id = ?').get(id);
+  const enBase = db.prepare('SELECT statut, visa_statut FROM fiches WHERE id = ?').get(id);
   assert.equal(enBase.statut, 'soumise');
   assert.equal(enBase.visa_statut, 'attente');
-  assert.ok(enBase.visa_jeton, 'un secret de lien est genere');
 });
 
-test('le lien de visa ouvre une fiche, une seule, et sans montant', async () => {
-  const d = await connexion('dir', '9999');
-  const relance = await d('POST', `/api/fiches/${db.prepare("SELECT id FROM fiches WHERE visa_statut = 'attente'").get().id}/relancer-visa`);
-  assert.equal(relance.statut, 200);
-  const lien = relance.corps.visa.lien;
-  const jeton = new URL(lien).searchParams.get('jeton');
 
-  // Sans aucune session : c'est tout l'interet du lien.
-  const vue = await fetch(`${base}/api/visa/${encodeURIComponent(jeton)}`);
-  assert.equal(vue.status, 200);
-  const { fiche } = await vue.json();
-  assert.equal(fiche.chantier, 'Chantier visa');
-  assert.equal(fiche.lignes.length, 1);
-  // Ni taux horaire, ni salaire, ni image de signature ne transitent.
-  assert.equal(fiche.lignes[0].signature, true);
-  assert.equal(JSON.stringify(fiche).includes('taux'), false);
 
-  // Un jeton bricole ne donne rien.
-  assert.equal((await fetch(`${base}/api/visa/nimportequoi`)).status, 403);
-});
 
-test('un GET ne vise jamais : seule une decision explicite compte', async () => {
-  const ligne = db.prepare("SELECT id, visa_jeton FROM fiches WHERE visa_statut = 'attente'").get();
-  // La consultation repetee du lien — ce que fait un antivirus de messagerie —
-  // laisse la fiche exactement dans l'etat ou il l'a trouvee.
-  assert.equal(db.prepare('SELECT visa_statut FROM fiches WHERE id = ?').get(ligne.id).visa_statut, 'attente');
-});
 
-test('le conducteur vise, et la fiche poursuit sa route', async () => {
-  const d = await connexion('dir', '9999');
-  const ficheId = db.prepare("SELECT id FROM fiches WHERE visa_statut = 'attente'").get().id;
-  const lien = (await d('POST', `/api/fiches/${ficheId}/relancer-visa`)).corps.visa.lien;
-  const jeton = new URL(lien).searchParams.get('jeton');
-
-  const decision = await fetch(`${base}/api/visa/${encodeURIComponent(jeton)}/decision`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ decision: 'viser', commentaire: 'Conforme au chantier.' }),
-  });
-  assert.equal(decision.status, 200);
-
-  const enBase = db.prepare('SELECT statut, visa_statut, visa_commentaire FROM fiches WHERE id = ?').get(ficheId);
-  assert.equal(enBase.statut, 'soumise'); // elle attend maintenant la direction
-  assert.equal(enBase.visa_statut, 'vise');
-  assert.equal(enBase.visa_commentaire, 'Conforme au chantier.');
-});
-
-test('un lien perime par une retransmission ne vise plus rien', async () => {
-  const d = await connexion('dir', '9999');
-  const a = await connexion('chefa', '1111');
-  db.exec('DELETE FROM fiches');
-
-  const { id } = await ficheTransmise(a, 22);
-  const ancien = new URL((await d('POST', `/api/fiches/${id}/relancer-visa`)).corps.visa.lien)
-    .searchParams.get('jeton');
-
-  // Le directeur renvoie la fiche, le chef la retransmet : nouveau secret.
-  await d('POST', `/api/fiches/${id}/decision`, { decision: 'rejeter', motif: 'a revoir' });
-  await a('POST', `/api/fiches/${id}/soumettre`);
-
-  const r = await fetch(`${base}/api/visa/${encodeURIComponent(ancien)}`);
-  assert.equal(r.status, 403);
-});
-
-test('le conducteur renvoie la fiche, avec son commentaire, au chef', async () => {
-  const d = await connexion('dir', '9999');
-  const ficheId = db.prepare("SELECT id FROM fiches WHERE visa_statut = 'attente'").get().id;
-  const jeton = new URL((await d('POST', `/api/fiches/${ficheId}/relancer-visa`)).corps.visa.lien)
-    .searchParams.get('jeton');
-
-  const envoyer = (corps) =>
-    fetch(`${base}/api/visa/${encodeURIComponent(jeton)}/decision`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(corps),
-    });
-
-  // Un renvoi sans motif est refuse : le chef doit savoir quoi corriger.
-  assert.equal((await envoyer({ decision: 'renvoyer', commentaire: '  ' })).status, 400);
-
-  assert.equal((await envoyer({ decision: 'renvoyer', commentaire: 'Jeudi manquant' })).status, 200);
-  const enBase = db.prepare('SELECT statut, motif_rejet, visa_statut FROM fiches WHERE id = ?').get(ficheId);
-  assert.equal(enBase.statut, 'rejetee');
-  assert.equal(enBase.visa_statut, '');
-  assert.match(enBase.motif_rejet, /MOREAU Paul.*Jeudi manquant/);
-});
 
 test('le directeur peut valider sans attendre le visa', async () => {
   const d = await connexion('dir', '9999');
@@ -819,71 +736,6 @@ test('le calendrier du mois montre tout l effectif, jour par jour', async () => 
 });
 
 /*
- * Le lien personnel du conducteur de travaux.
- *
- * Le courriel etait le seul maillon du circuit qui dependait de quelque chose
- * qu'on ne maitrise pas : un serveur d'envoi, un port ouvert, une autorisation
- * a demander. Ce lien-la se transmet une fois et se met en favori.
- */
-test('le lien personnel montre au conducteur ses fiches, et rien d autre', async () => {
-  const d = await connexion('dir', '9999');
-  const a = await connexion('chefa', '1111');
-  const b = await connexion('chefb', '2222');
-  db.exec('DELETE FROM fiches');
-  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
-
-  const paul = await creerConducteur(d, {
-    nom: 'MOREAU Paul', courriel: 'paul@exemple.fr',
-  });
-  const sophie = await creerConducteur(d, {
-    nom: 'RENAUD Sophie', courriel: 'sophie@exemple.fr',
-  });
-
-  // Le lien nait avec le conducteur : pas d'etape « activer son acces ».
-  assert.match(paul.lien, /\/conducteur\.html\?cle=/);
-  const clePaul = decodeURIComponent(paul.lien.split('cle=')[1]);
-  const cleSophie = decodeURIComponent(sophie.lien.split('cle=')[1]);
-  assert.notEqual(clePaul, cleSophie);
-  assert.ok(clePaul.length >= 24, 'le secret doit etre long et imprevisible');
-
-  await ficheTransmise(a, 40, paul.id);
-  await ficheTransmise(b, 41, sophie.id);
-
-  // Chacun ne voit que les siennes : c'est le meme cloisonnement que partout.
-  const vuePaul = (await fetch(`${base}/api/conducteur/${encodeURIComponent(clePaul)}`)).json
-    ? await (await fetch(`${base}/api/conducteur/${encodeURIComponent(clePaul)}`)).json()
-    : null;
-  assert.equal(vuePaul.conducteur.nom, 'MOREAU Paul');
-  assert.equal(vuePaul.enAttente.length, 1);
-  assert.equal(vuePaul.enAttente[0].semaine, 40);
-  assert.equal(vuePaul.enAttente[0].chef_nom, 'CHEF A');
-
-  // Aucun montant, aucun taux : cette page sert au controle des heures.
-  const texte = JSON.stringify(vuePaul);
-  assert.ok(!/taux|salaire|brut|net/i.test(texte), 'la page du conducteur ne doit porter aucun montant');
-
-  // Le lien de chaque fiche ouvre bien le visa, et lui seul.
-  const jeton = decodeURIComponent(vuePaul.enAttente[0].lien.split('jeton=')[1]);
-  const ouverture = await fetch(`${base}/api/visa/${encodeURIComponent(jeton)}`);
-  assert.equal(ouverture.status, 200);
-  assert.equal((await ouverture.json()).fiche.semaine, 40);
-
-  // Un secret invente n'ouvre rien.
-  assert.equal((await fetch(`${base}/api/conducteur/nimportequoi`)).status, 403);
-
-  // Regenerer coupe l'ancien lien immediatement.
-  const nouveau = (await d('POST', `/api/admin/conducteurs/${paul.id}/lien`)).corps;
-  assert.notEqual(nouveau.lien, paul.lien);
-  assert.equal((await fetch(`${base}/api/conducteur/${encodeURIComponent(clePaul)}`)).status, 403);
-  const cleNeuve = decodeURIComponent(nouveau.lien.split('cle=')[1]);
-  assert.equal((await fetch(`${base}/api/conducteur/${encodeURIComponent(cleNeuve)}`)).status, 200);
-
-  // Et un chef d'equipe ne peut pas se fabriquer un lien de conducteur.
-  assert.equal((await a('POST', `/api/admin/conducteurs/${paul.id}/lien`)).statut, 403);
-  assert.equal((await a('GET', '/api/admin/conducteurs')).statut, 403);
-});
-
-/*
  * Le chef reprend sa fiche pour la corriger.
  *
  * Il fallait auparavant demander une reouverture au directeur pour une virgule.
@@ -902,24 +754,23 @@ test('un chef reprend sa fiche transmise, et le visa en cours tombe', async () =
   });
   const { id } = await ficheTransmise(a, 45, paul.id);
 
-  const avant = db.prepare('SELECT statut, visa_statut, visa_jeton FROM fiches WHERE id = ?').get(id);
+  const avant = db.prepare('SELECT statut, visa_statut FROM fiches WHERE id = ?').get(id);
   assert.equal(avant.statut, 'soumise');
   assert.equal(avant.visa_statut, 'attente');
-  const jetonAvant = avant.visa_jeton;
 
   const reprise = await a('POST', `/api/fiches/${id}/reprendre`);
   assert.equal(reprise.statut, 200);
   assert.equal(reprise.corps.visaAnnule, true);
 
-  const apres = db.prepare('SELECT statut, visa_statut, visa_jeton FROM fiches WHERE id = ?').get(id);
+  const apres = db.prepare('SELECT statut, visa_statut FROM fiches WHERE id = ?').get(id);
   assert.equal(apres.statut, 'brouillon');
   assert.equal(apres.visa_statut, '');
-  assert.equal(apres.visa_jeton, null, 'le secret doit tomber avec le visa');
-  assert.notEqual(apres.visa_jeton, jetonAvant);
 
-  // Elle a quitte la liste du conducteur.
-  const cle = decodeURIComponent(paul.lien.split('cle=')[1]);
-  const vue = await (await fetch(`${base}/api/conducteur/${encodeURIComponent(cle)}`)).json();
+  // Elle a quitte la liste du conducteur : il n'a plus rien a viser.
+  await d('POST', `/api/admin/utilisateurs/${paul.id}/code`, { pin: '5555' });
+  const identifiant = db.prepare('SELECT identifiant FROM utilisateurs WHERE id = ?').get(paul.id).identifiant;
+  const sien = await connexion(identifiant, '5555');
+  const vue = (await sien('GET', '/api/conducteur/moi')).corps;
   assert.equal(vue.enAttente.length, 0);
 
   // Et le chef peut de nouveau la modifier.
@@ -1039,15 +890,21 @@ test('le chef recoit de quoi prevenir le conducteur, jamais de quoi viser', asyn
   assert.ok(visa.alerte.sms.startsWith('sms:+33612345678'));
   assert.ok(visa.alerte.whatsapp.startsWith('https://wa.me/33612345678'));
 
-  // Et surtout : rien qui permette de viser.
+  /*
+   * Et surtout : rien qui permette de viser. Il n'existe plus de lien de visa a
+   * distribuer — le conducteur se connecte — mais la verification reste : si un
+   * jour quelque chose de tel reapparaissait dans cette reponse, ce test
+   * tomberait, et c'est bien ce qu'on lui demande.
+   */
   const recu = JSON.stringify(visa);
-  assert.equal(visa.lien, undefined, 'le lien de visa ne sort jamais vers un chef');
+  assert.equal(visa.lien, undefined, 'aucun lien de visa ne sort vers un chef');
   assert.ok(!/visa\.html|conducteur\.html|cle=|jeton=/i.test(recu), 'aucun secret vers le chef');
 
-  // Le directeur, lui, obtient le lien : ce n'est pas lui qu'on controle.
+  // La relance du directeur ne distribue pas davantage de secret.
   const relance = (await d('POST', `/api/fiches/${(await ficheTransmise(a, 47, paul.id)).id}/relancer-visa`)).corps;
-  assert.match(relance.visa.lien, /visa\.html\?jeton=/);
+  assert.equal(relance.visa.lien, undefined);
   assert.ok(relance.visa.alerte.texte.length > 50);
+  assert.ok(!/jeton|cle=/i.test(JSON.stringify(relance)), 'la relance non plus ne porte aucun secret');
 });
 
 /*
@@ -1098,29 +955,6 @@ test('un conducteur connecte n obtient encore rien', async () => {
   // deconnecter, ni changer le code qu'on vient de lui donner.
   assert.equal((await c('GET', '/api/moi')).statut, 200);
   assert.equal((await c('POST', '/api/mon-code', { actuel: '5555', nouveau: '6666' })).statut, 200);
-});
-
-/*
- * Le lien personnel doit survivre a la fermeture : c'est encore le seul moyen
- * dont dispose un conducteur pour viser, tant que son ecran n'existe pas.
- */
-test('le lien personnel fonctionne encore, meme pour un conducteur connecte', async () => {
-  const d = await connexion('dir', '9999');
-  const a = await connexion('chefa', '1111');
-  db.exec('DELETE FROM fiches');
-  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
-
-  const paul = await creerConducteur(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
-  await d('POST', `/api/admin/utilisateurs/${paul.id}/code`, { pin: '5555' });
-  await ficheTransmise(a, 48, paul.id);
-
-  const cle = db.prepare('SELECT jeton FROM utilisateurs WHERE id = ?').get(paul.id).jeton;
-  const identifiant = db.prepare('SELECT identifiant FROM utilisateurs WHERE id = ?').get(paul.id).identifiant;
-  const c = await connexion(identifiant, '5555');
-
-  const tableau = await c('GET', `/api/conducteur/${cle}`);
-  assert.equal(tableau.statut, 200, 'le jeton autorise, pas la session');
-  assert.equal(tableau.corps.enAttente.length, 1);
 });
 
 /*
@@ -1246,7 +1080,18 @@ test('un conducteur ne voit que les fiches ou le chef l a designe', async () => 
   // Le lien ne porte plus de secret : c'est la session qui prouve qui vise.
   assert.equal(tableau.enAttente[0].lien, `/visa.html?fiche=${sienne.id}`);
 
-  assert.equal((await paul.appeler('GET', `/api/visa/fiche/${sienne.id}`)).statut, 200);
+  const vue = await paul.appeler('GET', `/api/visa/fiche/${sienne.id}`);
+  assert.equal(vue.statut, 200);
+
+  /*
+   * Ce qu'il voit d'une fiche : les heures, et rien de la paie. Ni taux horaire,
+   * ni montant, ni meme l'image des signatures — leur seule presence suffit a
+   * verifier que le pointage a bien ete signe.
+   */
+  const recu = JSON.stringify(vue.corps.fiche);
+  assert.equal(/taux|salaire|montant|brut/i.test(recu), false, `aucun montant : ${recu.slice(0, 200)}`);
+  assert.equal(vue.corps.fiche.lignes[0].signature, true, 'la presence, pas l image');
+
   const refus = await paul.appeler('GET', `/api/visa/fiche/${autre.id}`);
   assert.equal(refus.statut, 403);
   assert.match(refus.corps.erreur, /ne releve pas de vous/);

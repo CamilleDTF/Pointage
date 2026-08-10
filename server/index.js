@@ -354,13 +354,14 @@ app.post(
 );
 
 /**
- * Ce qu'on peut dire de l'envoi sans exposer le lien a n'importe qui.
+ * Ce qu'on peut dire de l'envoi.
  *
  * `alerte` accompagne toujours la reponse : c'est un message tout pret, sans
  * aucun lien, que le chef d'equipe envoie de son telephone pour prevenir le
- * conducteur. Le lien de visa, lui, ne sort que pour le directeur.
+ * conducteur — il lui rappelle d'ouvrir ses fiches, rien de plus. Il n'y a plus
+ * de lien a distribuer : le conducteur se connecte.
  */
-function resumeVisa(visa, { avecLien = false } = {}) {
+function resumeVisa(visa) {
   if (!visa || visa.erreur) return { demande: false };
   if (!visa.conducteur) return { demande: false, raison: visa.raison || 'aucun_conducteur' };
 
@@ -373,7 +374,6 @@ function resumeVisa(visa, { avecLien = false } = {}) {
     courriel: visa.conducteur.courriel,
     envoye: Boolean(visa.courriel && visa.courriel.envoye),
     raison: visa.courriel ? visa.courriel.raison : undefined,
-    lien: avecLien ? visa.lien : undefined,
     alerte: complete
       ? AL.alerteVisa({
           fiche: complete,
@@ -397,7 +397,7 @@ app.post(
   asyncRoute(async (req, res) => {
     const visa = await V.envoyerDemandeVisa(Number(req.params.id), { relance: true });
     if (visa.erreur) return repondre(res, visa);
-    res.json({ visa: resumeVisa(visa, { avecLien: true }), fiche: F.obtenirFiche(Number(req.params.id)) });
+    res.json({ visa: resumeVisa(visa), fiche: F.obtenirFiche(Number(req.params.id)) });
   })
 );
 
@@ -423,16 +423,6 @@ app.post('/api/fiches/:id/decision', A.exigerDirecteur, (req, res) => {
  * messagerie qui visite les liens d'un message viserait sinon les fiches a la
  * place du conducteur.
  */
-app.get('/api/visa/:jeton', (req, res) => {
-  const acces = V.ficheDuJeton(req.params.jeton);
-  if (acces.erreur) return res.status(acces.code || 403).json({ erreur: acces.erreur });
-  res.json({ fiche: V.vueConducteur(acces.fiche), reference: { joursCourts: D.JOURS_COURTS, codesAbsence: D.CODES_ABSENCE } });
-});
-
-app.post('/api/visa/:jeton/decision', (req, res) => {
-  decider(res, V.ficheDuJeton(req.params.jeton), req.body);
-});
-
 /* --------------------- Espace du conducteur de travaux --------------------- */
 
 /*
@@ -492,18 +482,6 @@ function decider(res, acces, corps, utilisateur = null) {
   res.status(400).json({ erreur: 'Decision inconnue.' });
 }
 
-/*
- * Le lien personnel d'un conducteur : ses fiches en attente de visa.
- *
- * Sans compte, comme le reste de ce circuit, et sans courriel — c'etait le seul
- * maillon qui dependait d'un serveur d'envoi, d'un port ouvert et d'une
- * autorisation a demander. Le conducteur met cette adresse en favori une fois
- * pour toutes.
- */
-app.get('/api/conducteur/:cle', (req, res) => {
-  repondre(res, V.tableauConducteurParLien(req.params.cle));
-});
-
 /* ------------------------ Conducteurs de travaux --------------------------- */
 
 /*
@@ -519,9 +497,8 @@ app.get('/api/admin/conducteurs', A.exigerDirecteur, (req, res) => {
     conducteurs: db
       .prepare("SELECT * FROM utilisateurs WHERE role = 'conducteur' ORDER BY nom")
       .all()
-      .map(({ pin_hash: empreinte, ...c }) => ({
+      .map(({ pin_hash: empreinte, jeton, ...c }) => ({
         ...c,
-        lien: V.lienConducteur(c),
         // Un compte migre porte une empreinte que personne ne peut retrouver :
         // tant que le directeur n'a pas donne de code, il ne peut pas entrer.
         codeADefinir: !A.codeUtilisable(empreinte),
@@ -537,17 +514,6 @@ app.get('/api/admin/conducteurs', A.exigerDirecteur, (req, res) => {
       .all(),
     envoiConfigure: C.ACTIF,
   });
-});
-
-/*
- * Regenerer le lien d'un conducteur : un telephone perdu, un depart, un lien
- * transmis a la mauvaise personne. L'ancien cesse aussitot de fonctionner.
- */
-app.post('/api/admin/conducteurs/:id/lien', A.exigerDirecteur, (req, res) => {
-  const resultat = V.regenererJeton(Number(req.params.id));
-  if (resultat.erreur) return repondre(res, resultat);
-  journaliser(null, req.utilisateur.id, 'lien_conducteur', resultat.conducteur.nom);
-  res.json({ lien: V.lienConducteur(resultat.conducteur) });
 });
 
 app.put('/api/admin/chefs/:id/conducteur', A.exigerDirecteur, (req, res) => {
@@ -815,19 +781,14 @@ app.post('/api/admin/utilisateurs', A.exigerDirecteur, (req, res) => {
     return res.status(400).json({ erreur: 'Adresse de courriel invalide.' });
   }
 
-  // Le lien personnel nait avec le conducteur : pas d'etape « activer son
-  // acces », qui serait une occasion de plus de l'oublier.
-  const jeton = role === 'conducteur' ? crypto.randomBytes(24).toString('base64url') : null;
   try {
     const r = db
       .prepare(
-        `INSERT INTO utilisateurs (nom, identifiant, role, pin_hash, courriel, telephone, jeton)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO utilisateurs (nom, identifiant, role, pin_hash, courriel, telephone)
+         VALUES (?, ?, ?, ?, ?, ?)`
       )
-      .run(nom, identifiant, role, A.hacherPin(pin), courriel, String(req.body.telephone || '').trim().slice(0, 30), jeton);
-    // Le lien part avec la reponse : le directeur vient de creer le compte,
-    // c'est le moment ou il a la personne en tete pour le lui transmettre.
-    res.json({ id: r.lastInsertRowid, lien: jeton ? V.lienConducteur({ jeton }) : undefined });
+      .run(nom, identifiant, role, A.hacherPin(pin), courriel, String(req.body.telephone || '').trim().slice(0, 30));
+    res.json({ id: r.lastInsertRowid });
   } catch (e) {
     res.status(409).json({ erreur: 'Cet identifiant existe deja.' });
   }

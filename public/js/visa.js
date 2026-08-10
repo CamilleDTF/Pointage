@@ -1,38 +1,22 @@
 /*
- * Ecran du conducteur de travaux, ouvert depuis le lien recu par courriel.
+ * Une fiche a viser, ouverte depuis l'espace du conducteur de travaux.
  *
- * Le seul ecran de l'application qui fonctionne sans compte : le conducteur
- * arrive avec un jeton signe qui ne donne acces qu'a une fiche, et seulement
- * tant qu'elle attend son visa.
- *
- * Rien n'est decide a l'ouverture, meme quand le lien porte `action=viser` :
- * le parametre ne fait que mettre en avant le bouton correspondant. Une messagerie
- * d'entreprise visite les liens de ses courriels pour les analyser ; si un GET
- * pouvait viser une fiche, l'antivirus viserait a la place du conducteur.
+ * Il la relit, corrige les heures s'il le faut, puis vise ou la renvoie au chef
+ * avec un commentaire. Rien n'est decide a l'ouverture : la page se lit, la
+ * decision passe par un envoi explicite.
  */
 
 const $ = (id) => document.getElementById(id);
 
-const parametres = new URLSearchParams(location.search);
-const JETON = parametres.get('jeton') || '';
-const FICHE = parametres.get('fiche') || '';
-const ACTION = parametres.get('action') || '';
-
-/*
- * Deux portes, un seul ecran. Par jeton signe, le conducteur n'a pas de compte
- * et ne peut que lire puis decider. Par compte, il est reconnu pour ce qu'il est
- * et peut en plus corriger les heures : un controle qui ne peut pas rectifier
- * une virgule oblige a renvoyer la fiche entiere pour rien.
- */
-const PAR_LIEN = Boolean(JETON);
-const RACINE = PAR_LIEN ? `/api/visa/${encodeURIComponent(JETON)}` : `/api/visa/fiche/${encodeURIComponent(FICHE)}`;
+const FICHE = new URLSearchParams(location.search).get('fiche') || '';
+const RACINE = `/api/visa/fiche/${encodeURIComponent(FICHE)}`;
 
 let fiche = null;
 let reference = null;
 let corrections = new Map(); // id de ligne -> ligne corrigee, en attente d'envoi
 
 async function demarrer() {
-  if (!JETON && !FICHE) return afficherErreur('Adresse incomplète : aucune fiche désignée.');
+  if (!FICHE) return afficherErreur('Adresse incomplète : aucune fiche désignée.');
 
   try {
     const reponse = await API.get(RACINE);
@@ -46,7 +30,7 @@ async function demarrer() {
 }
 
 /** Le conducteur peut-il corriger cette fiche ? Le serveur seul en decide. */
-const corrigeable = () => !PAR_LIEN && Boolean(fiche && fiche.modifiable);
+const corrigeable = () => Boolean(fiche && fiche.modifiable);
 
 function afficherErreur(texte) {
   $('bloc-erreur').hidden = false;
@@ -100,11 +84,6 @@ function afficher() {
   ].filter(Boolean);
   $('observations').textContent = remarques.join(' — ');
 
-  // Le lien du courriel met en avant le geste choisi, sans rien décider.
-  if (ACTION === 'renvoyer' && !deja) {
-    $('commentaire').focus();
-    $('commentaire').placeholder = 'Indiquez ce qui doit être corrigé…';
-  }
 }
 
 function construireGrille() {
@@ -286,9 +265,7 @@ function terminer(titre, texte) {
   $('titre-resultat').textContent = titre;
   const bloc = $('bloc-correction');
   if (bloc) bloc.classList.add('masque');
-  $('texte-resultat').textContent = PAR_LIEN
-    ? `${texte} Vous pouvez fermer cette page.`
-    : `${texte} Retournez à vos fiches pour la suivante.`;
+  $('texte-resultat').textContent = `${texte} Retournez à vos fiches pour la suivante.`;
   $('bloc-resultat').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 

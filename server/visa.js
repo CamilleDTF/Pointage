@@ -3,57 +3,21 @@
 /*
  * Visa du conducteur de travaux.
  *
- * Le conducteur n'a pas de compte : il recoit un courriel avec un lien signe,
- * qui ouvre la fiche en lecture et propose deux gestes — viser, ou renvoyer au
- * chef avec un commentaire. C'est un choix delibere : un compte de plus par
- * conducteur, ce serait un code de plus a distribuer, a retenir et a
- * reinitialiser, pour deux clics par semaine.
+ * Le conducteur vise avant la direction, depuis son compte. Il voit les fiches
+ * ou un chef l'a designe, les relit, corrige les heures s'il le faut, puis vise
+ * ou renvoie au chef avec un commentaire.
  *
- * Ce que le lien autorise est volontairement etroit :
- *  - une seule fiche, celle dont l'identifiant est dans le jeton ;
- *  - deux actions, viser ou renvoyer, rien d'autre ;
- *  - tant que la fiche attend ce visa. Une fiche modifiee puis retransmise
- *    reçoit un nouveau secret, ce qui condamne les liens precedents.
- *
- * Et rien n'est decide sur un GET : les liens du courriel ouvrent une page, la
- * decision passe par un POST. Sans cela, l'antivirus de messagerie qui visite
- * les liens d'un message viserait les fiches a la place du conducteur.
+ * Tout cela passait auparavant par des liens signes envoyes par courriel : le
+ * conducteur n'avait pas de compte, et un secret par fiche lui tenait lieu
+ * d'identite. Ce detour a disparu avec les comptes, et c'est un soulagement —
+ * un secret qui circule est un secret qui s'egare, et un jeton prouve un droit
+ * sans jamais dire qui l'exerce. Le journal peut desormais nommer qui a vise.
  */
 
-const crypto = require('crypto');
 const { db, journaliser } = require('./db');
 const D = require('./domaine');
 const F = require('./fiches');
 const C = require('./courriel');
-
-const DUREE_JETON_MS = 60 * 24 * 3600 * 1000; // 60 jours : large, le secret change a chaque envoi
-
-function secret() {
-  // Le meme secret que les sessions : il vit deja dans DATA_DIR/session.key.
-  return require('./auth').SECRET_JETONS;
-}
-
-function signer(donnees) {
-  const charge = Buffer.from(JSON.stringify(donnees)).toString('base64url');
-  const sig = crypto.createHmac('sha256', secret()).update(charge).digest('base64url');
-  return `${charge}.${sig}`;
-}
-
-function verifier(jeton) {
-  if (typeof jeton !== 'string' || !jeton.includes('.')) return null;
-  const [charge, sig] = jeton.split('.');
-  const attendu = crypto.createHmac('sha256', secret()).update(charge).digest('base64url');
-  const a = Buffer.from(sig);
-  const b = Buffer.from(attendu);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-  try {
-    const donnees = JSON.parse(Buffer.from(charge, 'base64url').toString('utf8'));
-    if (!donnees.exp || donnees.exp < Date.now()) return null;
-    return donnees;
-  } catch {
-    return null;
-  }
-}
 
 /** Le conducteur de travaux dont depend habituellement un chef d'equipe. */
 function conducteurDuChef(chefId) {
@@ -101,18 +65,14 @@ function demanderVisa(ficheId, { relance = false } = {}) {
     return { visa: null, raison: 'aucun_conducteur' };
   }
 
-  const nonce = crypto.randomBytes(12).toString('base64url');
   db.prepare(
-    `UPDATE fiches SET visa_statut = 'attente', visa_jeton = ?, visa_le = NULL,
+    `UPDATE fiches SET visa_statut = 'attente', visa_le = NULL,
             visa_courriel = ?, visa_commentaire = '', visa_envoye_le = datetime('now')
       WHERE id = ?`
-  ).run(nonce, conducteur.courriel, ficheId);
-
-  const jeton = signer({ f: ficheId, n: nonce, exp: Date.now() + DUREE_JETON_MS });
-  const lien = `${adressePublique()}/visa.html?jeton=${encodeURIComponent(jeton)}`;
+  ).run(conducteur.courriel, ficheId);
 
   journaliser(ficheId, null, relance ? 'relance_visa' : 'demande_visa', `${conducteur.nom} <${conducteur.courriel}>`);
-  return { conducteur, jeton, lien, fiche };
+  return { conducteur, fiche };
 }
 
 /** L'adresse a laquelle les conducteurs joignent l'application. */
@@ -141,29 +101,14 @@ async function envoyerDemandeVisa(ficheId, options = {}) {
 
 /* ------------------------------ Cote conducteur ---------------------------- */
 
-/** La fiche visee par un jeton, si celui-ci est encore valable. */
-function ficheDuJeton(jeton) {
-  const donnees = verifier(jeton);
-  if (!donnees) return { erreur: 'Ce lien n est plus valable.', code: 403 };
-
-  const fiche = F.obtenirFiche(donnees.f);
-  if (!fiche) return { erreur: 'Fiche introuvable.', code: 404 };
-  // Le secret change a chaque transmission : un lien d'une version anterieure
-  // de la fiche ne doit plus rien pouvoir viser.
-  if (!fiche.visa_jeton || fiche.visa_jeton !== donnees.n) {
-    return { erreur: 'Ce lien a ete remplace : le chef d equipe a retransmis sa fiche.', code: 403 };
-  }
-  return { fiche };
-}
-
 /*
- * L'autre facon d'arriver sur une fiche : par son compte.
+ * La fiche qu'un conducteur a le droit d'ouvrir.
  *
- * Le lien signe ne donnait acces qu'a une fiche, et seulement tant qu'elle
- * attendait ce visa. Un conducteur connecte, lui, est reconnu pour ce qu'il est,
- * et son perimetre se lit sur la fiche : celles ou le chef l'a designe. C'est la
+ * Son perimetre se lit sur la fiche : celles ou le chef l'a designe. C'est la
  * meme regle que `conducteurDeLaFiche` — ce qu'il voit est exactement ce qu'il
- * doit viser, ni plus ni moins.
+ * doit viser, ni plus ni moins. Un rattachement fixe ne saurait pas le dire :
+ * un chef peut changer de conducteur d'une semaine a l'autre, ou en avoir deux
+ * a la fois quand il tient deux chantiers.
  */
 function ficheDuConducteur(conducteur, ficheId) {
   if (!conducteur || conducteur.role !== 'conducteur') return { erreur: 'Acces reserve.', code: 403 };
@@ -265,7 +210,7 @@ function renvoyer(acces, commentaire, utilisateur = null) {
   const signature = conducteur ? `${conducteur.nom} (conducteur de travaux)` : 'Conducteur de travaux';
 
   db.prepare(
-    `UPDATE fiches SET statut = 'rejetee', motif_rejet = ?, visa_statut = '', visa_jeton = NULL,
+    `UPDATE fiches SET statut = 'rejetee', motif_rejet = ?, visa_statut = '',
             visa_commentaire = ?, validee_le = NULL, validee_par = NULL, maj_le = datetime('now')
       WHERE id = ?`
   ).run(`${signature} : ${motif}`.slice(0, 1000), motif.slice(0, 1000), fiche.id);
@@ -352,63 +297,12 @@ function corrigerHeures(conducteur, ficheId, lignesEnvoyees) {
   return { corrections: changements.length, fiche: vueConducteur(F.obtenirFiche(fiche.id)) };
 }
 
-/* ------------------- Lien personnel d'un conducteur ----------------------- */
+/* ---------------------- Tableau de bord du conducteur --------------------- */
 
 /*
- * Le courriel restait le seul maillon dependant de quelque chose qu'on ne
- * maitrise pas : un serveur d'envoi, un port ouvert, une autorisation a
- * demander. Le conducteur recoit donc, une fois pour toutes, une adresse
- * personnelle a mettre en favori sur son telephone. Elle lui montre les fiches
- * qui attendent SON visa, et rien d'autre.
- *
- * Ce lien ne passe jamais par le chef d'equipe : c'est ce qui distingue un
- * controle d'une formalite. Un chef qui detiendrait le lien pourrait viser sa
- * propre fiche.
+ * Ses fiches : celles qui attendent son visa, puis celles qu'il a deja visees.
  */
-function lienConducteur(conducteur) {
-  if (!conducteur || !conducteur.jeton) return '';
-  return `${adressePublique()}/conducteur.html?cle=${encodeURIComponent(conducteur.jeton)}`;
-}
-
-/** Regenere le secret : l'ancien lien cesse aussitot de fonctionner. */
-function regenererJeton(conducteurId) {
-  const jeton = crypto.randomBytes(24).toString('base64url');
-  const resultat = db
-    .prepare("UPDATE utilisateurs SET jeton = ? WHERE id = ? AND role = 'conducteur'")
-    .run(jeton, conducteurId);
-  if (!resultat.changes) return { erreur: 'Conducteur de travaux inconnu.', code: 404 };
-  return { conducteur: db.prepare('SELECT * FROM utilisateurs WHERE id = ?').get(conducteurId) };
-}
-
-function conducteurDuJeton(cle) {
-  if (!cle || typeof cle !== 'string') return null;
-  return (
-    db.prepare("SELECT * FROM utilisateurs WHERE jeton = ? AND role = 'conducteur' AND actif = 1").get(cle) ||
-    null
-  );
-}
-
-/**
- * Ce que voit le conducteur en ouvrant son lien : ses fiches en attente, et
- * celles qu'il a visees recemment — pour qu'il sache que son geste a porte.
- *
- * Chaque fiche en attente est accompagnee de son lien de visa du moment. Le
- * mecanisme d'ouverture d'une fiche reste donc exactement celui du courriel,
- * deja eprouve : un secret par fiche, renouvele a chaque transmission.
- */
-function tableauConducteurParLien(cle) {
-  const conducteur = conducteurDuJeton(cle);
-  if (!conducteur) return { erreur: 'Ce lien n’est plus valable. Demandez-en un nouveau à la direction.', code: 403 };
-  return tableauConducteur(conducteur, { avecLiens: true });
-}
-
-/*
- * `avecLiens` distingue les deux chemins. Par lien personnel, chaque fiche doit
- * porter son propre secret signe — c'est la seule chose qui autorise a l'ouvrir.
- * Par compte, ces secrets n'ont plus lieu d'etre : c'est la session qui prouve
- * qui vise, et un lien de moins est un lien de moins a egarer.
- */
-function tableauConducteur(conducteur, { avecLiens = false, historique = 60 } = {}) {
+function tableauConducteur(conducteur, { historique = 60 } = {}) {
   const enAttente = db
     .prepare(
       `SELECT f.id, f.annee, f.semaine, f.chantier, f.ville, f.visa_envoye_le, u.nom AS chef_nom,
@@ -440,37 +334,19 @@ function tableauConducteur(conducteur, { avecLiens = false, historique = 60 } = 
     conducteur: { nom: conducteur.nom },
     enAttente: enAttente.map((f) => ({
       ...f,
-      lien: avecLiens ? lienFiche(f.id) : `/visa.html?fiche=${f.id}`,
+      lien: `/visa.html?fiche=${f.id}`,
     })),
-    recentes: recentes.map((f) => ({ ...f, lien: avecLiens ? '' : `/visa.html?fiche=${f.id}` })),
+    recentes: recentes.map((f) => ({ ...f, lien: `/visa.html?fiche=${f.id}` })),
   };
-}
-
-/**
- * Lien de visa d'une fiche donnee, signe a l'instant.
- *
- * Le secret vit dans la fiche et change a chaque transmission : on le lit plutot
- * que d'en poser un nouveau, sans quoi ouvrir sa liste condamnerait les liens
- * deja envoyes par courriel pour la meme fiche.
- */
-function lienFiche(ficheId) {
-  const ligne = db.prepare('SELECT visa_jeton FROM fiches WHERE id = ?').get(ficheId);
-  if (!ligne || !ligne.visa_jeton) return '';
-  const jeton = signer({ f: ficheId, n: ligne.visa_jeton, exp: Date.now() + DUREE_JETON_MS });
-  return `/visa.html?jeton=${encodeURIComponent(jeton)}`;
 }
 
 module.exports = {
   envoyerDemandeVisa,
   conducteurDeLaFiche,
-  ficheDuJeton,
   ficheDuConducteur,
   corrigerHeures,
   vueConducteur,
   viser,
   renvoyer,
-  lienConducteur,
-  regenererJeton,
   tableauConducteur,
-  tableauConducteurParLien,
 };

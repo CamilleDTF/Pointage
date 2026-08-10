@@ -480,7 +480,7 @@ function reprendre(ficheId, utilisateur) {
   const visaEnCours = fiche.visa_statut === 'attente' || fiche.visa_statut === 'vise';
   db.prepare(
     `UPDATE fiches SET statut = 'brouillon', soumise_le = NULL,
-            visa_statut = '', visa_jeton = NULL, visa_le = NULL, visa_conducteur = '',
+            visa_statut = '', visa_le = NULL, visa_conducteur = '',
             maj_le = datetime('now')
       WHERE id = ?`
   ).run(ficheId);
