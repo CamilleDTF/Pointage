@@ -429,10 +429,77 @@ test('les montants de la paie exigent le code, meme pour un directeur connecte',
   );
 });
 
+/*
+ * Le tableau du personnel non productif porte les memes salaires : il se protege
+ * de la meme facon, et par le meme billet. Les heures, elles, restent lisibles
+ * sans code sur le calendrier — c'est l'argent qui se ferme, pas le temps.
+ */
+test('la paie du personnel non productif exige le code, elle aussi', async () => {
+  const d = await connexion('dir', '9999');
+
+  // Le calendrier s'ouvre sans rien redemander : il ne porte aucun montant.
+  const calendrier = await d('GET', '/api/non-productif?annee=2026&mois=9');
+  assert.equal(calendrier.statut, 200);
+  for (const ligne of calendrier.corps.lignes) {
+    for (const champ of ['salaireBrut', 'totalNet', 'totalBrut']) {
+      assert.equal(ligne[champ], undefined, `${champ} n a rien a faire dans le calendrier`);
+    }
+  }
+
+  assert.equal((await d('GET', '/api/non-productif/paie?annee=2026&mois=9')).statut, 403);
+  assert.equal((await d('GET', '/api/export/non-productif.xlsx?annee=2026&mois=9')).statut, 403);
+
+  const billet = (await d('POST', '/api/paie/billet', { pin: '9999' })).corps.billet;
+  assert.equal((await d('GET', `/api/non-productif/paie?annee=2026&mois=9&billet=${billet}`)).statut, 200);
+  assert.equal(
+    (await d('GET', `/api/non-productif/paie?annee=2026&mois=9&billet=${billet}`)).statut,
+    403,
+    'le meme billet ne sert pas deux fois'
+  );
+
+  // Et un billet du tableau des chantiers ne vaut pas pour celui-ci : chaque
+  // ouverture redemande le code, quelle que soit la porte.
+  const autre = (await d('POST', '/api/paie/billet', { pin: '9999' })).corps.billet;
+  assert.equal((await d('GET', `/api/mois?annee=2026&mois=9&version=direction&billet=${autre}`)).statut, 200);
+  assert.equal((await d('GET', `/api/non-productif/paie?annee=2026&mois=9&billet=${autre}`)).statut, 403);
+});
+
+/*
+ * Un code mal tape n'est pas une session finie.
+ *
+ * Les deux repondaient 401 sans se distinguer, et l'interface renvoyait a
+ * l'ecran de connexion dans les deux cas : se tromper en ressaisissant son code
+ * ejectait le directeur du tableau qu'il consultait, sans explication. Seule
+ * l'expiration porte desormais le drapeau qui declenche ce retour.
+ */
+test('un code refuse ne se confond pas avec une session expiree', async () => {
+  const d = await connexion('dir', '9999');
+
+  const mauvaisCode = await d('POST', '/api/paie/billet', { pin: '0000' });
+  assert.equal(mauvaisCode.statut, 401);
+  assert.ok(!mauvaisCode.corps.sessionExpiree, 'un code refuse ne doit pas passer pour une session finie');
+
+  const changement = await d('POST', '/api/mon-code', { actuel: '0000', nouveau: '4321' });
+  assert.equal(changement.statut, 401);
+  assert.ok(!changement.corps.sessionExpiree);
+
+  // Sans cookie, en revanche, c'est bien la session qui manque.
+  const sansSession = await fetch(`${base}/api/moi`);
+  assert.equal(sansSession.status, 401);
+  assert.equal((await sansSession.json()).sessionExpiree, true);
+
+  const protegee = await fetch(`${base}/api/mois?annee=2026&mois=9`);
+  assert.equal(protegee.status, 401);
+  assert.equal((await protegee.json()).sessionExpiree, true);
+});
+
 test('les ecrans de parametrage et les montants restent fermes aux chefs', async () => {
   const a = await connexion('chefa', '1111');
   for (const [methode, chemin] of [
     ['GET', '/api/mois?annee=2026&mois=9'],
+    ['GET', '/api/non-productif?annee=2026&mois=9'],
+    ['GET', '/api/non-productif/paie?annee=2026&mois=9'],
+    ['GET', '/api/export/non-productif.xlsx?annee=2026&mois=9'],
     ['GET', '/api/admin/vehicules'],
     ['GET', '/api/admin/indicateurs'],
     ['POST', '/api/paie/billet'],

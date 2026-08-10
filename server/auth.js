@@ -117,7 +117,7 @@ function fermerSession(res) {
 }
 
 function exigerConnexion(req, res, next) {
-  if (!req.utilisateur) return res.status(401).json({ erreur: 'Session expiree, reconnectez-vous.' });
+  if (!req.utilisateur) return res.status(401).json({ erreur: 'Session expiree, reconnectez-vous.', sessionExpiree: true });
   next();
 }
 
@@ -159,7 +159,7 @@ function espaceConducteurFerme(req, res, next) {
  * journee est vide avant de viser une fiche.
  */
 function exigerDirecteurOuConducteur(req, res, next) {
-  if (!req.utilisateur) return res.status(401).json({ erreur: 'Session expiree, reconnectez-vous.' });
+  if (!req.utilisateur) return res.status(401).json({ erreur: 'Session expiree, reconnectez-vous.', sessionExpiree: true });
   if (!['directeur', 'conducteur'].includes(req.utilisateur.role)) {
     return res.status(403).json({ erreur: 'Action reservee a la direction.' });
   }
@@ -167,7 +167,7 @@ function exigerDirecteurOuConducteur(req, res, next) {
 }
 
 function exigerDirecteur(req, res, next) {
-  if (!req.utilisateur) return res.status(401).json({ erreur: 'Session expiree, reconnectez-vous.' });
+  if (!req.utilisateur) return res.status(401).json({ erreur: 'Session expiree, reconnectez-vous.', sessionExpiree: true });
   if (req.utilisateur.role !== 'directeur') {
     return res.status(403).json({ erreur: 'Action reservee au directeur.' });
   }

@@ -46,6 +46,7 @@ async function demarrer() {
 }
 
 surClic('btn-retour', () => { location.href = '/directeur.html'; });
+surClic('btn-paie-np', () => { location.href = '/paie-non-productif.html'; });
 surClic('btn-quitter', deconnexion);
 surClic('btn-precedent', () => decalerMois(-1));
 surClic('btn-suivant', () => decalerMois(1));

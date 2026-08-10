@@ -426,6 +426,122 @@
     };
   }
 
+  /* ------------------------ Personnel non productif -------------------------- */
+
+  /**
+   * Le mois du personnel non productif, tel que server/non-productif.js le
+   * construit : 7 h par jour ouvre, et seuls les ecarts declares s'en ecartent.
+   * Deux ecrans s'en servent — le calendrier et le tableau de paie — d'ou une
+   * seule construction.
+   */
+  function moisNonProductif(annee, mois) {
+    const dernier = new Date(Date.UTC(annee, mois, 0)).getUTCDate();
+    const jours = [];
+    for (let q = 1; q <= dernier; q += 1) {
+      const date = `${annee}-${String(mois).padStart(2, '0')}-${String(q).padStart(2, '0')}`;
+      const jourSemaine = new Date(`${date}T00:00:00Z`).getUTCDay();
+      jours.push({ date, quantieme: q, jourSemaine, ouvre: jourSemaine >= 1 && jourSemaine <= 5 });
+    }
+    const parDefaut = (j) => (j.ouvre ? R.DUREE_JOURNEE_REFERENCE_MINUTES : 0);
+
+    const lignes = NON_PRODUCTIFS.filter((s) => s.actif).map((personne) => {
+      const cases = jours.map((jour) => {
+        const declare = joursNonProductifs.find((d) => d.salarie_id === personne.id && d.date === jour.date);
+        const conge = conges.find(
+          (c) => c.salarie_id === personne.id && jour.date >= c.debut && jour.date <= c.fin
+        );
+        if (declare && declare.code_absence) {
+          return { ...jour, etat: 'absence', code: declare.code_absence, minutes: 0, gd: declare.gd };
+        }
+        if (declare && declare.gd) {
+          return { ...jour, etat: 'gd', gd: declare.gd, minutes: declare.minutes || parDefaut(jour) };
+        }
+        if (declare && declare.minutes !== parDefaut(jour)) {
+          return { ...jour, etat: jour.ouvre ? 'partiel' : 'travaille', minutes: declare.minutes, gd: '' };
+        }
+        if (conge) return { ...jour, etat: 'conge', code: conge.motif, minutes: 0, gd: '' };
+        if (!jour.ouvre) return { ...jour, etat: 'weekend', minutes: 0, gd: '' };
+        return { ...jour, etat: 'travaille', minutes: R.DUREE_JOURNEE_REFERENCE_MINUTES, gd: '' };
+      });
+
+      const absences = {};
+      for (const c of cases) {
+        if (c.etat === 'absence' || c.etat === 'conge') absences[c.code] = (absences[c.code] || 0) + 1;
+      }
+      const primes = primesNonProductifs.filter(
+        (p) => p.salarie_id === personne.id && p.annee === annee && p.mois === mois
+      );
+
+      return {
+        ...personne,
+        jours: cases,
+        joursTravailles: cases.filter((c) => c.minutes > 0).length,
+        minutes: cases.reduce((t, c) => t + c.minutes, 0),
+        joursAbsence: cases.filter((c) => c.etat === 'absence' || c.etat === 'conge').length,
+        absences,
+        joursGD72: cases.filter((c) => c.gd === '72').length,
+        joursGD80: cases.filter((c) => c.gd === '80').length,
+        primes,
+        montantPrimes: primes.reduce((t, p) => t + p.montant, 0),
+      };
+    });
+
+    return {
+      annee,
+      mois,
+      jours,
+      joursOuvres: jours.filter((j) => j.ouvre).length,
+      heuresReference: R.heuresReferenceMois(annee, mois),
+      lignes,
+    };
+  }
+
+  /**
+   * Les memes formules que server/non-productif.js. Ni prime amiante ni panier
+   * repas : ce personnel n'entre pas en zone. Le grand deplacement est une
+   * indemnite, il se verse net ; la prime suit le salaire.
+   */
+  function valoriserNonProductif(ligne) {
+    const taux = Number(ligne.taux_horaire) || 0;
+    const h = (min) => (Number(min) || 0) / 60;
+
+    const parSemaine = new Map();
+    for (const c of ligne.jours) {
+      if (!c.minutes) continue;
+      const { annee, semaine } = R.semaineISO(new Date(`${c.date}T00:00:00Z`));
+      const cle = `${annee}-${semaine}`;
+      parSemaine.set(cle, (parSemaine.get(cle) || 0) + c.minutes);
+    }
+    let minutes25 = 0;
+    let minutes50 = 0;
+    for (const minutes of parSemaine.values()) {
+      const sup = R.heuresSupplementaires(minutes);
+      minutes25 += sup.minutes25;
+      minutes50 += sup.minutes50;
+    }
+
+    const primes = Number(ligne.montantPrimes) || 0;
+    if (!taux) {
+      return {
+        tauxManquant: true, tauxHoraire: 0, minutes25, minutes50,
+        salaireBrut: 0, heuresSupBrut: 0, grandDeplacement: 0, primes,
+        totalBrut: 0, totalNet: 0,
+      };
+    }
+
+    const salaireBrut = 151.67 * taux;
+    const heuresSupBrut = taux * 1.25 * h(minutes25) + taux * 1.5 * h(minutes50);
+    const grandDeplacement = ligne.joursGD72 * 72 + ligne.joursGD80 * 80;
+    return {
+      tauxManquant: false, tauxHoraire: taux, minutes25, minutes50,
+      salaireBrut, salaireNet: salaireBrut * 0.77,
+      heuresSupBrut, heuresSupNet: heuresSupBrut * 0.77,
+      primes, grandDeplacement,
+      totalBrut: salaireBrut + heuresSupBrut + primes + grandDeplacement,
+      totalNet: (salaireBrut + heuresSupBrut + primes) * 0.77 + grandDeplacement,
+    };
+  }
+
   function exigerConnexion() {
     if (!session) erreur(401, 'Session expirée, reconnectez-vous.');
     return session;
@@ -1045,69 +1161,43 @@
 
     ['GET', /^\/api\/non-productif$/, (m, corps, params) => {
       exigerDirecteur();
-      const annee = Number(params.get('annee'));
-      const mois = Number(params.get('mois'));
-      const dernier = new Date(Date.UTC(annee, mois, 0)).getUTCDate();
-
-      const jours = [];
-      for (let q = 1; q <= dernier; q += 1) {
-        const date = `${annee}-${String(mois).padStart(2, '0')}-${String(q).padStart(2, '0')}`;
-        const jourSemaine = new Date(`${date}T00:00:00Z`).getUTCDay();
-        jours.push({ date, quantieme: q, jourSemaine, ouvre: jourSemaine >= 1 && jourSemaine <= 5 });
-      }
-      const parDefaut = (j) => (j.ouvre ? R.DUREE_JOURNEE_REFERENCE_MINUTES : 0);
-
-      const lignes = NON_PRODUCTIFS.filter((s) => s.actif).map((personne) => {
-        const cases = jours.map((jour) => {
-          const declare = joursNonProductifs.find((d) => d.salarie_id === personne.id && d.date === jour.date);
-          const conge = conges.find(
-            (c) => c.salarie_id === personne.id && jour.date >= c.debut && jour.date <= c.fin
-          );
-          if (declare && declare.code_absence) {
-            return { ...jour, etat: 'absence', code: declare.code_absence, minutes: 0, gd: declare.gd };
-          }
-          if (declare && declare.gd) {
-            return { ...jour, etat: 'gd', gd: declare.gd, minutes: declare.minutes || parDefaut(jour) };
-          }
-          if (declare && declare.minutes !== parDefaut(jour)) {
-            return { ...jour, etat: jour.ouvre ? 'partiel' : 'travaille', minutes: declare.minutes, gd: '' };
-          }
-          if (conge) return { ...jour, etat: 'conge', code: conge.motif, minutes: 0, gd: '' };
-          if (!jour.ouvre) return { ...jour, etat: 'weekend', minutes: 0, gd: '' };
-          return { ...jour, etat: 'travaille', minutes: R.DUREE_JOURNEE_REFERENCE_MINUTES, gd: '' };
-        });
-
-        const absences = {};
-        for (const c of cases) {
-          if (c.etat === 'absence' || c.etat === 'conge') absences[c.code] = (absences[c.code] || 0) + 1;
-        }
-        const primes = primesNonProductifs.filter(
-          (p) => p.salarie_id === personne.id && p.annee === annee && p.mois === mois
-        );
-
-        return {
-          ...personne,
-          jours: cases,
-          joursTravailles: cases.filter((c) => c.minutes > 0).length,
-          minutes: cases.reduce((t, c) => t + c.minutes, 0),
-          joursAbsence: cases.filter((c) => c.etat === 'absence' || c.etat === 'conge').length,
-          absences,
-          joursGD72: cases.filter((c) => c.gd === '72').length,
-          joursGD80: cases.filter((c) => c.gd === '80').length,
-          primes,
-          montantPrimes: primes.reduce((t, p) => t + p.montant, 0),
-        };
-      });
-
       return {
-        annee,
-        mois,
-        jours,
-        joursOuvres: jours.filter((j) => j.ouvre).length,
-        heuresReference: R.heuresReferenceMois(annee, mois),
-        lignes,
+        ...moisNonProductif(Number(params.get('annee')), Number(params.get('mois'))),
         codesAbsence: R.CODES_ABSENCE,
         motifsConge: MOTIFS_CONGE,
+      };
+    }],
+
+    /*
+     * Le tableau de paie de ce personnel : le meme mois, valorise. Il porte des
+     * salaires, donc il consomme un billet comme celui des chantiers.
+     */
+    ['GET', /^\/api\/non-productif\/paie$/, (m, corps, params) => {
+      exigerDirecteur();
+      if (!billetPaie || params.get('billet') !== billetPaie) {
+        erreur(403, 'Les montants demandent votre code directeur.', { codeDemande: true });
+      }
+      billetPaie = null;
+
+      const donnees = moisNonProductif(Number(params.get('annee')), Number(params.get('mois')));
+      return {
+        annee: donnees.annee,
+        mois: donnees.mois,
+        joursOuvres: donnees.joursOuvres,
+        heuresReference: donnees.heuresReference,
+        salaries: donnees.lignes.map((ligne) => ({
+          matricule: ligne.matricule,
+          nom: ligne.nom,
+          prenom: ligne.prenom,
+          joursTravailles: ligne.joursTravailles,
+          minutes: ligne.minutes,
+          joursAbsence: ligne.joursAbsence,
+          absences: ligne.absences,
+          joursGD72: ligne.joursGD72,
+          joursGD80: ligne.joursGD80,
+          detailPrimes: ligne.primes,
+          ...valoriserNonProductif(ligne),
+        })),
       };
     }],
 

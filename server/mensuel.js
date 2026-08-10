@@ -283,4 +283,10 @@ function valoriser(salarie, { montantPanier = D.MONTANT_PANIER_REPAS } = {}) {
 module.exports = {
   agregerMois,
   valoriser,
+  // Partagees avec la paie du personnel non productif : les memes taux, ecrits
+  // une seule fois. Deux copies de 151,67 finiraient par ne plus se ressembler.
+  HEURES_MENSUELLES_BASE,
+  PART_NET,
+  MONTANT_GD_72,
+  MONTANT_GD_80,
 };

@@ -124,9 +124,15 @@ function preparerDirecteur() {
   );
   source = adapter(
     source,
-    "surClic('btn-non-productif', () => { location.href = '/non-productif.html'; });",
-    "surClic('btn-non-productif', () => Demo.aller('nonproductif'));",
+    "  surClic(bouton, () => { location.href = '/non-productif.html'; });",
+    "  surClic(bouton, () => Demo.aller('nonproductif'));",
     'accès au personnel non productif'
+  );
+  source = adapter(
+    source,
+    "surClic('btn-paie-non-productif', () => { location.href = '/paie-non-productif.html'; });",
+    "surClic('btn-paie-non-productif', () => Demo.aller('paienonproductif'));",
+    'accès à la paie du personnel non productif'
   );
   return source;
 }
@@ -169,6 +175,36 @@ function preparerNonProductif() {
     "surClic('btn-retour', () => { location.href = '/directeur.html'; });",
     "surClic('btn-retour', () => Demo.aller('directeur'));",
     'retour au tableau de bord'
+  );
+  source = adapter(
+    source,
+    "surClic('btn-paie-np', () => { location.href = '/paie-non-productif.html'; });",
+    "surClic('btn-paie-np', () => Demo.aller('paienonproductif'));",
+    'passage au tableau de paie'
+  );
+  return source;
+}
+
+function preparerPaieNonProductif() {
+  let source = lire('public', 'js', 'paie-non-productif.js');
+  source = adapter(source, "location.href = '/chef.html';", "Demo.aller('chef');", 'redirection chef');
+  source = adapter(
+    source,
+    "surClic('btn-retour', () => { location.href = '/directeur.html'; });",
+    "surClic('btn-retour', () => Demo.aller('directeur'));",
+    'retour au tableau de bord'
+  );
+  source = adapter(
+    source,
+    "surClic('btn-calendrier-np', () => { location.href = '/non-productif.html'; });",
+    "surClic('btn-calendrier-np', () => Demo.aller('nonproductif'));",
+    'retour au calendrier'
+  );
+  source = adapter(
+    source,
+    '  window.location.href = `/api/export/non-productif.xlsx?${parametres}`;',
+    "  Demo.indisponible('Classeur de paie du personnel non productif');",
+    'téléchargement de la paie non productive'
   );
   return source;
 }
@@ -224,12 +260,14 @@ const remplacements = {
   GABARIT_MENSUEL: JSON.stringify(corpsDePage('mensuel.html')),
   GABARIT_CALENDRIER: JSON.stringify(corpsDePage('calendrier.html')),
   GABARIT_NONPRODUCTIF: JSON.stringify(corpsDePage('non-productif.html')),
+  GABARIT_PAIENONPRODUCTIF: JSON.stringify(corpsDePage('paie-non-productif.html')),
   SCRIPT_CHEF: JSON.stringify(preparerChef()),
   SCRIPT_DIRECTEUR: JSON.stringify(preparerDirecteur()),
   SCRIPT_PARAMETRES: JSON.stringify(preparerParametres()),
   SCRIPT_MENSUEL: JSON.stringify(preparerMensuel()),
   SCRIPT_CALENDRIER: JSON.stringify(preparerCalendrier()),
   SCRIPT_NONPRODUCTIF: JSON.stringify(preparerNonProductif()),
+  SCRIPT_PAIENONPRODUCTIF: JSON.stringify(preparerPaieNonProductif()),
 };
 
 let page = lire('demo', 'coquille.html');

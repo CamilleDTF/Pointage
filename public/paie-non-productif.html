@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10416b">
+  <title>Pointage — Paie du personnel non productif</title>
+  <link rel="icon" href="/icone.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="appbar">
+    <div class="titre">
+      Paie du personnel non productif
+      <small id="entete-nom">…</small>
+    </div>
+    <button class="petit" id="btn-calendrier-np" type="button">Calendrier</button>
+    <button class="petit" id="btn-retour" type="button">◀ Tableau de bord</button>
+    <button class="petit" id="btn-quitter" type="button">Quitter</button>
+  </header>
+
+  <main>
+    <section class="carte">
+      <div class="rangee">
+        <div style="width:150px">
+          <label for="mois">Mois</label>
+          <select id="mois"></select>
+        </div>
+        <div style="width:110px">
+          <label for="annee">Année</label>
+          <input id="annee" type="number" min="2020" max="2100" step="1">
+        </div>
+        <button class="principal" id="btn-voir" type="button">Afficher les montants</button>
+        <button class="valide" id="btn-export" type="button">Télécharger</button>
+        <button class="petit" id="btn-masquer" type="button">Masquer</button>
+        <span class="pousse"></span>
+        <p class="aide" id="apercu" style="margin:0;text-align:right;max-width:360px"></p>
+      </div>
+      <p class="aide" style="margin-top:10px">
+        Tableau distinct de celui des chantiers : ce personnel ne figure sur aucune fiche.
+        Le salaire de base vaut <strong>151,67 h</strong> par mois ; ne s'y ajoutent que les
+        heures particulières, les grands déplacements et les primes saisies au calendrier.
+      </p>
+    </section>
+
+    <section class="carte">
+      <div id="tableau-paie">
+        <p class="vide">
+          Les montants demandent votre code directeur. Cliquez sur
+          <strong>Afficher les montants</strong>.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/regles.js"></script>
+  <script src="/js/commun.js"></script>
+  <script src="/js/paie-non-productif.js"></script>
+</body>
+</html>

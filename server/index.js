@@ -14,6 +14,7 @@ const F = require('./fiches');
 const A = require('./auth');
 const X = require('./export');
 const XM = require('./export-mensuel');
+const XNP = require('./export-non-productif');
 const M = require('./mensuel');
 const I = require('./indicateurs');
 const V = require('./visa');
@@ -77,7 +78,7 @@ app.post('/api/deconnexion', (req, res) => {
 });
 
 app.get('/api/moi', (req, res) => {
-  if (!req.utilisateur) return res.status(401).json({ erreur: 'Non connecte.' });
+  if (!req.utilisateur) return res.status(401).json({ erreur: 'Non connecte.', sessionExpiree: true });
   res.json({ utilisateur: req.utilisateur });
 });
 
@@ -225,6 +226,54 @@ app.post('/api/non-productif/primes', A.exigerDirecteur, (req, res) => {
 app.delete('/api/non-productif/primes/:id', A.exigerDirecteur, (req, res) => {
   repondre(res, NP.supprimerPrime(req.params.id));
 });
+
+/*
+ * Le tableau mensuel de paie du personnel non productif.
+ *
+ * Meme protection que celui des chantiers : les montants ne s'ouvrent jamais sur
+ * la seule foi d'une session. Le code du directeur s'echange contre un billet a
+ * usage unique, consomme des la premiere requete.
+ */
+app.get('/api/non-productif/paie', A.exigerDirecteur, (req, res) => {
+  const annee = Number(req.query.annee);
+  const mois = Number(req.query.mois);
+  if (!Number.isInteger(annee) || annee < 2020 || annee > 2100) {
+    return res.status(400).json({ erreur: 'Annee invalide.' });
+  }
+  if (!Number.isInteger(mois) || mois < 1 || mois > 12) {
+    return res.status(400).json({ erreur: 'Mois invalide (1 a 12).' });
+  }
+  if (!A.consommerBilletPaie(req, req.query.billet)) {
+    return res.status(403).json({ erreur: 'Les montants demandent votre code directeur.', codeDemande: true });
+  }
+
+  res.json(NP.paieDuMois(annee, mois));
+});
+
+/* Le meme tableau, en classeur. Il porte les memes montants, donc le meme billet. */
+app.get(
+  '/api/export/non-productif.xlsx',
+  A.exigerDirecteur,
+  asyncRoute(async (req, res) => {
+    const annee = Number(req.query.annee);
+    const mois = Number(req.query.mois);
+    if (!Number.isInteger(annee) || annee < 2020 || annee > 2100) {
+      return res.status(400).json({ erreur: 'Annee invalide.' });
+    }
+    if (!Number.isInteger(mois) || mois < 1 || mois > 12) {
+      return res.status(400).json({ erreur: 'Mois invalide (1 a 12).' });
+    }
+    if (!A.consommerBilletPaie(req, req.query.billet)) {
+      return res.status(403).json({ erreur: 'Les montants demandent votre code directeur.', codeDemande: true });
+    }
+
+    const buffer = await XNP.exporterPaieNonProductif(NP.paieDuMois(annee, mois));
+    const nom = nomFichier(`paie_non_productif_${annee}_${String(mois).padStart(2, '0')}.xlsx`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${nom}"`);
+    res.send(Buffer.from(buffer));
+  })
+);
 
 /*
  * Le personnel non productif se gere comme l'effectif de chantier, dans son
@@ -540,7 +589,7 @@ app.post('/api/fiches/:id/decision', A.exigerDirecteur, (req, res) => {
  * tient deux chantiers.
  */
 function exigerConducteur(req, res, next) {
-  if (!req.utilisateur) return res.status(401).json({ erreur: 'Session expiree, reconnectez-vous.' });
+  if (!req.utilisateur) return res.status(401).json({ erreur: 'Session expiree, reconnectez-vous.', sessionExpiree: true });
   if (req.utilisateur.role !== 'conducteur') {
     return res.status(403).json({ erreur: 'Action reservee au conducteur de travaux.' });
   }

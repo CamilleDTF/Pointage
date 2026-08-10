@@ -80,7 +80,10 @@ for (const bouton of ['btn-mensuel', 'btn-mensuel-haut']) {
 for (const bouton of ['btn-calendrier', 'btn-calendrier-bas']) {
   surClic(bouton, () => { location.href = '/calendrier.html'; });
 }
-surClic('btn-non-productif', () => { location.href = '/non-productif.html'; });
+for (const bouton of ['btn-non-productif', 'btn-non-productif-bas']) {
+  surClic(bouton, () => { location.href = '/non-productif.html'; });
+}
+surClic('btn-paie-non-productif', () => { location.href = '/paie-non-productif.html'; });
 
 function decalerSemaine(pas) {
   let semaine = Number($('semaine').value) + pas;

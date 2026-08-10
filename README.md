@@ -195,6 +195,32 @@ indicateur (`salaries.productif`) sépare les deux populations, et il est filtr�
 où l'effectif de chantier est lu : un administratif n'apparaît jamais sur une fiche, dans
 une équipe, ni dans le calendrier des chantiers.
 
+### Leur tableau de paie
+
+Il est **à part**, et pas par commodité : ces salariés n'ont pas de fiche, donc pas de
+semaines à additionner, pas de zone amiante, pas de panier. Les glisser dans le tableau
+des chantiers aurait donné un tableau à moitié vide où chaque colonne aurait demandé
+« pour qui ? ». Il s'ouvre depuis le tableau de bord, ou depuis leur calendrier.
+
+Les taux sont les mêmes qu'ailleurs, et écrits une seule fois (`server/mensuel.js`) :
+
+| | |
+|---|---|
+| **Salaire de base** | 151,67 h × taux horaire. Mensualisé : il ne suit pas le nombre de jours ouvrés du mois, et une absence ne le diminue pas — c'est la paie qui décidera d'une retenue. |
+| **Heures supplémentaires** | Calculées **sur la semaine**, comme partout. Sept heures par jour font trente-cinq heures : elles n'existent que si des heures particulières ont été déclarées. |
+| **Primes** | Celles saisies au calendrier. Traitées comme du **brut**, soumis à charges. |
+| **Grand déplacement** | 72 € ou 80 € par jour. C'est une **indemnité** : elle se verse **nette**, la seule ligne du tableau dans ce cas. |
+| **Net** | 77 % du brut soumis, plus le grand déplacement. |
+
+Sans taux horaire renseigné, **rien n'est calculé** : la ligne le dit et renvoie aux
+paramètres. Une case vide se corrige ; un salaire faux se paie.
+
+Comme le tableau des chantiers, il porte des salaires : **chaque affichage et chaque
+téléchargement redemande le code du directeur**, même si la session est ouverte. Le
+calendrier, lui, reste consultable sans code — c'est l'argent qui se ferme, pas le temps.
+Le classeur téléchargé tient sur une feuille, une ligne par personne, avec le détail des
+absences et des primes en commentaire de cellule.
+
 ## Le circuit d'une fiche
 
 ```
@@ -661,7 +687,8 @@ server/
   export-mensuel.js  Le classeur mensuel, versions publique et direction
   indicateurs.js Suivi des chefs : assiduité, retards, fiches renvoyées
   calendrier.js Vue mensuelle par personne, et registre des congés
-  non-productif.js  Le mois du personnel non productif : 7 h par jour, et ses écarts
+  non-productif.js  Le mois du personnel non productif : 7 h par jour, ses écarts, sa paie
+  export-non-productif.js  Leur classeur de paie : une feuille, une ligne par personne
   visa.js       Espace du conducteur : ses fiches, visa, renvoi
   alerte.js     Message prévenant le conducteur (SMS, WhatsApp, courriel) — sans aucun lien
   courriel.js   Envoi SMTP, et dépôt sur disque à défaut de serveur d'envoi
@@ -676,6 +703,7 @@ public/
   mensuel.html    Tableau mensuel      + js/mensuel.js
   calendrier.html Calendrier du mois   + js/calendrier.js
   non-productif.html  Personnel non productif + js/non-productif.js
+  paie-non-productif.html  Leur tableau de paie + js/paie-non-productif.js
   conducteur.html Ses fiches à viser   + js/conducteur.js
   visa.html       Une fiche à viser     + js/visa.js
   js/regles.js  Règles métier partagées avec le serveur (heures, semaines, contrôles)
@@ -694,6 +722,7 @@ test/
   migration-conducteurs.test.js  Les conducteurs deviennent des comptes sans perdre une fiche
   semaine-partagee.test.js  Un operateur sur deux chantiers : plafonds et primes de la semaine
   non-productif.test.js Le mois à 7 h par jour, ses écarts, ses primes
+  paie-non-productif.test.js  Leur valorisation : mensualisation, majorations, indemnités
 scripts/
   tester-courriel.js    Essai d'envoi, et diagnostic des réglages SMTP
   importer-effectif.js  Chargement de l'effectif depuis le tableau d'affectation

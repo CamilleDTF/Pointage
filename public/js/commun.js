@@ -7,11 +7,22 @@ const API = {
       headers: corps ? { 'Content-Type': 'application/json' } : undefined,
       body: corps ? JSON.stringify(corps) : undefined,
     });
-    if (reponse.status === 401 && !location.pathname.endsWith('/index.html') && location.pathname !== '/') {
+    const donnees = await reponse.json().catch(() => ({}));
+
+    /*
+     * Une session finie renvoie a l'ecran de connexion. Un code mal tape, non :
+     * il vaut un refus, pas une expulsion. Les deux repondaient 401, et se
+     * tromper en ressaisissant son code renvoyait le directeur au tableau de
+     * bord sans un mot d'explication. C'est le serveur qui distingue les deux.
+     */
+    if (
+      reponse.status === 401 && donnees.sessionExpiree
+      && !location.pathname.endsWith('/index.html') && location.pathname !== '/'
+    ) {
       location.href = '/';
       throw new Error('Session expiree.');
     }
-    const donnees = await reponse.json().catch(() => ({}));
+
     if (!reponse.ok) {
       const erreur = new Error(donnees.erreur || `Erreur ${reponse.status}`);
       erreur.anomalies = donnees.anomalies;

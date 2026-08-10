@@ -16,6 +16,7 @@
 
 const { db, journaliser } = require('./db');
 const D = require('./domaine');
+const M = require('./mensuel');
 
 /** Les jours du mois, avec ce qui distingue un jour ouvre d'un week-end. */
 function joursDuMois(annee, mois) {
@@ -215,4 +216,121 @@ function supprimerPrime(id) {
   return r.changes ? { ok: true } : { erreur: 'Prime introuvable.', code: 404 };
 }
 
-module.exports = { moisComplet, joursDuMois, declarerJour, ajouterPrime, supprimerPrime };
+/*
+ * Les heures supplementaires, semaine par semaine.
+ *
+ * Elles ne devraient pas exister — 7 h par jour font 35 h — mais le directeur
+ * peut declarer des heures particulieres, et la majoration se calcule alors
+ * comme partout ailleurs : sur la semaine, pas sur le mois.
+ *
+ * Seules comptent les journees du mois affiche. Une semaine a cheval sur deux
+ * mois est donc vue par moities, chacune dans son tableau : c'est la meme
+ * convention que le tableau des chantiers, et elle evite qu'un meme jour soit
+ * paye deux fois.
+ */
+function heuresSupDuMois(cases) {
+  const parSemaine = new Map();
+  for (const c of cases) {
+    if (!c.minutes) continue;
+    const { annee, semaine } = D.semaineISO(new Date(`${c.date}T00:00:00Z`));
+    const cle = `${annee}-${semaine}`;
+    parSemaine.set(cle, (parSemaine.get(cle) || 0) + c.minutes);
+  }
+
+  let minutes25 = 0;
+  let minutes50 = 0;
+  for (const minutes of parSemaine.values()) {
+    const sup = D.heuresSupplementaires(minutes);
+    minutes25 += sup.minutes25;
+    minutes50 += sup.minutes50;
+  }
+  return { minutes25, minutes50 };
+}
+
+/**
+ * Valorisation d'un mois, aux memes taux que le tableau des chantiers.
+ *
+ * Sans taux horaire renseigne, rien n'est calcule : une case vide vaut mieux
+ * qu'un salaire faux. C'est `tauxManquant` qui le signale a l'ecran.
+ *
+ * Deux differences avec le chantier, et elles se voient : pas de prime amiante
+ * — ils ne vont pas en zone — et pas de panier repas, qui n'a pas ete demande
+ * pour eux. Les primes saisies sont traitees comme du BRUT, soumis a charges :
+ * c'est le regime ordinaire d'une prime, a la difference d'une indemnite de
+ * grand deplacement, qui se verse nette.
+ */
+function valoriser(ligne) {
+  const taux = Number(ligne.taux_horaire) || 0;
+  const h = (minutes) => (Number(minutes) || 0) / 60;
+  const { minutes25, minutes50 } = heuresSupDuMois(ligne.jours);
+
+  if (!taux) {
+    return {
+      tauxManquant: true, tauxHoraire: 0, minutes25, minutes50,
+      salaireBrut: 0, salaireNet: 0, heuresSupBrut: 0, heuresSupNet: 0,
+      grandDeplacement: 0, primes: ligne.montantPrimes || 0, totalBrut: 0, totalNet: 0,
+    };
+  }
+
+  const salaireBrut = M.HEURES_MENSUELLES_BASE * taux;
+  const heuresSupBrut = taux * 1.25 * h(minutes25) + taux * 1.5 * h(minutes50);
+  const grandDeplacement = ligne.joursGD72 * M.MONTANT_GD_72 + ligne.joursGD80 * M.MONTANT_GD_80;
+  const primes = Number(ligne.montantPrimes) || 0;
+
+  const totalBrut = salaireBrut + heuresSupBrut + primes + grandDeplacement;
+  return {
+    tauxManquant: false,
+    tauxHoraire: taux,
+    minutes25,
+    minutes50,
+    salaireBrut,
+    salaireNet: salaireBrut * M.PART_NET,
+    heuresSupBrut,
+    heuresSupNet: heuresSupBrut * M.PART_NET,
+    primes,
+    grandDeplacement,
+    totalBrut,
+    // Le grand deplacement est une indemnite : il se verse net. La prime, elle,
+    // suit le salaire.
+    totalNet: (salaireBrut + heuresSupBrut + primes) * M.PART_NET + grandDeplacement,
+  };
+}
+
+/**
+ * Le mois valorise, tel qu'il part a l'ecran comme au classeur.
+ *
+ * Une seule construction pour les deux : un tableau affiche et un tableau
+ * telecharge qui ne diraient pas la meme chose seraient pires qu'un seul.
+ */
+function paieDuMois(annee, mois) {
+  const donnees = moisComplet(annee, mois);
+  return {
+    annee,
+    mois,
+    joursOuvres: donnees.joursOuvres,
+    heuresReference: donnees.heuresReference,
+    salaries: donnees.lignes.map((ligne) => ({
+      matricule: ligne.matricule,
+      nom: ligne.nom,
+      prenom: ligne.prenom,
+      joursTravailles: ligne.joursTravailles,
+      minutes: ligne.minutes,
+      joursAbsence: ligne.joursAbsence,
+      absences: ligne.absences,
+      joursGD72: ligne.joursGD72,
+      joursGD80: ligne.joursGD80,
+      detailPrimes: ligne.primes,
+      ...valoriser(ligne),
+    })),
+  };
+}
+
+module.exports = {
+  moisComplet,
+  joursDuMois,
+  declarerJour,
+  ajouterPrime,
+  supprimerPrime,
+  valoriser,
+  paieDuMois,
+};
