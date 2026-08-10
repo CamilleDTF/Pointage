@@ -133,6 +133,41 @@ app.get('/api/reference', A.exigerConnexion, (req, res) => {
   });
 });
 
+/*
+ * Ce qui appelle l'attention du chef d'equipe, sur son ecran d'accueil.
+ *
+ * Une fiche renvoyee, il le voyait deja en l'ouvrant. Une fiche corrigee par le
+ * conducteur, non : elle poursuivait sa route vers la direction sans qu'il sache
+ * qu'on avait touche a son pointage. Or ce sont ses operateurs qui ont signe, et
+ * c'est lui qu'on interrogera si un montant surprend.
+ */
+app.get('/api/mes-notifications', A.exigerConnexion, (req, res) => {
+  if (req.utilisateur.role !== 'chef') return res.json({ corrections: [], renvoyees: [] });
+
+  const corrections = db
+    .prepare(
+      `SELECT j.detail, j.horodatage, u.nom AS auteur,
+              f.id AS fiche_id, f.annee, f.semaine, f.chantier
+         FROM journal j
+         JOIN fiches f ON f.id = j.fiche_id
+         LEFT JOIN utilisateurs u ON u.id = j.user_id
+        WHERE j.action = 'correction_conducteur' AND f.chef_id = ?
+          AND j.horodatage >= datetime('now', '-45 days')
+        ORDER BY j.id DESC LIMIT 20`
+    )
+    .all(req.utilisateur.id);
+
+  const renvoyees = db
+    .prepare(
+      `SELECT id, annee, semaine, chantier, motif_rejet
+         FROM fiches WHERE chef_id = ? AND statut = 'rejetee'
+        ORDER BY annee DESC, semaine DESC LIMIT 20`
+    )
+    .all(req.utilisateur.id);
+
+  res.json({ corrections, renvoyees });
+});
+
 /* -------------------------- Calendrier d'un chef --------------------------- */
 
 /*
@@ -456,18 +491,40 @@ app.get('/api/visa/fiche/:id', exigerConducteur, (req, res) => {
       // une fiche visee ou validee ne se retouche plus de son cote.
       modifiable: acces.fiche.statut === 'soumise' && acces.fiche.visa_statut === 'attente',
     },
-    reference: { joursCourts: D.JOURS_COURTS, codesAbsence: D.CODES_ABSENCE },
+    // Ce qu'il faut pour corriger : les codes d'absence, l'effectif pour ajouter
+    // quelqu'un, le parc pour designer un vehicule. Aucun montant.
+    reference: {
+      joursCourts: D.JOURS_COURTS,
+      jours: D.JOURS,
+      codesAbsence: D.CODES_ABSENCE,
+      typesMasque: D.TYPES_MASQUE,
+      effectif: db
+        .prepare('SELECT id, nom, prenom, matricule FROM salaries WHERE actif = 1 ORDER BY nom, prenom')
+        .all(),
+      vehicules: db
+        .prepare('SELECT immatriculation, marque, modele FROM vehicules WHERE actif = 1 ORDER BY immatriculation')
+        .all(),
+    },
   });
 });
 
 /*
- * La correction des heures. Le conducteur controle le pointage : lui interdire
+ * La correction de la fiche. Le conducteur controle le pointage : lui interdire
  * de rectifier une erreur l'obligerait a renvoyer la fiche entiere au chef pour
- * une virgule. Il ne peut toucher qu'aux heures, et seulement tant que la fiche
- * attend son visa — la validation finale reste au directeur.
+ * une virgule. Il la corrige comme son auteur, tant qu'elle attend son visa —
+ * la validation finale, elle, reste au directeur.
  */
-app.put('/api/visa/fiche/:id/heures', exigerConducteur, (req, res) => {
-  repondre(res, V.corrigerHeures(req.utilisateur, req.params.id, req.body.lignes));
+app.put('/api/visa/fiche/:id', exigerConducteur, (req, res) => {
+  const acces = V.ficheDuConducteur(req.utilisateur, req.params.id);
+  if (acces.erreur) return repondre(res, acces);
+
+  const resultat = F.enregistrerFiche(acces.fiche.id, req.body, req.utilisateur);
+  if (resultat.fiche) {
+    const options = F.optionsControle(resultat.fiche);
+    resultat.anomalies = D.controlerFiche(resultat.fiche, resultat.fiche.lignes, options);
+    resultat.fiche = { ...V.vueConducteur(resultat.fiche), modifiable: true };
+  }
+  repondre(res, resultat);
 });
 
 app.post('/api/visa/fiche/:id/decision', exigerConducteur, (req, res) => {

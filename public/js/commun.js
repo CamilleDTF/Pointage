@@ -55,7 +55,10 @@ const etiquetteStatut = (statut, role) => Regles.etiquetteStatut(statut, role ||
 
 /** "2026-09-01" -> "1er septembre 2026" */
 function dateFrancaise(iso) {
-  const [annee, mois, jour] = String(iso || '').split('-').map(Number);
+  // Un horodatage « 2026-08-10 08:55:07 » est une date aussi : sans cette
+  // coupe, l'heure collee au quantieme rendait le nombre illisible et la
+  // fonction retournait une chaine vide, sans rien dire.
+  const [annee, mois, jour] = String(iso || '').slice(0, 10).split('-').map(Number);
   if (!annee || !mois || !jour) return '';
   const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
     'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];

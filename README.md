@@ -184,7 +184,7 @@ Connecté, il arrive sur **ses fiches à viser**. Il ouvre celle qu'il veut, la 
 | | |
 |---|---|
 | **Voit** | Les fiches où le chef l'a désigné, en attente comme passées, et le calendrier des présences |
-| **Peut** | Viser, renvoyer avec un commentaire, corriger les heures |
+| **Peut** | Viser, renvoyer avec un commentaire, **corriger la fiche comme son auteur** |
 | **Ne peut pas** | Valider définitivement — cela reste à la direction |
 | **N'a pas** | Le tableau mensuel, les exports de paie, les taux horaires, *Paramètres* |
 
@@ -194,12 +194,31 @@ quand il tient deux chantiers : une case de rattachement ne contient qu'un nom, 
 fiche porte le sien. Le rattachement de *Paramètres* garde son rôle — proposer le bon
 nom par défaut.
 
-**La correction est étroite par construction.** `corrigerHeures` (`server/visa.js`) ne
-sait écrire que des journées, de la route et du trajet : ni le chantier, ni les primes,
-ni les signatures, ni le statut. Ce n'est pas une politesse demandée au navigateur —
-aucune ligne de code n'écrit ces champs-là. Et chaque correction est inscrite au journal
-**sous son nom, avec l'avant et l'après** : les opérateurs ont signé une version du
-pointage, la direction doit pouvoir savoir ce qui a changé depuis.
+**Il corrige la fiche comme son auteur** : l'en-tête, les heures, les absences, les
+primes, et jusqu'à l'ajout d'un opérateur que le chef avait oublié. Le contraire
+l'obligerait à renvoyer la fiche entière pour un masque manquant. Ce qui lui reste fermé
+est ailleurs — la validation finale, et les montants. Contrairement à l'écran du chef,
+qui enregistre au fil de la frappe, une correction est ici un **geste décidé** : rien ne
+part tant qu'il n'a pas cliqué.
+
+### Ce qui a changé se lit, des deux côtés
+
+Les opérateurs ont signé une version du pointage ; le directeur en valide une autre.
+Chaque intervention produit donc un **relevé** — `comparerFiches` (`server/fiches.js`) —
+écrit en français et inscrit au journal sous le nom de son auteur :
+
+```
+chantier : « Lycée Jean Moulin » → « Lycée Jean Moulin - Bât. C »
+BENALI Karim Lundi : 7h30 → 8h00
+BENALI Karim Jeudi : absence « — » → « VM »
+BENALI Karim jours en zone : 0 → 3
+BERTIN Bruno : ajouté à la fiche
+```
+
+Le **directeur** le lit sur la fiche, au moment de valider. Le **chef d'équipe** le
+trouve en haut de son écran, sans avoir à ouvrir quoi que ce soit : sa fiche poursuivait
+sa route sans qu'il sache qu'on y avait touché, alors que ce sont ses opérateurs qui ont
+signé et lui qu'on interrogera si un montant surprend.
 
 Il n'y a **qu'une porte d'entrée** : le compte. Les liens signés qui tenaient lieu
 d'identité au conducteur — son lien personnel, et un secret par fiche envoyé par
@@ -606,7 +625,7 @@ server/
   export-mensuel.js  Le classeur mensuel, versions publique et direction
   indicateurs.js Suivi des chefs : assiduité, retards, fiches renvoyées
   calendrier.js Vue mensuelle par personne, et registre des congés
-  visa.js       Espace du conducteur : ses fiches, visa, renvoi, correction des heures
+  visa.js       Espace du conducteur : ses fiches, visa, renvoi
   alerte.js     Message prévenant le conducteur (SMS, WhatsApp, courriel) — sans aucun lien
   courriel.js   Envoi SMTP, et dépôt sur disque à défaut de serveur d'envoi
   fournisseurs-courriel.js  Réglages SMTP devinés depuis les MX du domaine

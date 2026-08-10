@@ -132,15 +132,30 @@ async function charger() {
 function afficherIndicateurs() {
   const t = tableau.totaux;
   const manquantes = tableau.suivi.filter((s) => s.statut === 'manquante').length;
+  /*
+   * `appel` marque ce qui attend une action du directeur. La couleur ne porte
+   * jamais l'information seule : le libelle la dit aussi, pour qui la distingue
+   * mal — et un zero ne s'allume pas, sans quoi le tableau serait toujours
+   * orange et ne signalerait plus rien.
+   */
+  const aVerifier = tableau.fiches.filter((f) => f.statut === 'soumise' && f.visa_statut !== 'attente').length;
+  const chezLeConducteur = tableau.fiches.filter((f) => f.visa_statut === 'attente').length;
+
   const cartes = [
     { valeur: `${t.validees}/${t.attendues}`, libelle: 'Fiches validées' },
-    { valeur: tableau.fiches.filter((f) => f.statut === 'soumise').length, libelle: 'À vérifier' },
-    { valeur: manquantes, libelle: 'Fiches manquantes' },
+    { valeur: aVerifier, libelle: 'À vérifier', appel: aVerifier > 0 },
+    { valeur: chezLeConducteur, libelle: 'Chez le conducteur' },
+    { valeur: manquantes, libelle: 'Fiches manquantes', appel: manquantes > 0 },
     { valeur: t.salaries, libelle: 'Salariés pointés' },
     { valeur: versTexte(t.minutes), libelle: 'Total heures semaine' },
   ];
   $('indicateurs').innerHTML = cartes
-    .map((c) => `<div class="indicateur"><div class="valeur">${c.valeur}</div><div class="libelle">${c.libelle}</div></div>`)
+    .map(
+      (c) => `<div class="indicateur${c.appel ? ' appel' : ''}">
+        <div class="valeur">${c.valeur}</div>
+        <div class="libelle">${c.libelle}${c.appel ? ' — à traiter' : ''}</div>
+      </div>`
+    )
     .join('');
 }
 
@@ -230,6 +245,28 @@ window.allerA = allerA;
 
 /* ------------------ Grille de correction, une par fiche ------------------- */
 
+/*
+ * Ce que le conducteur de travaux a corrige, avant de viser.
+ *
+ * Les operateurs ont signe une version du pointage ; le directeur valide la
+ * suivante. Lui montrer la difference lui evite de comparer deux ecrans — ou,
+ * plus probablement, de ne rien comparer du tout.
+ */
+function relevesConducteur(fiche) {
+  const releves = (fiche.journal || []).filter((e) => e.action === 'correction_conducteur');
+  if (!releves.length) return '';
+
+  return releves
+    .map(
+      (e) => `<div class="corrections-conducteur">
+        <strong>Corrigé par ${echapper(e.auteur || 'le conducteur de travaux')}</strong>
+        le ${echapper(dateFrancaise(e.horodatage))} :
+        ${echapper(e.detail.split(' ; ').join('\n'))}
+      </div>`
+    )
+    .join('');
+}
+
 function construireFiche(fiche) {
   const bloc = document.createElement('details');
   bloc.className = 'carte';
@@ -288,6 +325,7 @@ function construireFiche(fiche) {
     <div style="margin-top:14px">
       ${fiche.motif_rejet ? `<p class="aide" style="color:var(--rouge);font-weight:600">Renvoyée : ${echapper(fiche.motif_rejet)}</p>` : ''}
       ${bandeauVisa(fiche)}
+      ${relevesConducteur(fiche)}
       <div class="grille trois" style="margin-bottom:12px">
         <div><label>Chantier</label><input class="entete" data-champ="chantier" value="${echapper(fiche.chantier)}"></div>
         <div><label>Ville</label><input class="entete" data-champ="ville" value="${echapper(fiche.ville)}"></div>

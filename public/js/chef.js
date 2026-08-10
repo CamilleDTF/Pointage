@@ -84,7 +84,56 @@ async function demarrer() {
   surveillerReseau();
   signalerPagePerimee();
   await chargerCalendrier();
+  await chargerNotifications();
   await ouvrirFiche();
+}
+
+/*
+ * Ce qui appelle l'attention du chef, en haut de son ecran.
+ *
+ * Une fiche renvoyee, il le voyait en l'ouvrant. Une fiche corrigee par le
+ * conducteur, non : elle poursuivait sa route vers la direction sans qu'il sache
+ * qu'on avait touche a son pointage. Ce sont pourtant ses operateurs qui ont
+ * signe, et c'est lui qu'on interrogera si un montant surprend.
+ */
+async function chargerNotifications() {
+  const bloc = $('bloc-notifications');
+  if (!bloc) return;
+
+  let donnees;
+  try {
+    donnees = await API.get('/api/mes-notifications');
+  } catch {
+    return; // une notification manquante ne doit pas couter l'ecran
+  }
+
+  const semaine = (n) => `semaine ${n.semaine} — ${n.chantier || 'chantier non renseigné'}`;
+  const entrees = [
+    ...donnees.renvoyees.map((f) => ({
+      objet: `Fiche à corriger : ${semaine(f)}`,
+      detail: f.motif_rejet || 'Renvoyée pour correction.',
+      fiche: f.id,
+    })),
+    ...donnees.corrections.map((c) => ({
+      objet: `${c.auteur || 'Le conducteur de travaux'} a corrigé votre fiche : ${semaine(c)}`,
+      detail: c.detail.split(' ; ').join('\n'),
+      fiche: c.fiche_id,
+    })),
+  ];
+
+  bloc.classList.toggle('masque', entrees.length === 0);
+  if (!entrees.length) return;
+
+  $('titre-notifications').textContent =
+    entrees.length === 1 ? 'À votre attention' : `À votre attention — ${entrees.length} points`;
+  $('liste-notifications').innerHTML = entrees
+    .map(
+      (e) => `<div class="notification">
+        <div class="objet">${echapper(e.objet)}</div>
+        <div class="detail">${echapper(e.detail)}</div>
+      </div>`
+    )
+    .join('');
 }
 
 if ($('annee-calendrier')) $('annee-calendrier').addEventListener('change', chargerCalendrier);

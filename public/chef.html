@@ -23,6 +23,15 @@
   <div class="hors-ligne masque" id="banniere-reseau"></div>
 
   <main>
+    <!--
+      Ce qui appelle une action ou une relecture. Masqué quand il n'y a rien :
+      un bandeau vide finit par ne plus se voir du tout.
+    -->
+    <section class="carte alerte-accueil masque" id="bloc-notifications">
+      <h2 id="titre-notifications">À votre attention</h2>
+      <div id="liste-notifications"></div>
+    </section>
+
     <details class="carte" id="bloc-calendrier">
       <summary class="titre-calendrier">
         <span class="intitule">Mes fiches de l'année</span>

@@ -14,7 +14,9 @@
       Visa du conducteur de travaux
       <small id="entete-conducteur">…</small>
     </div>
+    <button class="petit" id="btn-retour" type="button">◀ Mes fiches</button>
   </header>
+  <datalist id="liste-effectif"></datalist>
 
   <main>
     <section class="carte" id="bloc-erreur" hidden>
@@ -56,11 +58,12 @@
         qui attend encore son visa. Par lien signé, l'écran reste en lecture.
       -->
       <section class="carte masque" id="bloc-correction">
-        <h2>Corriger les heures</h2>
+        <h2>Corriger la fiche</h2>
         <p class="aide">
-          Les cases du tableau ci-dessus sont modifiables : vous pouvez rectifier une
-          journée, la route ou le trajet sans renvoyer la fiche au chef d'équipe. Le
-          reste — chantier, primes, signatures — ne se corrige pas ici.
+          Le chantier, le véhicule et tout le tableau ci-dessus sont modifiables : vous
+          pouvez rectifier une journée, une absence, une prime ou ajouter un opérateur
+          sans renvoyer la fiche au chef d'équipe pour autant. Les signatures des
+          salariés, elles, restent les leurs.
         </p>
         <p class="aide">
           Chaque correction est inscrite au journal de la fiche avec votre nom, l'avant
@@ -71,6 +74,10 @@
           <button class="petit principal" id="btn-enregistrer" type="button">Enregistrer les corrections</button>
           <span class="aide" id="etat-correction"></span>
         </div>
+        <p class="aide" style="margin-top:8px">
+          Une ligne vide en bas du tableau permet d'ajouter un opérateur oublié : tapez
+          son nom, la liste vous le propose.
+        </p>
       </section>
 
       <section class="carte" id="bloc-decision">

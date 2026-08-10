@@ -1123,16 +1123,20 @@ test('le conducteur vise depuis son compte, et la fiche poursuit sa route', asyn
   assert.equal(trace.user_id, paul.id, 'le visa doit porter un nom, pas un anonyme');
 
   // Une fiche deja visee ne se corrige plus de son cote.
-  const tardif = await paul.appeler('PUT', `/api/visa/fiche/${id}/heures`, { lignes: [] });
+  const tardif = await paul.appeler('PUT', `/api/visa/fiche/${id}`, { chantier: 'Trop tard' });
   assert.equal(tardif.statut, 409);
+  assert.equal(db.prepare('SELECT chantier FROM fiches WHERE id = ?').get(id).chantier, 'Chantier visa');
 });
 
 /*
- * Corriger plutot que renvoyer la fiche entiere pour une virgule. Le pouvoir est
- * volontairement etroit : seules les heures, et seulement tant que la fiche
- * attend ce visa.
+ * Le conducteur corrige la fiche comme son auteur.
+ *
+ * Il controle le pointage : lui laisser les seules heures l'obligerait a
+ * renvoyer la fiche entiere au chef pour un masque oublie ou un operateur
+ * manquant. Ce qui reste hors de sa portee est ailleurs — la validation finale,
+ * et les montants.
  */
-test('le conducteur corrige les heures, et rien d autre', async () => {
+test('le conducteur corrige toute la fiche, tant qu elle attend son visa', async () => {
   const d = await connexion('dir', '9999');
   const a = await connexion('chefa', '1111');
   db.exec('DELETE FROM fiches');
@@ -1143,49 +1147,77 @@ test('le conducteur corrige les heures, et rien d autre', async () => {
 
   const avant = (await paul.appeler('GET', `/api/visa/fiche/${id}`)).corps.fiche;
   assert.equal(avant.modifiable, true);
-  const ligne = avant.lignes[0];
-  assert.equal(ligne.jours[0].minutes, 450);
+  assert.ok(avant.lignes.length > 1, 'les lignes libres sont fournies : il peut ajouter quelqu un');
 
-  const correction = await paul.appeler('PUT', `/api/visa/fiche/${id}/heures`, {
-    lignes: [{
-      id: ligne.id,
-      minutes_route: 30,
-      minutes_trajet: ligne.minutes_trajet,
-      jours: [{ jour: 0, minutes: 480, code_absence: '' }],
-    }],
+  const pointee = avant.lignes.find((l) => String(l.nom_affiche || '').trim());
+  const libre = avant.lignes.find((l) => !String(l.nom_affiche || '').trim());
+  assert.equal(pointee.jours[0].minutes, 450);
+
+  const correction = await paul.appeler('PUT', `/api/visa/fiche/${id}`, {
+    chantier: 'Chantier visa corrige',
+    ville: 'Blagnac',
+    immatriculation: 'AA-123-BB',
+    conducteur_vehicule: 'MOREAU Paul',
+    lignes: avant.lignes.map((l) => {
+      if (l.id === pointee.id) {
+        return {
+          ...l,
+          minutes_route: 30,
+          jours_zone: 3,
+          type_masque: 'VA',
+          nb_gd72: 2,
+          observation: 'Corrigé après contrôle',
+          jours: l.jours.map((j) => (j.jour === 0 ? { ...j, minutes: 480 } : j.jour === 3 ? { ...j, minutes: 0, code_absence: 'VM' } : j)),
+        };
+      }
+      if (l.id === libre.id) {
+        // Un renfort saisi a la main : il n'a pas de numero de salarie.
+        return {
+          ...l,
+          salarie_id: null,
+          nom_affiche: 'BERTIN Bruno',
+          jours: l.jours.map((j) => ({ ...j, minutes: j.jour <= 4 ? 420 : 0, saisi: 1 })),
+        };
+      }
+      return l;
+    }),
   });
-  assert.equal(correction.statut, 200);
-  assert.equal(correction.corps.corrections, 2, 'la journee et la route');
-  assert.equal(correction.corps.fiche.lignes[0].jours[0].minutes, 480);
+  assert.equal(correction.statut, 200, JSON.stringify(correction.corps).slice(0, 200));
 
-  // Le journal garde l'avant et l'apres, sous le nom de son auteur.
+  const apres = db.prepare('SELECT chantier, ville, immatriculation FROM fiches WHERE id = ?').get(id);
+  assert.equal(apres.chantier, 'Chantier visa corrige');
+  assert.equal(apres.ville, 'Blagnac');
+  assert.equal(apres.immatriculation, 'AA-123-BB');
+
+  const relue = (await paul.appeler('GET', `/api/visa/fiche/${id}`)).corps.fiche;
+  const corrigee = relue.lignes.find((l) => l.nom_affiche === pointee.nom_affiche);
+  assert.equal(corrigee.jours[0].minutes, 480);
+  assert.equal(corrigee.jours[3].code_absence, 'VM');
+  assert.equal(corrigee.jours_zone, 3);
+  assert.equal(corrigee.type_masque, 'VA');
+  assert.equal(corrigee.nb_gd72, 2);
+  assert.equal(corrigee.observation, 'Corrigé après contrôle');
+  assert.ok(relue.lignes.some((l) => l.nom_affiche === 'BERTIN Bruno'), 'la personne ajoutee doit rester');
+
+  /*
+   * Le releve de ce qui a bouge : c'est lui que le directeur lira avant de
+   * valider, et le chef pour comprendre ce qu'on a corrige chez lui.
+   */
   const trace = db
     .prepare("SELECT user_id, detail FROM journal WHERE fiche_id = ? AND action = 'correction_conducteur'")
     .get(id);
-  assert.equal(trace.user_id, paul.id);
+  assert.equal(trace.user_id, paul.id, 'la correction porte un nom');
+  assert.match(trace.detail, /chantier : « Chantier visa » → « Chantier visa corrige »/);
   assert.match(trace.detail, /Lundi : 7h30 → 8h00/);
-  assert.match(trace.detail, /route : 0h00 → 0h30/);
+  assert.match(trace.detail, /Jeudi : absence/);
+  assert.match(trace.detail, /jours en zone : 0 → 3/);
+  assert.match(trace.detail, /jours GD 72 : 0 → 2/);
+  assert.match(trace.detail, /BERTIN Bruno : ajouté à la fiche/);
 
-  /*
-   * Le point qui compte : cette route ne sait ecrire que des heures. Meme si le
-   * client envoie autre chose, rien d'autre ne bouge — la limite est dans le
-   * code, pas dans la politesse de l'appelant.
-   */
-  const entete = db.prepare('SELECT chantier, statut, conducteur_id FROM fiches WHERE id = ?').get(id);
-  await paul.appeler('PUT', `/api/visa/fiche/${id}/heures`, {
-    lignes: [{ id: ligne.id, nb_gd72: 5, jours_zone: 4, signature: null, jours: [] }],
-    chantier: 'Detourne',
-    statut: 'validee',
-  });
-  const apres = db.prepare('SELECT chantier, statut, conducteur_id FROM fiches WHERE id = ?').get(id);
-  assert.deepEqual(apres, entete, "l'entete de la fiche ne bouge pas");
-  const ligneApres = db.prepare('SELECT nb_gd72, jours_zone, signature FROM fiche_lignes WHERE id = ?').get(ligne.id);
-  assert.equal(ligneApres.nb_gd72, 0, 'les primes ne se corrigent pas ici');
-  assert.equal(ligneApres.jours_zone, 0);
-  assert.ok(ligneApres.signature, 'la signature du salarie reste intacte');
-
-  // Et il ne peut pas valider : cela reste au directeur.
+  // Ce qui lui reste ferme : valider, et les montants.
   assert.equal((await paul.appeler('POST', `/api/fiches/${id}/decision`, { decision: 'valider' })).statut, 403);
+  assert.equal((await paul.appeler('PUT', `/api/fiches/${id}`, { chantier: 'Par la mauvaise porte' })).statut, 403);
+  assert.equal(db.prepare('SELECT chantier FROM fiches WHERE id = ?').get(id).chantier, 'Chantier visa corrige');
 });
 
 test('le conducteur renvoie la fiche au chef, avec son commentaire', async () => {
@@ -1225,4 +1257,49 @@ test('le calendrier des presences s ouvre au conducteur, la paie non', async () 
   assert.equal((await paul.appeler('POST', '/api/conges', { salarie_id: 1, debut: '2026-08-03', fin: '2026-08-07' })).statut, 403);
   assert.equal((await paul.appeler('GET', '/api/admin/conducteurs')).statut, 403);
   assert.equal((await paul.appeler('GET', '/api/admin/indicateurs')).statut, 403);
+});
+
+/*
+ * Ce que le conducteur a corrigé ne doit pas rester entre lui et la fiche.
+ *
+ * Les opérateurs ont signé une version du pointage, le directeur en valide une
+ * autre, et c'est le chef d'équipe qu'on interrogera si un montant surprend :
+ * les deux doivent pouvoir lire ce qui a bougé sans comparer deux écrans.
+ */
+test('le chef et le directeur voient ce que le conducteur a corrige', async () => {
+  const d = await connexion('dir', '9999');
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+
+  const paul = await conducteurConnecte(d, { nom: 'MOREAU Paul', courriel: 'paul@exemple.fr' });
+  const { id } = await ficheTransmise(a, 20, paul.id);
+
+  const vue = (await paul.appeler('GET', `/api/visa/fiche/${id}`)).corps.fiche;
+  const pointee = vue.lignes.find((l) => String(l.nom_affiche || '').trim());
+  await paul.appeler('PUT', `/api/visa/fiche/${id}`, {
+    lignes: vue.lignes.map((l) =>
+      l.id === pointee.id
+        ? { ...l, jours: l.jours.map((j) => (j.jour === 1 ? { ...j, minutes: 300 } : j)) }
+        : l
+    ),
+  });
+
+  // Le chef le voit sur son ecran d'accueil, sans avoir a ouvrir la fiche.
+  const sien = (await a('GET', '/api/mes-notifications')).corps;
+  assert.equal(sien.corrections.length, 1);
+  assert.equal(sien.corrections[0].auteur, 'MOREAU Paul');
+  assert.equal(sien.corrections[0].fiche_id, id);
+  assert.match(sien.corrections[0].detail, /Mardi : 7h30 → 5h00/);
+
+  // Le directeur le lit sur la fiche, au moment de valider.
+  const releve = (await d('GET', `/api/fiches/${id}`)).corps.fiche.journal
+    .find((e) => e.action === 'correction_conducteur');
+  assert.ok(releve, 'le releve doit accompagner la fiche');
+  assert.equal(releve.auteur, 'MOREAU Paul');
+  assert.match(releve.detail, /Mardi : 7h30 → 5h00/);
+
+  // Un autre chef ne voit rien de tout cela.
+  const b = await connexion('chefb', '2222');
+  assert.deepEqual((await b('GET', '/api/mes-notifications')).corps.corrections, []);
 });

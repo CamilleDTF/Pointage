@@ -650,3 +650,48 @@ input[readonly] { background: #f7f9fc; color: var(--gris-texte); }
   font-size: 0.86rem;
 }
 .bouton-lien:hover { background: var(--bleu-clair); }
+
+/* ------------------------- Ce qui appelle une action ---------------------- */
+
+/*
+ * Le bandeau d'accueil du chef d'equipe et les cartes du directeur : ce qui
+ * attend quelqu'un doit se voir avant qu'il ait a chercher. La couleur ne porte
+ * jamais l'information seule — un intitule la dit aussi, pour qui la distingue
+ * mal.
+ */
+.alerte-accueil {
+  border-left: 5px solid var(--orange);
+  background: #fff8ee;
+}
+.alerte-accueil h2 { color: #8a5300; }
+
+.notification {
+  padding: 10px 0;
+  border-top: 1px solid #f0e2cd;
+}
+.notification:first-child { border-top: none; }
+.notification .objet { font-weight: 600; font-size: 0.92rem; }
+.notification .detail {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--gris-texte);
+  white-space: pre-line;
+}
+
+/* Une carte d'indicateur qui reclame une action du directeur. */
+.indicateur.appel {
+  border-color: var(--orange);
+  background: #fff8ee;
+}
+.indicateur.appel .valeur { color: #8a5300; }
+
+/* Le releve des corrections d'un conducteur, sur la fiche du directeur. */
+.corrections-conducteur {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-left: 4px solid var(--orange);
+  background: #fff8ee;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.85rem;
+  white-space: pre-line;
+}

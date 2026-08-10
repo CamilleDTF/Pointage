@@ -90,6 +90,35 @@ function pointagesDeLaSemaine(fiche) {
   return parPersonne;
 }
 
+/** Le conducteur de travaux dont depend habituellement un chef d'equipe. */
+function conducteurDuChef(chefId) {
+  return db
+    .prepare(
+      `SELECT c.* FROM utilisateurs c
+         JOIN utilisateurs u ON u.conducteur_id = c.id
+        WHERE u.id = ? AND c.role = 'conducteur' AND c.actif = 1`
+    )
+    .get(chefId);
+}
+
+/**
+ * Le conducteur qui doit viser une fiche donnee.
+ *
+ * Le choix fait par le chef au moment de transmettre l'emporte : c'est lui qui
+ * sait sous quelle conduite s'est deroule le chantier de la semaine. Son
+ * rattachement habituel ne sert que de proposition, et de repli pour les fiches
+ * transmises avant que ce choix existe.
+ */
+function conducteurDeLaFiche(fiche) {
+  if (fiche && fiche.conducteur_id) {
+    const choisi = db
+      .prepare("SELECT * FROM utilisateurs WHERE id = ? AND role = 'conducteur' AND actif = 1")
+      .get(fiche.conducteur_id);
+    if (choisi) return choisi;
+  }
+  return conducteurDuChef(fiche ? fiche.chef_id : null);
+}
+
 const NB_LIGNES_FICHE = 11; // la fiche papier comporte 11 lignes de salaries (lignes 11 a 21).
 
 function normaliserLigne(brut, ordre) {
@@ -109,9 +138,17 @@ function normaliserLigne(brut, ordre) {
   const gd72 = Math.max(0, Math.round(Number(brut.nb_gd72) || 0));
   const gd80 = Math.max(0, Math.round(Number(brut.nb_gd80) || 0));
 
+  const nom = String(brut.nom_affiche || '').trim().slice(0, 120);
+
   return {
-    salarie_id: brut.salarie_id ? Number(brut.salarie_id) : null,
-    nom_affiche: String(brut.nom_affiche || '').trim().slice(0, 120),
+    /*
+     * Une ligne sans nom n'est rattachee a personne. Sans ce garde-fou, effacer
+     * un nom laisserait son numero de salarie accroche a la ligne vide : le
+     * suivant qu'on y inscrirait heriterait de son identite, et ses heures
+     * partiraient en paie sous le mauvais nom.
+     */
+    salarie_id: nom && brut.salarie_id ? Number(brut.salarie_id) : null,
+    nom_affiche: nom,
     ordre,
     minutes_route: Math.max(0, Math.round(Number(brut.minutes_route) || 0)),
     minutes_trajet: Math.max(0, Math.round(Number(brut.minutes_trajet) || 0)),
@@ -344,20 +381,132 @@ const CHAMPS_ENTETE = [
 ];
 
 /** Ecrit l'entete et remplace integralement les lignes. Renvoie la fiche a jour. */
+/*
+ * Ce qui a change d'une version de la fiche a l'autre, en francais.
+ *
+ * Un relevé, pas un journal technique : il sera lu par le directeur avant de
+ * valider, et par le chef d'equipe pour comprendre ce qu'on a corrige chez lui.
+ * D'ou des libelles de fiche papier — « Mardi », « jours en zone » — et des
+ * heures ecrites comme elles se saisissent.
+ */
+const LIBELLES_ENTETE = {
+  chantier: 'chantier',
+  ville: 'ville',
+  conducteur_vehicule: 'conducteur du véhicule',
+  type_vehicule: 'type de véhicule',
+  immatriculation: 'immatriculation',
+  observations_pointage: 'observations',
+  commentaire_responsable: 'commentaire du responsable',
+  nom_responsable: 'responsable de chantier',
+};
+
+const LIBELLES_LIGNE = {
+  minutes_route: ['route', D.versTexte],
+  minutes_trajet: ['trajet', D.versTexte],
+  jours_zone: ['jours en zone', String],
+  type_masque: ['masque', (v) => v || '—'],
+  nb_gd72: ['jours GD 72', String],
+  nb_gd80: ['jours GD 80', String],
+  observation: ['observation', (v) => v || '—'],
+};
+
+function comparerFiches(avant, apres) {
+  if (!avant || !apres) return [];
+  const changements = [];
+
+  for (const [champ, libelle] of Object.entries(LIBELLES_ENTETE)) {
+    if (String(avant[champ] || '') !== String(apres[champ] || '')) {
+      changements.push(`${libelle} : « ${avant[champ] || '—'} » → « ${apres[champ] || '—'} »`);
+    }
+  }
+
+  // Les lignes se comparent par personne : leur ordre peut changer, et une
+  // ligne ajoutee ou retiree n'est pas un decalage de toutes les suivantes.
+  const nommees = (fiche) => {
+    const parCle = new Map();
+    for (const l of fiche.lignes) {
+      if (!String(l.nom_affiche || '').trim()) continue;
+      /*
+       * Deux lignes peuvent porter la meme cle — un salarie saisi deux fois par
+       * megarde, ou un nom recopie sur une ligne libre. Sans ce suffixe, la
+       * seconde ecraserait la premiere et le releve comparerait deux personnes
+       * differentes l'une a l'autre : on lirait « X est passe de 7h30 a 7h00 »
+       * alors que ni l'un ni l'autre n'a bouge.
+       */
+      let cle = D.clePointage(l);
+      let occurrence = 2;
+      while (parCle.has(cle)) cle = `${D.clePointage(l)}#${occurrence++}`;
+      parCle.set(cle, l);
+    }
+    return parCle;
+  };
+  const lignesAvant = nommees(avant);
+  const lignesApres = nommees(apres);
+
+  for (const [cle, ligne] of lignesApres) {
+    const ancienne = lignesAvant.get(cle);
+    if (!ancienne) {
+      changements.push(`${ligne.nom_affiche} : ajouté à la fiche`);
+      continue;
+    }
+    for (let j = 0; j < 7; j += 1) {
+      const a = ancienne.jours.find((x) => x.jour === j) || {};
+      const b = ligne.jours.find((x) => x.jour === j) || {};
+      if ((a.minutes || 0) !== (b.minutes || 0)) {
+        changements.push(
+          `${ligne.nom_affiche} ${D.JOURS[j]} : ${D.versTexte(a.minutes || 0)} → ${D.versTexte(b.minutes || 0)}`
+        );
+      }
+      if (String(a.code_absence || '') !== String(b.code_absence || '')) {
+        changements.push(
+          `${ligne.nom_affiche} ${D.JOURS[j]} : absence « ${a.code_absence || '—'} » → « ${b.code_absence || '—'} »`
+        );
+      }
+    }
+    for (const [champ, [libelle, formater]] of Object.entries(LIBELLES_LIGNE)) {
+      if (String(ancienne[champ] || '') !== String(ligne[champ] || '')) {
+        changements.push(
+          `${ligne.nom_affiche} ${libelle} : ${formater(ancienne[champ] || 0)} → ${formater(ligne[champ] || 0)}`
+        );
+      }
+    }
+  }
+  for (const [cle, ligne] of lignesAvant) {
+    if (!lignesApres.has(cle)) changements.push(`${ligne.nom_affiche} : retiré de la fiche`);
+  }
+
+  return changements;
+}
+
 function enregistrerFiche(ficheId, corps, utilisateur) {
   const fiche = db.prepare('SELECT * FROM fiches WHERE id = ?').get(ficheId);
   if (!fiche) return { erreur: 'Fiche introuvable.', code: 404 };
 
   const estDirecteur = utilisateur.role === 'directeur';
-  if (!estDirecteur && fiche.chef_id !== utilisateur.id) {
+  const sien = conducteurDeLaFiche(fiche);
+  const estConducteur = utilisateur.role === 'conducteur' && sien && sien.id === utilisateur.id;
+
+  if (!estDirecteur && !estConducteur && fiche.chef_id !== utilisateur.id) {
     return { erreur: 'Cette fiche appartient a un autre chef d equipe.', code: 403 };
   }
-  if (!estDirecteur && !['brouillon', 'rejetee'].includes(fiche.statut)) {
+  /*
+   * Le conducteur controle le pointage : lui interdire de rectifier une erreur
+   * l'obligerait a renvoyer la fiche entiere au chef pour une virgule. Il
+   * corrige donc la fiche comme son auteur — mais seulement tant qu'elle attend
+   * SON visa. Une fois visee ou validee, elle lui echappe comme aux autres.
+   */
+  if (estConducteur && !(fiche.statut === 'soumise' && fiche.visa_statut === 'attente')) {
+    return { erreur: 'Cette fiche n attend plus votre visa : elle n est plus modifiable.', code: 409 };
+  }
+  if (!estDirecteur && !estConducteur && !['brouillon', 'rejetee'].includes(fiche.statut)) {
     return {
       erreur: 'Fiche deja transmise au directeur : elle n est plus modifiable. Demandez sa reouverture.',
       code: 409,
     };
   }
+
+  // Ce qu'on relira apres coup pour dire ce qui a change.
+  const avant = estConducteur ? obtenirFiche(ficheId) : null;
 
   // Une mise a jour qui ne porte que sur l entete ne touche pas aux lignes :
   // sans ce garde-fou, un PUT partiel effacerait toute la saisie de la semaine.
@@ -415,6 +564,18 @@ function enregistrerFiche(ficheId, corps, utilisateur) {
 
     if (estDirecteur && fiche.chef_id !== utilisateur.id) {
       journaliser(ficheId, utilisateur.id, 'correction_directeur', 'Fiche corrigee par le directeur');
+    }
+    if (estConducteur) {
+      /*
+       * Les operateurs ont signe une version du pointage. Corriger apres coup
+       * est le role meme du controle, mais cela decale leur signature de ce qui
+       * partira en paie : le directeur et le chef doivent pouvoir lire ce qui a
+       * bouge, sans avoir a comparer deux ecrans.
+       */
+      const changements = comparerFiches(avant, obtenirFiche(ficheId));
+      if (changements.length) {
+        journaliser(ficheId, utilisateur.id, 'correction_conducteur', changements.join(' ; ').slice(0, 2000));
+      }
     }
   });
 
@@ -590,6 +751,9 @@ module.exports = {
   salarieDuChef,
   equipeDuChef,
   obtenirFiche,
+  conducteurDuChef,
+  conducteurDeLaFiche,
+  comparerFiches,
   obtenirOuCreerFicheSemaine,
   fichesDeLaSemaine,
   ouvrirFicheSupplementaire,
