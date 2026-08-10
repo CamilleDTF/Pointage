@@ -1333,6 +1333,76 @@ test('le calendrier des presences s ouvre au conducteur, la paie non', async () 
  * autre, et c'est le chef d'équipe qu'on interrogera si un montant surprend :
  * les deux doivent pouvoir lire ce qui a bougé sans comparer deux écrans.
  */
+/*
+ * Le scenario de l'audit, par la vraie route du conducteur.
+ *
+ * L'operateur a signe 7h30 ; le conducteur corrige a 8h00. La signature ne peut
+ * pas suivre : elle attestait d'autre chose. Et remplacer la personne d'une
+ * ligne ne doit surtout pas lui transmettre la signature du precedent.
+ */
+test('corriger un pointage signe fait tomber la signature, elle ne migre jamais', async () => {
+  const d = await connexion('dir', '9999');
+  const a = await connexion('chefa', '1111');
+  db.exec('DELETE FROM fiches');
+  db.exec("DELETE FROM utilisateurs WHERE role = 'conducteur'");
+
+  const paul = await conducteurConnecte(d, { nom: 'MOREAU Paul', courriel: 'p@exemple.fr' });
+  const { id } = await ficheTransmise(a, 27, paul.id);
+
+  const avant = (await paul.appeler('GET', `/api/visa/fiche/${id}`)).corps.fiche;
+  const signee = avant.lignes.find((l) => l.nom_affiche === 'ANDRE Alain');
+  assert.ok(signee.signature, 'le depart : la ligne est bien signee');
+
+  // Le conducteur corrige les heures. Son ecran ne renvoie pas les signatures.
+  await paul.appeler('PUT', `/api/visa/fiche/${id}`, {
+    lignes: avant.lignes.map((l) =>
+      l.id === signee.id
+        ? { ...l, signature: undefined, jours: l.jours.map((j) => (j.jour === 0 ? { ...j, minutes: 480 } : j)) }
+        : { ...l, signature: undefined }
+    ),
+  });
+
+  const apres = (await paul.appeler('GET', `/api/visa/fiche/${id}`)).corps.fiche;
+  const corrigee = apres.lignes.find((l) => l.nom_affiche === 'ANDRE Alain');
+  assert.equal(corrigee.jours[0].minutes, 480);
+  // Le conducteur ne recoit jamais l'image, seulement sa presence.
+  assert.equal(corrigee.signature, false, 'ce n est plus ce que l operateur a signe');
+
+  // Le journal nomme celui qui doit re-signer.
+  const trace = db
+    .prepare("SELECT detail FROM journal WHERE fiche_id = ? AND action = 'signature_invalidee'")
+    .get(id);
+  assert.ok(trace, 'la perte est tracee');
+  assert.match(trace.detail, /ANDRE Alain/);
+
+  /*
+   * Et le cas qui donnait son nom au defaut : la ligne change de personne. La
+   * signature d'ANDRE ne doit pas se retrouver sous le nom de BERTIN.
+   */
+  const { id: second } = await ficheTransmise(a, 28, paul.id);
+  const fiche2 = (await paul.appeler('GET', `/api/visa/fiche/${second}`)).corps.fiche;
+  const premiere = fiche2.lignes.find((l) => l.nom_affiche === 'ANDRE Alain');
+  const bertin = db.prepare("SELECT id FROM salaries WHERE nom = 'BERTIN'").get();
+
+  await paul.appeler('PUT', `/api/visa/fiche/${second}`, {
+    lignes: fiche2.lignes.map((l) =>
+      l.id === premiere.id
+        ? { ...l, salarie_id: bertin.id, nom_affiche: 'BERTIN Bruno', signature: undefined }
+        : { ...l, signature: undefined }
+    ),
+  });
+
+  const remplacee = (await paul.appeler('GET', `/api/visa/fiche/${second}`)).corps.fiche.lignes[0];
+  assert.equal(remplacee.nom_affiche, 'BERTIN Bruno');
+  assert.equal(remplacee.signature, false, 'la signature d ANDRE ne devient pas celle de BERTIN');
+
+  // Et dans la base, la ou est la verite : plus aucune image sur cette ligne.
+  assert.equal(
+    db.prepare('SELECT signature FROM fiche_lignes WHERE fiche_id = ? ORDER BY ordre LIMIT 1').get(second).signature,
+    null
+  );
+});
+
 test('le chef et le directeur voient ce que le conducteur a corrige', async () => {
   const d = await connexion('dir', '9999');
   const a = await connexion('chefa', '1111');

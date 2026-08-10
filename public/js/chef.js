@@ -8,6 +8,8 @@
 let reference = null;
 let fiche = null;
 let signaturesLignes = [];
+// Le pad de chaque toile, pour pouvoir effacer un trace devenu caduc.
+const padsSignature = new WeakMap();
 let modifiable = true;
 let presentation = window.matchMedia('(min-width: 1024px)').matches ? 'tableau' : 'cartes';
 let differerEnregistrement = null;
@@ -748,6 +750,28 @@ function cablerLigne(conteneur, index) {
   libre.addEventListener('input', () => {
     if (etiquette) etiquette.textContent = libre.value || 'Ligne libre';
   });
+
+  /*
+   * Changer le nom d'une ligne efface sa signature.
+   *
+   * Une signature appartient a la personne qui l'a donnee, pas au rang de la
+   * ligne. Sans cela, reutiliser une ligne pour quelqu'un d'autre laissait la
+   * signature du precedent sous le nouveau nom — et la fiche affirmait qu'il
+   * avait signe des heures qu'il n'avait jamais vues. Le serveur applique la
+   * meme regle de son cote ; ici, c'est pour que le chef le voie tout de suite.
+   *
+   * Sur `change` et non sur `input` : on ne va pas effacer une signature a
+   * chaque lettre tapee pendant qu'il corrige un accent.
+   */
+  let nomSigne = libre.value.trim();
+  libre.addEventListener('change', () => {
+    if (libre.value.trim() === nomSigne) return;
+    nomSigne = libre.value.trim();
+    if (oublierSignature(index, conteneur)) {
+      message('Nom modifié : la signature de cette ligne est effacée, elle doit être reprise.', 'info', 6000);
+    }
+  });
+
   cablerCorrectionNom(conteneur);
 
   // Un code absence remet la journee a zero : les deux ne se cumulent pas.
@@ -777,6 +801,36 @@ function cablerLigne(conteneur, index) {
   cablerSignature(conteneur, index);
 }
 
+/**
+ * Retire la signature d'une ligne, a l'ecran comme dans le modele.
+ *
+ * Renvoie vrai s'il y avait bien une signature a retirer : l'appelant sait
+ * alors qu'il doit le dire, plutot que d'annoncer une perte qui n'a pas eu lieu.
+ */
+function oublierSignature(index, conteneur) {
+  if (!signaturesLignes[index]) return false;
+  signaturesLignes[index] = null;
+
+  const bouton = conteneur.querySelector('button.signer');
+  if (bouton) {
+    bouton.textContent = 'Signer';
+    bouton.classList.remove('valide');
+  }
+  const apercu = conteneur.querySelector('.apercu-signature');
+  if (apercu) apercu.innerHTML = '';
+
+  const toile = conteneur.querySelector('.toile-signature');
+  if (toile) {
+    toile.classList.remove('masque');
+    // Le trace aussi doit disparaitre : une case qui montre encore une
+    // signature dit le contraire de ce que la fiche enregistre, et c'est
+    // l'ecran que le chef croira.
+    const pad = padsSignature.get(toile);
+    if (pad) pad.effacer(false);
+  }
+  return true;
+}
+
 function cablerSignature(conteneur, index) {
   const bouton = conteneur.querySelector('button.signer');
   if (bouton) {
@@ -802,6 +856,9 @@ function cablerSignature(conteneur, index) {
     signaturesLignes[index] = image;
     enregistrerPlusTard();
   });
+  // Retrouve depuis oublierSignature() pour effacer le trace quand la signature
+  // cesse d'etre valable.
+  padsSignature.set(toile, pad);
   conteneur.querySelector('.effacer-signature').addEventListener('click', () => {
     if (!modifiable) return;
     apercu.innerHTML = '';
@@ -925,6 +982,35 @@ function collecter() {
   return corps;
 }
 
+/**
+ * Aligne l'ecran sur les signatures que le serveur a REELLEMENT gardees.
+ *
+ * C'est lui qui tranche : une signature ne survit pas a une modification des
+ * heures qu'elle couvrait. Sans cette remise a niveau, le bouton resterait au
+ * vert « Signée ✔ » alors que la fiche est repartie sans signature, et le chef
+ * transmettrait en croyant l'affaire close.
+ */
+function accorderSignatures(enregistree) {
+  if (!enregistree || !Array.isArray(enregistree.lignes)) return;
+  const tombees = [];
+
+  document.querySelectorAll('[data-ligne]').forEach((conteneur) => {
+    const index = Number(conteneur.dataset.ligne);
+    const ligne = enregistree.lignes[index];
+    if (!ligne || ligne.signature || !signaturesLignes[index]) return;
+    const nom = String(ligne.nom_affiche || '').trim();
+    if (oublierSignature(index, conteneur) && nom) tombees.push(nom);
+  });
+
+  if (tombees.length) {
+    message(
+      `Le pointage a changé : ${tombees.join(', ')} ${tombees.length > 1 ? 'doivent' : 'doit'} signer à nouveau.`,
+      'info',
+      8000
+    );
+  }
+}
+
 async function enregistrer() {
   if (!fiche || !modifiable) return;
   const corps = collecter();
@@ -949,6 +1035,7 @@ async function enregistrer() {
       onglet.chantier = fiche.chantier;
       afficherChantiers();
     }
+    accorderSignatures(reponse.fiche);
     afficherAnomalies(reponse.anomalies || []);
     $('etat-sauvegarde').textContent = `Enregistré à ${new Date().toLocaleTimeString('fr-FR')}`;
   } catch (e) {

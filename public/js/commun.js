@@ -147,10 +147,16 @@ function activerSignature(canvas, auChangement) {
   canvas.addEventListener('pointerleave', fin);
 
   return {
-    effacer() {
+    /*
+     * `prevenir` a faux efface le trace sans rappeler auChangement : c'est le
+     * cas quand ce n'est pas l'utilisateur qui efface, mais l'application qui
+     * constate qu'une signature ne vaut plus — le modele est deja a jour, et
+     * repasser par le rappel declencherait un enregistrement pour rien.
+     */
+    effacer(prevenir = true) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       vide = true;
-      if (auChangement) auChangement(null);
+      if (prevenir && auChangement) auChangement(null);
     },
     estVide: () => vide,
   };

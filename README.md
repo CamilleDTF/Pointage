@@ -263,6 +263,39 @@ est ailleurs — la validation finale, et les montants. Contrairement à l'écra
 qui enregistre au fil de la frappe, une correction est ici un **geste décidé** : rien ne
 part tant qu'il n'a pas cliqué.
 
+### Une signature ne vaut que pour ce qu'elle a signé
+
+Une signature d'opérateur ne valait auparavant que la **position** de sa ligne : lors
+d'une réécriture, le serveur la reprenait par rang. Remplacer le nom de la ligne 3
+suffisait donc à faire glisser la signature du précédent sous le nom du suivant, et la
+fiche affirmait alors qu'il avait signé des heures qu'il n'avait jamais vues. Une
+signature qui survit à ce qu'elle signe est pire que pas de signature du tout : elle
+affirme.
+
+Chaque signature est donc enregistrée avec **de qui** elle est et **ce qu'elle
+atteste** — les sept journées, la route, le trajet, les jours en zone, le masque, les
+grands déplacements, l'observation (`signature_cle` et `signature_empreinte`). Dès que
+l'un des deux cesse de correspondre, **la signature tombe** et l'opérateur doit signer à
+nouveau.
+
+| Ce qui se passe | La signature |
+|---|---|
+| La ligne change de place sur la feuille | **reste** — signer n'a rien à voir avec un rang |
+| Une heure, une zone, un masque, un GD change | **tombe** — ce n'est plus ce qui a été signé |
+| La ligne change de personne | **tombe** — elle n'a jamais été à celle-là |
+| L'opérateur re-signe après correction | **vaut**, pour le contenu du jour |
+
+La règle est appliquée **côté serveur**, quel que soit l'écran : le chef, le conducteur
+et le directeur y sont soumis de la même façon. Renvoyer l'image d'une signature déjà
+connue ne la revalide pas — c'est un report, et un report ne tient que si rien n'a
+bougé. Le chef le voit immédiatement : le tracé s'efface et un message nomme qui doit
+re-signer. Le journal en garde la trace (`signature_invalidee`), et les écrans du
+conducteur et du directeur affichent la colonne signature en ✘.
+
+Les fiches saisies **avant** cette règle n'ont pas d'empreinte : on ne peut pas
+reconstruire après coup ce que quelqu'un a signé, et le prétendre serait pire que de
+l'admettre. Leur signature tombe donc à la première réécriture.
+
 ### Ce qui a changé se lit, des deux côtés
 
 Les opérateurs ont signé une version du pointage ; le directeur en valide une autre.
@@ -722,6 +755,7 @@ test/
   migration-conducteurs.test.js  Les conducteurs deviennent des comptes sans perdre une fiche
   semaine-partagee.test.js  Un operateur sur deux chantiers : plafonds et primes de la semaine
   non-productif.test.js Le mois à 7 h par jour, ses écarts, ses primes
+  signatures.test.js    Une signature ne survit ni au changement de personne ni à celui du pointage
   paie-non-productif.test.js  Leur valorisation : mensualisation, majorations, indemnités
 scripts/
   tester-courriel.js    Essai d'envoi, et diagnostic des réglages SMTP

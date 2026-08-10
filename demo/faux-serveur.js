@@ -542,6 +542,48 @@
     };
   }
 
+  /*
+   * Ce qu'une signature couvre — meme regle que server/fiches.js.
+   *
+   * Une signature vaut pour une personne et pour un contenu. On la reprend donc
+   * par identite, jamais par rang, et seulement si rien de ce qu'elle couvrait
+   * n'a bouge. Ici l'empreinte n'est pas hachee : tout tient en memoire, et la
+   * chaine se compare aussi bien.
+   */
+  const CHAMPS_SIGNES = [
+    'minutes_route', 'minutes_trajet', 'jours_zone', 'type_masque',
+    'nb_gd72', 'nb_gd80', 'observation',
+  ];
+
+  function empreinteLigne(ligne) {
+    const jours = Array.from({ length: 7 }, (_, j) => {
+      const jour = (ligne.jours || []).find((x) => Number(x.jour) === j) || {};
+      return `${Number(jour.minutes) || 0}:${String(jour.code_absence || '').toUpperCase()}`;
+    });
+    return [R.clePointage(ligne), ...jours, ...CHAMPS_SIGNES.map((c) => `${c}=${ligne[c] ?? ''}`)].join('|');
+  }
+
+  function signatureRetenue(recue, enregistree, avant) {
+    if (!enregistree.nom_affiche) return null;
+    const empreinte = empreinteLigne(enregistree);
+    const ancienne = avant.get(R.clePointage(enregistree));
+
+    // Une image inconnue : quelqu'un vient de signer ce qui s'ecrit.
+    const image = recue.signature;
+    if (typeof image === 'string' && image.startsWith('data:image/') && (!ancienne || image !== ancienne.signature)) {
+      enregistree.signature_empreinte = empreinte;
+      return image;
+    }
+    if (image === null || image === '' || !ancienne) return null;
+
+    // Report : il ne tient que si le contenu signe n'a pas bouge.
+    if (ancienne.signature_empreinte && ancienne.signature_empreinte === empreinte) {
+      enregistree.signature_empreinte = empreinte;
+      return ancienne.signature;
+    }
+    return null;
+  }
+
   function exigerConnexion() {
     if (!session) erreur(401, 'Session expirée, reconnectez-vous.');
     return session;
@@ -957,29 +999,42 @@
 
       // Comme sur le serveur : les lignes ne sont remplacees que si elles sont transmises.
       if (Array.isArray(corps.lignes)) {
-        fiche.lignes = corps.lignes.slice(0, R.NB_LIGNES_FICHE).map((ligne, i) => ({
-          id: `${fiche.id}-${i}`,
-          salarie_id: ligne.salarie_id || null,
-          nom_affiche: String(ligne.nom_affiche || '').trim(),
-          ordre: i,
-          minutes_route: Number(ligne.minutes_route) || 0,
-          minutes_trajet: Number(ligne.minutes_trajet) || 0,
-          jours_zone: Number(ligne.jours_zone) || 0,
-          type_masque: ligne.type_masque || '',
-          nb_deplacement: Number(ligne.nb_deplacement) || 0,
-          observation: String(ligne.observation || ''),
-          signature: ligne.signature === undefined ? (fiche.lignes[i] || {}).signature || null : ligne.signature,
-          jours: Array.from({ length: 7 }, (_, j) => {
-            const source = (ligne.jours || []).find((x) => Number(x.jour) === j) || {};
-            const minutes = Number(source.minutes) || 0;
-            return {
-              jour: j,
-              minutes,
-              code_absence: String(source.code_absence || '').toUpperCase(),
-              saisi: source.saisi || minutes > 0 ? 1 : 0,
-            };
-          }),
-        }));
+        // Les signatures deja donnees, retrouvees par personne et non par rang.
+        const avant = new Map();
+        for (const ancienne of fiche.lignes || []) {
+          if (ancienne.signature) avant.set(R.clePointage(ancienne), ancienne);
+        }
+
+        fiche.lignes = corps.lignes.slice(0, R.NB_LIGNES_FICHE).map((ligne, i) => {
+          const gd72 = Number(ligne.nb_gd72) || 0;
+          const gd80 = Number(ligne.nb_gd80) || 0;
+          const enregistree = {
+            id: `${fiche.id}-${i}`,
+            salarie_id: ligne.nom_affiche && ligne.salarie_id ? ligne.salarie_id : null,
+            nom_affiche: String(ligne.nom_affiche || '').trim(),
+            ordre: i,
+            minutes_route: Number(ligne.minutes_route) || 0,
+            minutes_trajet: Number(ligne.minutes_trajet) || 0,
+            jours_zone: Number(ligne.jours_zone) || 0,
+            type_masque: ligne.type_masque || '',
+            nb_gd72: gd72,
+            nb_gd80: gd80,
+            nb_deplacement: gd72 + gd80 || Number(ligne.nb_deplacement) || 0,
+            observation: String(ligne.observation || ''),
+            jours: Array.from({ length: 7 }, (_, j) => {
+              const source = (ligne.jours || []).find((x) => Number(x.jour) === j) || {};
+              const minutes = Number(source.minutes) || 0;
+              return {
+                jour: j,
+                minutes,
+                code_absence: String(source.code_absence || '').toUpperCase(),
+                saisi: source.saisi || minutes > 0 ? 1 : 0,
+              };
+            }),
+          };
+          enregistree.signature = signatureRetenue(ligne, enregistree, avant);
+          return enregistree;
+        });
       }
 
       const complet = enrichir(fiche);

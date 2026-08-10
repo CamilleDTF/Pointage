@@ -486,6 +486,27 @@ retirerColonne('fiches', 'visa_jeton');
 ajouterColonne('fiche_lignes', 'nb_gd72', 'INTEGER NOT NULL DEFAULT 0');
 ajouterColonne('fiche_lignes', 'nb_gd80', 'INTEGER NOT NULL DEFAULT 0');
 
+/*
+ * Ce qu'une signature couvre.
+ *
+ * Une signature ne valait rien de plus que la position de sa ligne : on la
+ * reprenait par rang lors d'une reecriture, si bien qu'en remplacant le nom de
+ * la ligne 3, la signature de la personne precedente restait accrochee a la
+ * suivante. Une signature doit dire DE QUI elle est et CE QU'elle atteste.
+ *
+ * `signature_cle` porte l'identite signee — le meme identifiant que les
+ * controles — et `signature_empreinte` un condense du contenu signe : heures,
+ * absences, route, trajet, zone, masque, grands deplacements, observation. Des
+ * que l'un des deux cesse de correspondre, la signature tombe.
+ *
+ * Les lignes d'avant la migration ont une empreinte vide : on ne peut pas
+ * reconstruire apres coup ce que quelqu'un a signe, et pretendre le savoir
+ * serait pire que de l'admettre. Leur signature tombera donc a la premiere
+ * reecriture de la fiche.
+ */
+ajouterColonne('fiche_lignes', 'signature_cle', "TEXT NOT NULL DEFAULT ''");
+ajouterColonne('fiche_lignes', 'signature_empreinte', "TEXT NOT NULL DEFAULT ''");
+
 const PARC_INITIAL = [
   ['GR-686-YM', 'Renault', 'Trafic', 'Diesel'],
   ['GR-714-YM', 'Renault', 'Trafic', 'Diesel'],

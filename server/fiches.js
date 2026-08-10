@@ -1,7 +1,47 @@
 'use strict';
 
+const crypto = require('node:crypto');
+
 const { db, journaliser } = require('./db');
 const D = require('./domaine');
+
+/* ------------------------- Ce qu'une signature couvre ---------------------- */
+
+/*
+ * Une signature d'operateur atteste d'un contenu, pour une personne.
+ *
+ * Elle ne valait auparavant que la POSITION de sa ligne : lors d'une reecriture,
+ * on la reprenait par rang. Remplacer le nom de la ligne 3 suffisait donc a
+ * transporter la signature de la personne precedente sur la suivante, et rien a
+ * l'ecran ne le disait. Une signature qui survit a ce qu'elle signe ne prouve
+ * plus rien — c'est meme pire que pas de signature du tout, puisqu'elle affirme.
+ *
+ * D'ou deux valeurs enregistrees avec elle : l'identite signee, et l'empreinte
+ * du contenu signe. Si l'une des deux cesse de correspondre, la signature tombe,
+ * et l'operateur doit signer a nouveau.
+ */
+const CHAMPS_SIGNES = [
+  'minutes_route', 'minutes_trajet', 'jours_zone', 'type_masque',
+  'nb_gd72', 'nb_gd80', 'observation',
+];
+
+/**
+ * Le condense de ce qu'une personne a signe : ses sept journees, et les valeurs
+ * de sa ligne. Ni l'ordre des lignes ni l'en-tete de la fiche n'en font partie —
+ * deplacer une ligne ne change rien a ce qui a ete signe.
+ */
+function empreinteLigne(ligne) {
+  const jours = [];
+  for (let j = 0; j < 7; j += 1) {
+    const jour = (ligne.jours || []).find((x) => Number(x.jour) === j) || {};
+    jours.push(`${Number(jour.minutes) || 0}:${String(jour.code_absence || '').toUpperCase()}`);
+  }
+  const champs = CHAMPS_SIGNES.map((c) => `${c}=${String(ligne[c] ?? '')}`);
+  return crypto
+    .createHash('sha256')
+    .update([D.clePointage(ligne), ...jours, ...champs].join('|'))
+    .digest('hex');
+}
 
 /*
  * Ce que les regles ne peuvent pas savoir en regardant une seule fiche.
@@ -480,6 +520,49 @@ function comparerFiches(avant, apres) {
   return changements;
 }
 
+/**
+ * Ce que devient la signature d'une ligne qu'on reecrit.
+ *
+ * Trois situations, et une seule regle : une signature ne vaut que pour la
+ * personne qui l'a donnee et pour le contenu qu'elle avait sous les yeux.
+ *
+ *   - une image nouvelle          -> quelqu'un vient de signer ce qui s'ecrit ;
+ *   - la meme image qu'avant      -> report : encore faut-il que rien n'ait bouge ;
+ *   - rien, ou explicitement vide -> pas de signature.
+ *
+ * Le report est le cas dangereux : c'est celui que le client declenche sans le
+ * vouloir, en renvoyant ce qu'il avait recu. On ne le distingue d'une signature
+ * neuve qu'en le comparant a ce qui est enregistre, jamais sur parole.
+ */
+function signatureDeLaLigne(ligne, anciennes, perdues) {
+  const vide = { signature: null, signature_cle: '', signature_empreinte: '' };
+  if (!ligne.nom_affiche) return vide;
+
+  const cle = D.clePointage(ligne);
+  const empreinte = empreinteLigne(ligne);
+  const ancienne = anciennes.get(cle);
+  const recue = ligne.signature;
+
+  // Une image qu'on ne connaissait pas : elle signe ce qui s'ecrit maintenant.
+  if (typeof recue === 'string' && recue.startsWith('data:image/') && (!ancienne || recue !== ancienne.signature)) {
+    return { signature: recue, signature_cle: cle, signature_empreinte: empreinte };
+  }
+
+  // Effacee volontairement : rien a signaler, c'est une decision.
+  if (recue === null || recue === '') return vide;
+  if (!ancienne) return vide;
+
+  // Report : il ne tient que si le contenu signe est reste identique. Une
+  // empreinte vide vient d'avant la migration — on ne sait pas ce qui a ete
+  // signe, donc on ne peut pas l'affirmer.
+  if (ancienne.signature_empreinte && ancienne.signature_empreinte === empreinte) {
+    return { signature: ancienne.signature, signature_cle: cle, signature_empreinte: empreinte };
+  }
+
+  perdues.push(ligne.nom_affiche);
+  return vide;
+}
+
 function enregistrerFiche(ficheId, corps, utilisateur) {
   const fiche = db.prepare('SELECT * FROM fiches WHERE id = ?').get(ficheId);
   if (!fiche) return { erreur: 'Fiche introuvable.', code: 404 };
@@ -538,30 +621,59 @@ function enregistrerFiche(ficheId, corps, utilisateur) {
     }
 
     if (remplacerLignes) {
-      const anciennes = db
-        .prepare('SELECT id, signature FROM fiche_lignes WHERE fiche_id = ? ORDER BY ordre, id')
-        .all(ficheId);
+      /*
+       * Les signatures existantes se retrouvent par IDENTITE, pas par rang :
+       * c'est de la personne qu'une signature est, et sa place sur la feuille
+       * peut changer sans qu'elle ait rien signe de nouveau.
+       */
+      const anciennes = new Map();
+      for (const ancienne of db
+        .prepare(
+          `SELECT salarie_id, nom_affiche, signature, signature_cle, signature_empreinte
+             FROM fiche_lignes WHERE fiche_id = ? AND signature IS NOT NULL AND signature <> ''`
+        )
+        .all(ficheId)) {
+        // Les lignes d'avant la migration n'ont pas de cle enregistree : on la
+        // deduit de la ligne elle-meme, faute de quoi renvoyer l'image d'une
+        // ancienne signature suffirait a la faire passer pour une signature
+        // neuve, donnee sur le contenu du jour.
+        anciennes.set(ancienne.signature_cle || D.clePointage(ancienne), ancienne);
+      }
       db.prepare('DELETE FROM fiche_lignes WHERE fiche_id = ?').run(ficheId);
 
       const insLigne = db.prepare(
         `INSERT INTO fiche_lignes
            (fiche_id, salarie_id, nom_affiche, ordre, minutes_route, minutes_trajet,
-            jours_zone, type_masque, nb_deplacement, nb_gd72, nb_gd80, observation, signature)
+            jours_zone, type_masque, nb_deplacement, nb_gd72, nb_gd80, observation,
+            signature, signature_cle, signature_empreinte)
          VALUES (@fiche_id, @salarie_id, @nom_affiche, @ordre, @minutes_route, @minutes_trajet,
-                 @jours_zone, @type_masque, @nb_deplacement, @nb_gd72, @nb_gd80, @observation, @signature)`
+                 @jours_zone, @type_masque, @nb_deplacement, @nb_gd72, @nb_gd80, @observation,
+                 @signature, @signature_cle, @signature_empreinte)`
       );
       const insJour = db.prepare(
         'INSERT INTO fiche_jours (ligne_id, jour, minutes, code_absence, saisi) VALUES (?, ?, ?, ?, ?)'
       );
 
-      lignes.forEach((ligne, i) => {
-        // signature === undefined : le client ne l a pas renvoyee, on conserve l existante.
-        const signature = ligne.signature === undefined ? (anciennes[i] || {}).signature ?? null : ligne.signature;
-        const r = insLigne.run({ ...ligne, fiche_id: ficheId, signature });
+      const perdues = [];
+      lignes.forEach((ligne) => {
+        const r = insLigne.run({ ...ligne, fiche_id: ficheId, ...signatureDeLaLigne(ligne, anciennes, perdues) });
         for (const jour of ligne.jours) {
           insJour.run(r.lastInsertRowid, jour.jour, jour.minutes, jour.code_absence, jour.saisi);
         }
       });
+
+      /*
+       * Une signature tombee doit se lire, pas se deviner. Le chef verra le
+       * bouton redemander une signature ; le journal dit pourquoi, et pour qui.
+       */
+      if (perdues.length) {
+        journaliser(
+          ficheId,
+          utilisateur.id,
+          'signature_invalidee',
+          `${perdues.join(' ; ')} — le pointage signé a changé, signature à reprendre`.slice(0, 2000)
+        );
+      }
     }
 
     if (estDirecteur && fiche.chef_id !== utilisateur.id) {
