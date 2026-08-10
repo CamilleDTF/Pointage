@@ -623,6 +623,15 @@ input[readonly] { background: #f7f9fc; color: var(--gris-texte); }
 .case-jour.weekend     { background: #f0f2f5; }
 .case-jour.horsService { background: #fafbfc; }
 
+/*
+ * Deux etats propres au personnel non productif : un grand deplacement, et une
+ * journee dont les heures ne sont pas celles de la regle. Ils se distinguent des
+ * autres par la couleur, mais la case porte aussi son chiffre — le taux du GD,
+ * les heures reelles — pour qui lit mal les nuances.
+ */
+.case-jour.gd      { background: #efe6fa; color: #4a2c85; font-weight: 600; }
+.case-jour.partiel { background: #fdf6d8; color: #7a5c00; font-weight: 600; }
+
 .calendrier-mois .total-mois {
   position: sticky;
   right: 0;

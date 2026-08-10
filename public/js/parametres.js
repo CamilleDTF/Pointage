@@ -45,7 +45,7 @@ surClic('btn-retour', () => { location.href = '/directeur.html'; });
 surClic('btn-quitter', deconnexion);
 
 /* Les quatre volets de l'ecran Parametres. */
-const PANNEAUX = ['effectif', 'comptes', 'conducteurs', 'vehicules', 'indicateurs'];
+const PANNEAUX = ['effectif', 'nonproductif', 'comptes', 'conducteurs', 'vehicules', 'indicateurs'];
 
 surEvenement('onglets-parametres', 'click', (e) => {
   const onglet = e.target.closest('.onglet');
@@ -61,6 +61,7 @@ function ouvrirPanneau(nom) {
   document.querySelectorAll('#onglets-parametres .onglet').forEach((o) => {
     o.classList.toggle('actif', o.dataset.onglet === nom);
   });
+  if (nom === 'nonproductif') chargerNonProductifs();
   if (nom === 'conducteurs') chargerConducteurs();
   if (nom === 'vehicules') chargerVehicules();
   if (nom === 'indicateurs') chargerIndicateurs();
@@ -105,6 +106,57 @@ window.corrigerVehicule = async (id, champ, valeur, element) => {
     message(e.message, 'erreur');
   }
 };
+
+/* -------------------------- Personnel non productif ------------------------ */
+
+/*
+ * Meme table que l'effectif de chantier, meme facon de le corriger : c'est le
+ * meme registre du personnel, separe par un seul indicateur. Ce qui change est
+ * ailleurs — ils n'ont pas de chef d'equipe, et leur mois se tient sur un autre
+ * ecran.
+ */
+async function chargerNonProductifs() {
+  const table = $('table-nonproductifs');
+  if (!table) return;
+  const { salaries } = await API.get('/api/admin/non-productifs');
+
+  table.querySelector('tbody').innerHTML = salaries.length
+    ? salaries
+        .map(
+          (s) => `<tr style="${s.actif ? '' : 'opacity:.5'}">
+            <td><input value="${echapper(s.matricule || '')}" style="width:100px"
+                       onchange="corrigerSalarie(${s.id}, 'matricule', this.value, this)"></td>
+            <td><input value="${echapper(s.nom)}" style="width:150px"
+                       onchange="corrigerSalarie(${s.id}, 'nom', this.value, this)"></td>
+            <td><input value="${echapper(s.prenom)}" style="width:130px"
+                       onchange="corrigerSalarie(${s.id}, 'prenom', this.value, this)"></td>
+            <td class="num"><input type="number" min="0" step="0.01" style="width:100px"
+                       value="${s.taux_horaire || ''}" placeholder="—"
+                       onchange="fixerTaux(${s.id}, this.value)"></td>
+            <td><button class="petit" onclick="basculerSalarie(${s.id}, ${s.actif ? 0 : 1})">${
+              s.actif ? 'Désactiver' : 'Réactiver'
+            }</button></td>
+          </tr>`
+        )
+        .join('')
+    : '<tr><td colspan="5" class="vide">Aucune personne enregistrée.</td></tr>';
+}
+
+surClic('btn-ajout-nonproductif', async () => {
+  try {
+    await API.post('/api/admin/salaries', {
+      matricule: $('np-matricule').value,
+      nom: $('np-nom').value.toUpperCase(),
+      prenom: $('np-prenom').value,
+      productif: 0,
+    });
+    for (const id of ['np-matricule', 'np-nom', 'np-prenom']) $(id).value = '';
+    await chargerNonProductifs();
+    message('Personne ajoutée.', 'succes');
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
+});
 
 /* --------------------------- Conducteurs de travaux ------------------------ */
 
@@ -433,7 +485,9 @@ window.fixerTaux = async (id, valeur) => {
 
 window.basculerSalarie = async (id, actif) => {
   await API.put(`/api/admin/salaries/${id}`, { actif });
-  await chargerAdmin();
+  // Le meme bouton sert aux deux populations : on rafraichit la liste ouverte.
+  const nonProductif = !$('panneau-nonproductif').classList.contains('masque');
+  await (nonProductif ? chargerNonProductifs() : chargerAdmin());
 };
 
 surClic('btn-ajout-chef', async () => {

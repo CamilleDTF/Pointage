@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10416b">
+  <title>Pointage — Personnel non productif</title>
+  <link rel="icon" href="/icone.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="appbar">
+    <div class="titre">
+      Personnel non productif — Direction
+      <small id="entete-nom">…</small>
+    </div>
+    <button class="petit" id="btn-retour" type="button">◀ Tableau de bord</button>
+    <button class="petit" id="btn-quitter" type="button">Quitter</button>
+  </header>
+
+  <main>
+    <section class="carte">
+      <div class="rangee">
+        <div style="width:150px">
+          <label for="mois">Mois</label>
+          <select id="mois"></select>
+        </div>
+        <div style="width:110px">
+          <label for="annee">Année</label>
+          <input id="annee" type="number" min="2020" max="2100" step="1">
+        </div>
+        <button class="petit" id="btn-precedent" type="button">◀ Précédent</button>
+        <button class="petit" id="btn-suivant" type="button">Suivant ▶</button>
+      </div>
+      <p class="aide" id="resume-mois"></p>
+    </section>
+
+    <section class="carte">
+      <div id="calendrier-np"></div>
+      <div class="legende-annee" id="legende-np"></div>
+      <p class="aide" style="margin-top:10px">
+        Ils sont à <strong>7 h par jour ouvré</strong> : il n'y a rien à saisir pour un mois
+        ordinaire. <strong>Cliquez sur une case</strong> pour déclarer ce qui s'en écarte —
+        une absence, un grand déplacement, ou des heures particulières.
+      </p>
+      <p class="aide">
+        Les congés enregistrés depuis le <strong>calendrier du mois</strong> apparaissent ici
+        aussi : ils n'ont pas à être ressaisis.
+      </p>
+    </section>
+
+    <section class="carte">
+      <h2>Totaux du mois</h2>
+      <div class="enveloppe-table"><table id="table-totaux">
+        <thead><tr>
+          <th>Nom</th><th>Prénom</th>
+          <th class="num">Jours travaillés</th>
+          <th class="num">Heures</th>
+          <th class="num">Absences</th>
+          <th class="num">GD 72</th>
+          <th class="num">GD 80</th>
+          <th class="num">Primes</th>
+          <th>Détail des primes</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p class="aide" style="margin-top:10px">
+        Les heures sont comptées à 7 h par jour travaillé. Une prime se saisit depuis le
+        bouton de la colonne <strong>Primes</strong>.
+      </p>
+    </section>
+  </main>
+
+  <script src="/js/regles.js"></script>
+  <script src="/js/commun.js"></script>
+  <script src="/js/non-productif.js"></script>
+</body>
+</html>

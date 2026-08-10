@@ -393,6 +393,58 @@ ajouterColonne('fiches', 'premiere_soumission_le', 'TEXT');
 ajouterColonne('fiches', 'conducteur_id', 'INTEGER REFERENCES utilisateurs(id) ON DELETE SET NULL');
 
 /*
+ * Deux populations dans le meme registre du personnel.
+ *
+ * Le personnel « non productif » — administratif, encadrement, atelier — ne
+ * figure sur aucune fiche de chantier : il n'a ni chef d'equipe, ni pointage
+ * hebdomadaire. Sa paie se prepare pourtant de la meme facon, et le directeur en
+ * a besoin. Plutot qu'un second registre a tenir en parallele, un indicateur :
+ * meme table, meme matricule, meme taux horaire, deux ecrans differents.
+ *
+ * Par defaut tout le monde est productif — c'est ce qu'etaient les salaries
+ * existants au moment ou cette colonne apparait.
+ */
+ajouterColonne('salaries', 'productif', 'INTEGER NOT NULL DEFAULT 1');
+
+/*
+ * Le pointage du personnel non productif : uniquement ce qui s'ecarte de
+ * l'ordinaire.
+ *
+ * Ils sont a 7 h par jour ouvre, et ce sont les exceptions qui se declarent —
+ * une absence, un grand deplacement. Une journee ordinaire ne laisse donc
+ * aucune ligne : la table ne grossit que de ce qui merite d'etre dit, et un mois
+ * sans histoire ne coute rien.
+ */
+db.exec(`
+CREATE TABLE IF NOT EXISTS jours_non_productifs (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  salarie_id   INTEGER NOT NULL REFERENCES salaries(id) ON DELETE CASCADE,
+  date         TEXT    NOT NULL,
+  code_absence TEXT    NOT NULL DEFAULT '',
+  minutes      INTEGER NOT NULL DEFAULT 0,
+  gd           TEXT    NOT NULL DEFAULT '',
+  UNIQUE (salarie_id, date)
+);
+
+/*
+ * Primes du personnel non productif : un montant, un motif, un mois. Elles ne se
+ * deduisent d'aucune regle — c'est une decision, et une decision se note.
+ */
+CREATE TABLE IF NOT EXISTS primes_non_productifs (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  salarie_id INTEGER NOT NULL REFERENCES salaries(id) ON DELETE CASCADE,
+  annee      INTEGER NOT NULL,
+  mois       INTEGER NOT NULL,
+  libelle    TEXT    NOT NULL DEFAULT '',
+  montant    REAL    NOT NULL DEFAULT 0,
+  cree_le    TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_jnp_salarie ON jours_non_productifs(salarie_id, date);
+CREATE INDEX IF NOT EXISTS idx_pnp_mois    ON primes_non_productifs(salarie_id, annee, mois);
+`);
+
+/*
  * Adresse et telephone d'un conducteur de travaux, sur son compte.
  *
  * Le courriel lui annonce qu'une fiche l'attend ; le telephone permet au chef

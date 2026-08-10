@@ -159,6 +159,42 @@ Le plafond de 48 h se compte sur **toutes** les fiches de la semaine, y compris 
 d'un autre chef — c'est la semaine d'un homme, pas celle d'une équipe — mais seuls les
 chantiers du chef lui-même sont nommés dans les messages.
 
+## Le personnel non productif
+
+Administratif, encadrement, atelier : ceux qui ne figurent sur **aucune fiche de
+chantier**. Ils n'ont ni chef d'équipe, ni pointage hebdomadaire — mais leur paie se
+prépare de la même façon, et la direction en a besoin. D'où un second calendrier,
+*Personnel non productif*, ouvert depuis le tableau de bord.
+
+Leur règle est plus simple : **7 h par jour ouvré**. C'est elle qui commande l'écran —
+**un mois ordinaire ne demande aucune saisie**. Sans rien déclarer, chacun est déjà à
+147 h en août 2026, et rien n'est écrit en base. Si tenir ce calendrier supposait vingt
+et un clics par personne et par mois pour dire que rien ne s'est passé, personne ne le
+tiendrait plus d'un mois.
+
+Ce sont donc les **écarts** qui se saisissent, d'un clic sur la case du jour :
+
+| | |
+|---|---|
+| **Absence** | Les mêmes codes que sur la fiche de chantier. La journée tombe à zéro. |
+| **Grand déplacement** | GD 72 ou GD 80. La journée reste travaillée — on se déplace en travaillant. |
+| **Heures particulières** | Une demi-journée, une heure de plus : la case porte alors le chiffre réel. |
+| **Prime** | Un montant et un motif, par personne et par mois. Elle ne se déduit d'aucune règle : c'est une décision, et une décision se note. |
+
+Revenir à l'ordinaire **efface** la déclaration plutôt que d'enregistrer un état « rien
+de spécial » : l'absence de ligne est déjà la façon de dire qu'il ne s'est rien passé,
+et deux façons de dire la même chose finissent toujours par diverger.
+
+Les **congés** saisis depuis le calendrier des équipes apparaissent ici aussi — ils
+n'ont pas à être ressaisis. Une déclaration faite sur cet écran l'emporte sur eux : qui
+saisit sait ce qu'il fait, et ne doit pas voir sa saisie silencieusement recouverte.
+
+La liste se tient dans *Paramètres ▸ Personnel non productif*, exactement comme
+l'effectif de chantier — même table, même matricule, même taux horaire. Un seul
+indicateur (`salaries.productif`) sépare les deux populations, et il est filtré partout
+où l'effectif de chantier est lu : un administratif n'apparaît jamais sur une fiche, dans
+une équipe, ni dans le calendrier des chantiers.
+
 ## Le circuit d'une fiche
 
 ```
@@ -625,6 +661,7 @@ server/
   export-mensuel.js  Le classeur mensuel, versions publique et direction
   indicateurs.js Suivi des chefs : assiduité, retards, fiches renvoyées
   calendrier.js Vue mensuelle par personne, et registre des congés
+  non-productif.js  Le mois du personnel non productif : 7 h par jour, et ses écarts
   visa.js       Espace du conducteur : ses fiches, visa, renvoi
   alerte.js     Message prévenant le conducteur (SMS, WhatsApp, courriel) — sans aucun lien
   courriel.js   Envoi SMTP, et dépôt sur disque à défaut de serveur d'envoi
@@ -638,6 +675,7 @@ public/
   parametres.html Paramètres direction + js/parametres.js
   mensuel.html    Tableau mensuel      + js/mensuel.js
   calendrier.html Calendrier du mois   + js/calendrier.js
+  non-productif.html  Personnel non productif + js/non-productif.js
   conducteur.html Ses fiches à viser   + js/conducteur.js
   visa.html       Une fiche à viser     + js/visa.js
   js/regles.js  Règles métier partagées avec le serveur (heures, semaines, contrôles)
@@ -655,6 +693,7 @@ test/
   alerte.test.js        Le message envoyé par le chef ne porte ni lien ni secret
   migration-conducteurs.test.js  Les conducteurs deviennent des comptes sans perdre une fiche
   semaine-partagee.test.js  Un operateur sur deux chantiers : plafonds et primes de la semaine
+  non-productif.test.js Le mois à 7 h par jour, ses écarts, ses primes
 scripts/
   tester-courriel.js    Essai d'envoi, et diagnostic des réglages SMTP
   importer-effectif.js  Chargement de l'effectif depuis le tableau d'affectation

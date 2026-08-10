@@ -108,6 +108,19 @@
     { code: 'AUT', libelle: 'Autre absence' },
   ];
 
+  /*
+   * Le personnel non productif : administratif et encadrement. Ils ne figurent
+   * sur aucune fiche de chantier, et sont a 7 h par jour ouvre.
+   */
+  const NON_PRODUCTIFS = [
+    { id: 201, matricule: 'B001', nom: 'PETIT', prenom: 'Anne', actif: 1, taux_horaire: 17.5, productif: 0 },
+    { id: 202, matricule: 'B002', nom: 'GARNIER', prenom: 'Luc', actif: 1, taux_horaire: 0, productif: 0 },
+    { id: 203, matricule: 'B003', nom: 'ROUX', prenom: 'Marie', actif: 1, taux_horaire: 21, productif: 0 },
+  ];
+  const joursNonProductifs = []; // { salarie_id, date, code_absence, minutes, gd }
+  const primesNonProductifs = [];
+  let prochainePrime = 1;
+
   /* Registre des conges : il explique les jours sans pointage. */
   const conges = [];
   let prochainConge = 1;
@@ -1020,6 +1033,126 @@
       exigerDirecteur();
       const compte = compteDeLaDemo(Number(m[1]));
       if (compte) compte.actif = corps.actif ? 1 : 0;
+      return { ok: true };
+    }],
+
+    /* ------------------ Personnel non productif ------------------ */
+
+    ['GET', /^\/api\/admin\/non-productifs$/, () => {
+      exigerDirecteur();
+      return { salaries: NON_PRODUCTIFS };
+    }],
+
+    ['GET', /^\/api\/non-productif$/, (m, corps, params) => {
+      exigerDirecteur();
+      const annee = Number(params.get('annee'));
+      const mois = Number(params.get('mois'));
+      const dernier = new Date(Date.UTC(annee, mois, 0)).getUTCDate();
+
+      const jours = [];
+      for (let q = 1; q <= dernier; q += 1) {
+        const date = `${annee}-${String(mois).padStart(2, '0')}-${String(q).padStart(2, '0')}`;
+        const jourSemaine = new Date(`${date}T00:00:00Z`).getUTCDay();
+        jours.push({ date, quantieme: q, jourSemaine, ouvre: jourSemaine >= 1 && jourSemaine <= 5 });
+      }
+      const parDefaut = (j) => (j.ouvre ? R.DUREE_JOURNEE_REFERENCE_MINUTES : 0);
+
+      const lignes = NON_PRODUCTIFS.filter((s) => s.actif).map((personne) => {
+        const cases = jours.map((jour) => {
+          const declare = joursNonProductifs.find((d) => d.salarie_id === personne.id && d.date === jour.date);
+          const conge = conges.find(
+            (c) => c.salarie_id === personne.id && jour.date >= c.debut && jour.date <= c.fin
+          );
+          if (declare && declare.code_absence) {
+            return { ...jour, etat: 'absence', code: declare.code_absence, minutes: 0, gd: declare.gd };
+          }
+          if (declare && declare.gd) {
+            return { ...jour, etat: 'gd', gd: declare.gd, minutes: declare.minutes || parDefaut(jour) };
+          }
+          if (declare && declare.minutes !== parDefaut(jour)) {
+            return { ...jour, etat: jour.ouvre ? 'partiel' : 'travaille', minutes: declare.minutes, gd: '' };
+          }
+          if (conge) return { ...jour, etat: 'conge', code: conge.motif, minutes: 0, gd: '' };
+          if (!jour.ouvre) return { ...jour, etat: 'weekend', minutes: 0, gd: '' };
+          return { ...jour, etat: 'travaille', minutes: R.DUREE_JOURNEE_REFERENCE_MINUTES, gd: '' };
+        });
+
+        const absences = {};
+        for (const c of cases) {
+          if (c.etat === 'absence' || c.etat === 'conge') absences[c.code] = (absences[c.code] || 0) + 1;
+        }
+        const primes = primesNonProductifs.filter(
+          (p) => p.salarie_id === personne.id && p.annee === annee && p.mois === mois
+        );
+
+        return {
+          ...personne,
+          jours: cases,
+          joursTravailles: cases.filter((c) => c.minutes > 0).length,
+          minutes: cases.reduce((t, c) => t + c.minutes, 0),
+          joursAbsence: cases.filter((c) => c.etat === 'absence' || c.etat === 'conge').length,
+          absences,
+          joursGD72: cases.filter((c) => c.gd === '72').length,
+          joursGD80: cases.filter((c) => c.gd === '80').length,
+          primes,
+          montantPrimes: primes.reduce((t, p) => t + p.montant, 0),
+        };
+      });
+
+      return {
+        annee,
+        mois,
+        jours,
+        joursOuvres: jours.filter((j) => j.ouvre).length,
+        heuresReference: R.heuresReferenceMois(annee, mois),
+        lignes,
+        codesAbsence: R.CODES_ABSENCE,
+        motifsConge: MOTIFS_CONGE,
+      };
+    }],
+
+    ['PUT', /^\/api\/non-productif\/jour$/, (m, corps) => {
+      exigerDirecteur();
+      const id = Number(corps.salarie_id);
+      const index = joursNonProductifs.findIndex((d) => d.salarie_id === id && d.date === corps.date);
+      const code = String(corps.code || '').trim().toUpperCase();
+      const gd = ['72', '80'].includes(String(corps.gd || '')) ? String(corps.gd) : '';
+
+      if (!code && !gd && (corps.minutes === undefined || corps.minutes === null)) {
+        if (index >= 0) joursNonProductifs.splice(index, 1);
+        return { efface: true };
+      }
+      const minutes =
+        corps.minutes !== undefined && corps.minutes !== null
+          ? Number(corps.minutes)
+          : code
+            ? 0
+            : R.DUREE_JOURNEE_REFERENCE_MINUTES;
+      const ligne = { salarie_id: id, date: corps.date, code_absence: code, minutes, gd };
+      if (index >= 0) joursNonProductifs[index] = ligne;
+      else joursNonProductifs.push(ligne);
+      return { ok: true };
+    }],
+
+    ['POST', /^\/api\/non-productif\/primes$/, (m, corps) => {
+      exigerDirecteur();
+      const montant = Number(corps.montant);
+      if (!Number.isFinite(montant) || montant === 0) erreur(400, 'Indiquez un montant.');
+      primesNonProductifs.push({
+        id: prochainePrime++,
+        salarie_id: Number(corps.salarie_id),
+        annee: Number(corps.annee),
+        mois: Number(corps.mois),
+        libelle: String(corps.libelle || '').trim(),
+        montant,
+      });
+      return { ok: true };
+    }],
+
+    ['DELETE', /^\/api\/non-productif\/primes\/(\d+)$/, (m) => {
+      exigerDirecteur();
+      const i = primesNonProductifs.findIndex((p) => p.id === Number(m[1]));
+      if (i >= 0) primesNonProductifs.splice(i, 1);
       return { ok: true };
     }],
 

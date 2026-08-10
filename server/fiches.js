@@ -231,7 +231,7 @@ function salarieDuChef(chefId) {
   if (!chef) return null;
 
   const existant = db
-    .prepare('SELECT id, nom, prenom, chef_id FROM salaries')
+    .prepare('SELECT id, nom, prenom, chef_id FROM salaries WHERE productif = 1')
     .all()
     .find((s) => D.memePersonne(`${s.nom} ${s.prenom}`, chef.nom));
 
@@ -258,12 +258,14 @@ function salarieDuChef(chefId) {
 function equipeDuChef(chefId) {
   const idChef = salarieDuChef(chefId);
   const operateurs = db
-    .prepare('SELECT id, nom, prenom, matricule FROM salaries WHERE chef_id = ? AND actif = 1 ORDER BY nom, prenom')
+    .prepare(
+      'SELECT id, nom, prenom, matricule FROM salaries WHERE chef_id = ? AND actif = 1 AND productif = 1 ORDER BY nom, prenom'
+    )
     .all(chefId);
 
   const lui = idChef
     ? operateurs.find((s) => s.id === idChef)
-      || db.prepare('SELECT id, nom, prenom, matricule FROM salaries WHERE id = ? AND actif = 1').get(idChef)
+      || db.prepare('SELECT id, nom, prenom, matricule FROM salaries WHERE id = ? AND actif = 1 AND productif = 1').get(idChef)
     : null;
 
   return lui ? [lui, ...operateurs.filter((s) => s.id !== lui.id)] : operateurs;

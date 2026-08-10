@@ -57,6 +57,7 @@ function preparerCommun() {
   get: (url) => API.appel('GET', url),
   post: (url, corps) => API.appel('POST', url, corps),
   put: (url, corps) => API.appel('PUT', url, corps),
+  supprimer: (url) => API.appel('DELETE', url),
 };` +
     source.slice(fin);
 
@@ -121,6 +122,12 @@ function preparerDirecteur() {
     "  surClic(bouton, () => Demo.aller('calendrier'));",
     'accès au calendrier du mois'
   );
+  source = adapter(
+    source,
+    "surClic('btn-non-productif', () => { location.href = '/non-productif.html'; });",
+    "surClic('btn-non-productif', () => Demo.aller('nonproductif'));",
+    'accès au personnel non productif'
+  );
   return source;
 }
 
@@ -144,6 +151,18 @@ function preparerMensuel() {
 
 function preparerCalendrier() {
   let source = lire('public', 'js', 'calendrier.js');
+  source = adapter(source, "location.href = '/chef.html';", "Demo.aller('chef');", 'redirection chef');
+  source = adapter(
+    source,
+    "surClic('btn-retour', () => { location.href = '/directeur.html'; });",
+    "surClic('btn-retour', () => Demo.aller('directeur'));",
+    'retour au tableau de bord'
+  );
+  return source;
+}
+
+function preparerNonProductif() {
+  let source = lire('public', 'js', 'non-productif.js');
   source = adapter(source, "location.href = '/chef.html';", "Demo.aller('chef');", 'redirection chef');
   source = adapter(
     source,
@@ -204,11 +223,13 @@ const remplacements = {
   GABARIT_PARAMETRES: JSON.stringify(corpsDePage('parametres.html')),
   GABARIT_MENSUEL: JSON.stringify(corpsDePage('mensuel.html')),
   GABARIT_CALENDRIER: JSON.stringify(corpsDePage('calendrier.html')),
+  GABARIT_NONPRODUCTIF: JSON.stringify(corpsDePage('non-productif.html')),
   SCRIPT_CHEF: JSON.stringify(preparerChef()),
   SCRIPT_DIRECTEUR: JSON.stringify(preparerDirecteur()),
   SCRIPT_PARAMETRES: JSON.stringify(preparerParametres()),
   SCRIPT_MENSUEL: JSON.stringify(preparerMensuel()),
   SCRIPT_CALENDRIER: JSON.stringify(preparerCalendrier()),
+  SCRIPT_NONPRODUCTIF: JSON.stringify(preparerNonProductif()),
 };
 
 let page = lire('demo', 'coquille.html');

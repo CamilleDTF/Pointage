@@ -23,6 +23,7 @@
     <section class="carte">
       <div class="onglets" id="onglets-parametres">
         <button class="onglet actif" type="button" data-onglet="effectif">Personnel et équipes</button>
+        <button class="onglet" type="button" data-onglet="nonproductif">Personnel non productif</button>
         <button class="onglet" type="button" data-onglet="comptes">Comptes des chefs</button>
         <button class="onglet" type="button" data-onglet="conducteurs">Conducteurs de travaux</button>
         <button class="onglet" type="button" data-onglet="vehicules">Véhicules</button>
@@ -49,6 +50,31 @@
         <input id="s-prenom" placeholder="Prénom" style="flex:1;min-width:110px">
         <select id="s-chef" style="flex:1;min-width:130px"></select>
         <button class="petit principal" id="btn-ajout-salarie" type="button">Ajouter</button>
+      </div>
+    </section>
+
+    <section class="carte panneau masque" id="panneau-nonproductif">
+      <h2>Personnel non productif</h2>
+      <p class="aide">
+        Administratif, encadrement, atelier : ceux qui ne figurent sur aucune fiche de
+        chantier. Ils n'ont pas de chef d'équipe et ne sont pas pointés à la semaine —
+        ils sont <strong>à 7 h par jour ouvré</strong>, et seuls les écarts se saisissent.
+      </p>
+      <p class="aide">
+        Leur mois se tient dans l'écran <strong>Personnel non productif</strong>, depuis le
+        tableau de bord : absences, grands déplacements et primes.
+      </p>
+      <div class="enveloppe-table"><table id="table-nonproductifs">
+        <thead><tr>
+          <th>Matricule</th><th>Nom</th><th>Prénom</th><th class="num">Taux horaire</th><th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <div class="rangee" style="margin-top:10px">
+        <input id="np-matricule" placeholder="matricule" style="width:100px">
+        <input id="np-nom" placeholder="NOM" style="flex:1;min-width:110px">
+        <input id="np-prenom" placeholder="Prénom" style="flex:1;min-width:110px">
+        <button class="petit principal" id="btn-ajout-nonproductif" type="button">Ajouter</button>
       </div>
     </section>
 

@@ -18,6 +18,7 @@ const M = require('./mensuel');
 const I = require('./indicateurs');
 const V = require('./visa');
 const CAL = require('./calendrier');
+const NP = require('./non-productif');
 const AL = require('./alerte');
 const C = require('./courriel');
 
@@ -114,11 +115,13 @@ app.get('/api/reference', A.exigerConnexion, (req, res) => {
     equipe:
       req.utilisateur.role === 'chef'
         ? F.equipeDuChef(req.utilisateur.id)
-        : db.prepare('SELECT id, nom, prenom, matricule, chef_id FROM salaries WHERE actif = 1 ORDER BY nom').all(),
+        : db
+            .prepare('SELECT id, nom, prenom, matricule, chef_id FROM salaries WHERE actif = 1 AND productif = 1 ORDER BY nom')
+            .all(),
     // Tout l effectif : un chantier reunit souvent des operateurs venus d autres
     // equipes, et le chef doit pouvoir les pointer sans passer par le directeur.
     effectif: db
-      .prepare('SELECT id, nom, prenom, matricule FROM salaries WHERE actif = 1 ORDER BY nom, prenom')
+      .prepare('SELECT id, nom, prenom, matricule FROM salaries WHERE actif = 1 AND productif = 1 ORDER BY nom, prenom')
       .all(),
     // Le parc : le chef choisit une immatriculation, le reste se remplit seul.
     vehicules: db
@@ -166,6 +169,73 @@ app.get('/api/mes-notifications', A.exigerConnexion, (req, res) => {
     .all(req.utilisateur.id);
 
   res.json({ corrections, renvoyees });
+});
+
+/* ------------------- Calendrier du personnel non productif ----------------- */
+
+/*
+ * Ils sont a 7 h par jour ouvre : ce sont les ecarts qui se saisissent, pas les
+ * journees. Une absence, un grand deplacement, une prime — le reste se deduit.
+ */
+app.get('/api/non-productif', A.exigerDirecteur, (req, res) => {
+  const maintenant = new Date();
+  const annee = Number(req.query.annee) || maintenant.getFullYear();
+  const mois = Number(req.query.mois) || maintenant.getMonth() + 1;
+  if (!Number.isInteger(annee) || annee < 2020 || annee > 2100) {
+    return res.status(400).json({ erreur: 'Annee invalide.' });
+  }
+  if (!Number.isInteger(mois) || mois < 1 || mois > 12) {
+    return res.status(400).json({ erreur: 'Mois invalide (1 a 12).' });
+  }
+  res.json({ ...NP.moisComplet(annee, mois), codesAbsence: D.CODES_ABSENCE, motifsConge: CAL.MOTIFS_CONGE });
+});
+
+app.put('/api/non-productif/jour', A.exigerDirecteur, (req, res) => {
+  repondre(
+    res,
+    NP.declarerJour(
+      {
+        salarieId: req.body.salarie_id,
+        date: req.body.date,
+        code: req.body.code,
+        gd: req.body.gd,
+        minutes: req.body.minutes,
+      },
+      req.utilisateur
+    )
+  );
+});
+
+app.post('/api/non-productif/primes', A.exigerDirecteur, (req, res) => {
+  repondre(
+    res,
+    NP.ajouterPrime(
+      {
+        salarieId: req.body.salarie_id,
+        annee: req.body.annee,
+        mois: req.body.mois,
+        libelle: req.body.libelle,
+        montant: req.body.montant,
+      },
+      req.utilisateur
+    )
+  );
+});
+
+app.delete('/api/non-productif/primes/:id', A.exigerDirecteur, (req, res) => {
+  repondre(res, NP.supprimerPrime(req.params.id));
+});
+
+/*
+ * Le personnel non productif se gere comme l'effectif de chantier, dans son
+ * propre onglet : meme table, meme matricule, meme taux horaire.
+ */
+app.get('/api/admin/non-productifs', A.exigerDirecteur, (req, res) => {
+  res.json({
+    salaries: db
+      .prepare('SELECT * FROM salaries WHERE productif = 0 ORDER BY nom, prenom')
+      .all(),
+  });
 });
 
 /* -------------------------- Calendrier d'un chef --------------------------- */
@@ -499,7 +569,7 @@ app.get('/api/visa/fiche/:id', exigerConducteur, (req, res) => {
       codesAbsence: D.CODES_ABSENCE,
       typesMasque: D.TYPES_MASQUE,
       effectif: db
-        .prepare('SELECT id, nom, prenom, matricule FROM salaries WHERE actif = 1 ORDER BY nom, prenom')
+        .prepare('SELECT id, nom, prenom, matricule FROM salaries WHERE actif = 1 AND productif = 1 ORDER BY nom, prenom')
         .all(),
       vehicules: db
         .prepare('SELECT immatriculation, marque, modele FROM vehicules WHERE actif = 1 ORDER BY immatriculation')
@@ -815,10 +885,13 @@ app.get('/api/admin/utilisateurs', A.exigerDirecteur, (req, res) => {
           WHERE role IN ('chef', 'directeur') ORDER BY role DESC, nom`
       )
       .all(),
+    // L'onglet « Personnel et equipes » ne montre que l'effectif de chantier ;
+    // le personnel non productif a le sien, avec ses propres ecrans.
     salaries: db
       .prepare(
         `SELECT s.*, u.nom AS chef_nom FROM salaries s
-           LEFT JOIN utilisateurs u ON u.id = s.chef_id ORDER BY s.nom, s.prenom`
+           LEFT JOIN utilisateurs u ON u.id = s.chef_id
+          WHERE s.productif = 1 ORDER BY s.nom, s.prenom`
       )
       .all(),
   });
@@ -942,9 +1015,17 @@ app.post('/api/admin/salaries', A.exigerDirecteur, (req, res) => {
   const nom = String(req.body.nom || '').trim();
   const prenom = String(req.body.prenom || '').trim();
   if (!nom || !prenom) return res.status(400).json({ erreur: 'Nom et prenom obligatoires.' });
+  // Non productif : pas de chef d'equipe, il ne figure sur aucune fiche.
+  const productif = req.body.productif === 0 || req.body.productif === false ? 0 : 1;
   const r = db
-    .prepare('INSERT INTO salaries (matricule, nom, prenom, chef_id) VALUES (?, ?, ?, ?)')
-    .run(String(req.body.matricule || '').trim(), nom, prenom, req.body.chef_id || null);
+    .prepare('INSERT INTO salaries (matricule, nom, prenom, chef_id, productif) VALUES (?, ?, ?, ?, ?)')
+    .run(
+      String(req.body.matricule || '').trim(),
+      nom,
+      prenom,
+      productif ? req.body.chef_id || null : null,
+      productif
+    );
   res.json({ id: r.lastInsertRowid });
 });
 

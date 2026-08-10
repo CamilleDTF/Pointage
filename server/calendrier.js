@@ -62,7 +62,7 @@ function moisComplet(annee, mois, { debutService = null } = {}) {
                    THEN 1 ELSE 0 END AS est_chef
          FROM salaries s
          LEFT JOIN utilisateurs u ON u.id = s.chef_id
-        WHERE s.actif = 1
+        WHERE s.actif = 1 AND s.productif = 1
         ORDER BY COALESCE(u.nom, 'zzz'), s.nom, s.prenom`
     )
     .all();
