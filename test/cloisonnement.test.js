@@ -207,8 +207,13 @@ test('une correction partielle du directeur ne detruit pas la saisie du chef', a
   const d = await connexion('dir', '9999');
 
   const fiche = (await a('POST', '/api/fiches/semaine', { annee: 2026, semaine: 15 })).corps.fiche;
+  // Le nom ET le numero, comme l'ecran du chef les envoie. Ecrire un nom par
+  // dessus le numero de quelqu'un d'autre ne trompe plus personne : le serveur
+  // relit l'identite dans le registre et retablit le nom du numero envoye.
+  const andre = db.prepare("SELECT id FROM salaries WHERE nom = 'ANDRE' ORDER BY id LIMIT 1").get();
   const lignes = fiche.lignes.map((ligne, i) => ({
     ...ligne,
+    salarie_id: i === 0 ? andre.id : null,
     nom_affiche: i === 0 ? 'ANDRE Alain' : '',
     jours: ligne.jours.map((j) => ({ ...j, minutes: i === 0 && j.jour <= 4 ? 450 : 0 })),
   }));

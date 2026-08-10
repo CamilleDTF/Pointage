@@ -563,6 +563,60 @@ function signatureDeLaLigne(ligne, anciennes, perdues) {
   return vide;
 }
 
+/**
+ * Le serveur decide qui est qui.
+ *
+ * Le navigateur envoyait un nom et un numero de salarie, et on le croyait sur
+ * parole. Rien ne verifiait que les deux designent la meme personne — or c'est
+ * le NUMERO qui part en paie : `agregerMois` va y chercher le matricule et le
+ * taux horaire. Un couple incoherent — « DURAND Pierre » avec le numero de
+ * MARTIN Paul — affichait donc Pierre sur la fiche et payait Paul, sans que
+ * rien nulle part ne le signale. C'est la definition d'une erreur de paie
+ * silencieuse.
+ *
+ * Le registre tranche donc, et non l'ecran : le nom affiche est RELU depuis la
+ * fiche du salarie. Un numero inconnu, inactif, ou qui designe quelqu'un du
+ * personnel non productif — qui n'a rien a faire sur une fiche de chantier —
+ * n'est pas suivi : la ligne redevient un nom libre, comme un renfort saisi a
+ * la main, plutot que de porter une identite invalide.
+ *
+ * Renvoie la liste des ecarts constates, pour qu'ils se lisent au journal : un
+ * client qui envoie des couples incoherents est un client a corriger.
+ */
+function resoudreIdentites(lignes) {
+  const ids = [...new Set(lignes.map((l) => l.salarie_id).filter(Boolean))];
+  if (!ids.length) return [];
+
+  const connus = new Map(
+    db
+      .prepare(
+        `SELECT id, nom, prenom FROM salaries
+          WHERE actif = 1 AND productif = 1 AND id IN (${ids.map(() => '?').join(', ')})`
+      )
+      .all(...ids)
+      .map((s) => [s.id, s])
+  );
+
+  const ecarts = [];
+  for (const ligne of lignes) {
+    if (!ligne.salarie_id) continue;
+
+    const salarie = connus.get(ligne.salarie_id);
+    if (!salarie) {
+      ecarts.push(`${ligne.nom_affiche || 'ligne sans nom'} : numéro de salarié inconnu, rattachement retiré`);
+      ligne.salarie_id = null;
+      continue;
+    }
+
+    const officiel = `${salarie.nom} ${salarie.prenom}`.trim();
+    if (ligne.nom_affiche !== officiel) {
+      ecarts.push(`« ${ligne.nom_affiche} » désignait en réalité ${officiel} : nom rétabli`);
+      ligne.nom_affiche = officiel;
+    }
+  }
+  return ecarts;
+}
+
 function enregistrerFiche(ficheId, corps, utilisateur) {
   const fiche = db.prepare('SELECT * FROM fiches WHERE id = ?').get(ficheId);
   if (!fiche) return { erreur: 'Fiche introuvable.', code: 404 };
@@ -597,6 +651,12 @@ function enregistrerFiche(ficheId, corps, utilisateur) {
   // sans ce garde-fou, un PUT partiel effacerait toute la saisie de la semaine.
   const remplacerLignes = Array.isArray(corps.lignes);
   const lignes = remplacerLignes ? corps.lignes.slice(0, NB_LIGNES_FICHE).map(normaliserLigne) : [];
+  /*
+   * Avant toute chose : qui est qui. L'empreinte des signatures et la cle des
+   * comparaisons reposent sur le numero de salarie — les resoudre apres coup
+   * reviendrait a signer une identite qu'on n'a pas encore verifiee.
+   */
+  const ecartsIdentite = resoudreIdentites(lignes);
 
   const ecrire = db.transaction(() => {
     const maj = {};
@@ -673,6 +733,12 @@ function enregistrerFiche(ficheId, corps, utilisateur) {
           'signature_invalidee',
           `${perdues.join(' ; ')} — le pointage signé a changé, signature à reprendre`.slice(0, 2000)
         );
+      }
+
+      // Un couple nom/numero incoherent n'arrive pas par hasard : il vient d'un
+      // client a corriger, ou d'une requete forgee. Dans les deux cas, ca se lit.
+      if (ecartsIdentite.length) {
+        journaliser(ficheId, utilisateur.id, 'identite_corrigee', ecartsIdentite.join(' ; ').slice(0, 2000));
       }
     }
 

@@ -563,6 +563,23 @@
     return [R.clePointage(ligne), ...jours, ...CHAMPS_SIGNES.map((c) => `${c}=${ligne[c] ?? ''}`)].join('|');
   }
 
+  /*
+   * Le registre tranche, pas l'ecran — meme regle que server/fiches.js.
+   *
+   * Le nom affiche est relu depuis la fiche du salarie, et un numero qu'on ne
+   * peut pas honorer n'est pas suivi : c'est le numero qui part en paie, et un
+   * couple incoherent paierait quelqu'un d'autre que celui qu'on affiche.
+   */
+  function resoudreIdentite(ligne) {
+    if (!ligne.salarie_id) return;
+    const salarie = salaries.find((s) => s.id === ligne.salarie_id && s.actif && s.productif !== 0);
+    if (!salarie) {
+      ligne.salarie_id = null;
+      return;
+    }
+    ligne.nom_affiche = `${salarie.nom} ${salarie.prenom}`.trim();
+  }
+
   function signatureRetenue(recue, enregistree, avant) {
     if (!enregistree.nom_affiche) return null;
     const empreinte = empreinteLigne(enregistree);
@@ -1032,6 +1049,8 @@
               };
             }),
           };
+          // L'identite d'abord : la signature s'appuie dessus.
+          resoudreIdentite(enregistree);
           enregistree.signature = signatureRetenue(ligne, enregistree, avant);
           return enregistree;
         });

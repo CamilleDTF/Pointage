@@ -263,6 +263,30 @@ est ailleurs — la validation finale, et les montants. Contrairement à l'écra
 qui enregistre au fil de la frappe, une correction est ici un **geste décidé** : rien ne
 part tant qu'il n'a pas cliqué.
 
+### Le registre décide qui est qui, jamais l'écran
+
+Une ligne de pointage porte deux choses : un **nom**, qu'on lit à l'écran, et un
+**numéro de salarié**, qui part en paie — `agregerMois` y cherche le matricule et le
+taux horaire. Le serveur croyait le navigateur sur parole pour les deux. Un couple
+incohérent — le nom de Pierre avec le numéro de Paul — affichait donc Pierre sur la
+fiche et payait Paul, sans que rien nulle part ne le signale. C'est la définition d'une
+erreur de paie silencieuse, et le navigateur avait beau faire le bon rapprochement, une
+règle pareille n'a pas à dépendre de sa bonne volonté.
+
+Le nom affiché est désormais **relu depuis le registre** à chaque enregistrement
+(`resoudreIdentites`, `server/fiches.js`) :
+
+| Ce qui arrive | Ce que le serveur en fait |
+|---|---|
+| Nom et numéro concordants | rien — c'est le cas normal |
+| Nom qui ne correspond pas au numéro | le **nom du registre** est rétabli, l'écart est journalisé |
+| Numéro inconnu, ou salarié sorti de l'effectif | le rattachement est **retiré** : la ligne redevient un nom libre, les heures restent |
+| Numéro d'un salarié **non productif** | rattachement retiré — il a son propre calendrier, le compter ici le compterait deux fois |
+| Nom libre, sans numéro | conservé tel quel : un renfort pas encore au registre reste pointable |
+
+Un nom corrigé dans *Paramètres* se propage donc aux fiches au prochain enregistrement,
+sans que cela passe pour un changement de personne : c'est le numéro qui fait l'identité.
+
 ### Une signature ne vaut que pour ce qu'elle a signé
 
 Une signature d'opérateur ne valait auparavant que la **position** de sa ligne : lors
@@ -756,6 +780,7 @@ test/
   semaine-partagee.test.js  Un operateur sur deux chantiers : plafonds et primes de la semaine
   non-productif.test.js Le mois à 7 h par jour, ses écarts, ses primes
   signatures.test.js    Une signature ne survit ni au changement de personne ni à celui du pointage
+  identite.test.js      Le registre tranche : nom relu, numéro non honoré retiré
   paie-non-productif.test.js  Leur valorisation : mensualisation, majorations, indemnités
 scripts/
   tester-courriel.js    Essai d'envoi, et diagnostic des réglages SMTP
