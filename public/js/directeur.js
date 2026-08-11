@@ -118,7 +118,7 @@ async function charger() {
   }
 
   $('periode').textContent = `Semaine ${tableau.semaine} — du ${jourMois(tableau.dates[0])} au ${jourMois(tableau.dates[6])} ${tableau.annee}`;
-  afficherIndicateurs();
+  afficherAppels();
   afficherSuivi();
 
   fichesChargees.clear();
@@ -133,34 +133,78 @@ async function charger() {
   }
 }
 
-function afficherIndicateurs() {
-  const t = tableau.totaux;
-  const manquantes = tableau.suivi.filter((s) => s.statut === 'manquante').length;
-  /*
-   * `appel` marque ce qui attend une action du directeur. La couleur ne porte
-   * jamais l'information seule : le libelle la dit aussi, pour qui la distingue
-   * mal — et un zero ne s'allume pas, sans quoi le tableau serait toujours
-   * orange et ne signalerait plus rien.
-   */
-  const aVerifier = tableau.fiches.filter((f) => f.statut === 'soumise' && f.visa_statut !== 'attente').length;
-  const chezLeConducteur = tableau.fiches.filter((f) => f.visa_statut === 'attente').length;
+/**
+ * Enumere des noms sans allonger la ligne indefiniment : trois, puis le compte
+ * de ceux qui restent. Huit chefs cites d'affilee ne se lisent pas.
+ */
+function citerNoms(noms) {
+  if (noms.length <= 3) return noms.map(echapper).join(', ');
+  return `${noms.slice(0, 3).map(echapper).join(', ')} et ${noms.length - 3} autre(s)`;
+}
 
-  const cartes = [
-    { valeur: `${t.validees}/${t.attendues}`, libelle: 'Fiches validées' },
-    { valeur: aVerifier, libelle: 'À vérifier', appel: aVerifier > 0 },
-    { valeur: chezLeConducteur, libelle: 'Chez le conducteur' },
-    { valeur: manquantes, libelle: 'Fiches manquantes', appel: manquantes > 0 },
-    { valeur: t.salaries, libelle: 'Salariés pointés' },
-    { valeur: versTexte(t.minutes), libelle: 'Total heures semaine' },
-  ];
-  $('indicateurs').innerHTML = cartes
-    .map(
-      (c) => `<div class="indicateur${c.appel ? ' appel' : ''}">
-        <div class="valeur">${c.valeur}</div>
-        <div class="libelle">${c.libelle}${c.appel ? ' — à traiter' : ''}</div>
-      </div>`
-    )
-    .join('');
+/*
+ * Ce qui attend le directeur, dans l'ordre ou il peut y faire quelque chose.
+ *
+ * Six nombres de meme poids occupaient cette place — dont quatre qui n'appellent
+ * aucun geste. On y lisait l'etat de la semaine, jamais ce qu'il fallait en
+ * faire. Ne restent ici que les trois situations qui demandent une decision,
+ * une relance ou une attente ; le reste de l'etat tient sur une ligne, en
+ * dessous. Une rubrique a zero ne s'affiche pas : un tableau de bord qui
+ * signale toujours quelque chose ne signale plus rien.
+ *
+ * La couleur ne porte jamais l'information seule — le libelle la dit aussi,
+ * pour qui la distingue mal.
+ */
+function afficherAppels() {
+  const t = tableau.totaux;
+  const aVerifier = tableau.fiches.filter((f) => f.statut === 'soumise' && f.visa_statut !== 'attente');
+  const chezLeConducteur = tableau.fiches.filter((f) => f.visa_statut === 'attente');
+  const manquantes = tableau.suivi.filter((s) => s.statut === 'manquante');
+
+  const appels = [];
+  if (aVerifier.length) {
+    appels.push({
+      ton: 'agir',
+      nombre: aVerifier.length,
+      titre: aVerifier.length > 1 ? 'fiches à vérifier' : 'fiche à vérifier',
+      detail: citerNoms(aVerifier.map((f) => f.chef_nom)),
+      action: { intitule: 'Ouvrir la première', ficheId: aVerifier[0].id },
+    });
+  }
+  if (manquantes.length) {
+    appels.push({
+      ton: 'relancer',
+      nombre: manquantes.length,
+      titre: manquantes.length > 1 ? 'fiches manquantes' : 'fiche manquante',
+      detail: citerNoms(manquantes.map((s) => s.chef_nom)),
+    });
+  }
+  if (chezLeConducteur.length) {
+    appels.push({
+      ton: 'attendre',
+      nombre: chezLeConducteur.length,
+      titre: chezLeConducteur.length > 1 ? 'fiches chez le conducteur' : 'fiche chez le conducteur',
+      detail: citerNoms(chezLeConducteur.map((f) => f.chef_nom)),
+    });
+  }
+
+  $('appels').innerHTML = appels.length
+    ? appels
+        .map(
+          (a) => `<div class="appel ${a.ton}">
+            <span class="nombre">${a.nombre}</span>
+            <span class="quoi">
+              ${a.titre}
+              <span class="detail">${a.detail}</span>
+            </span>
+            ${a.action ? `<button class="petit" onclick="allerA(${a.action.ficheId})">${a.action.intitule}</button>` : ''}
+          </div>`
+        )
+        .join('')
+    : '<p class="rien-a-faire">Rien à traiter : aucune fiche n\'attend de décision cette semaine.</p>';
+
+  $('contexte-semaine').textContent =
+    `${t.validees}/${t.attendues} fiches validées · ${t.salaries} salarié(s) pointé(s) · ${versTexte(t.minutes)} au total.`;
 }
 
 function afficherSuivi() {

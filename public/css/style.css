@@ -922,6 +922,71 @@ input[readonly] { background: #f7f9fc; color: var(--gris-texte); }
 }
 .indicateur.appel .valeur { color: #8a5300; }
 
+/* --------------------------- Ce qui vous attend --------------------------- */
+
+/*
+ * Une ligne par situation : le nombre, ce dont il s'agit, qui est concerne, et
+ * le geste s'il y en a un. Trois tons, du plus urgent au plus patient — agir
+ * (une fiche attend ma decision), relancer (elle n'est pas arrivee), attendre
+ * (elle est chez quelqu'un d'autre, je n'ai rien a y faire).
+ */
+.appel {
+  display: flex;
+  align-items: center;
+  gap: var(--e4);
+  padding: var(--e3) var(--e4);
+  border: 1px solid var(--gris-bord);
+  border-left-width: 4px;
+  border-radius: var(--rayon);
+  margin-bottom: var(--e2);
+}
+.appel:last-child { margin-bottom: 0; }
+.appel .nombre {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 2ch;
+  text-align: right;
+}
+.appel .quoi { flex: 1; font-weight: 600; font-size: var(--t-normal); }
+.appel .detail {
+  display: block;
+  font-weight: 400;
+  font-size: var(--t-petit);
+  color: var(--gris-texte);
+  margin-top: 2px;
+}
+.appel button { margin-left: auto; }
+
+.appel.agir { border-color: var(--orange); border-left-color: var(--orange); background: #fff8ee; }
+.appel.agir .nombre { color: #8a5300; }
+.appel.relancer { border-color: var(--gris-bord); border-left-color: var(--rouge); }
+.appel.relancer .nombre { color: var(--rouge); }
+.appel.attendre { border-color: var(--gris-bord); border-left-color: var(--bleu-clair); }
+.appel.attendre .nombre { color: var(--gris-texte); }
+
+/* Le cas le plus frequent une fois la semaine close : rien a faire, et ca se dit. */
+.rien-a-faire {
+  margin: 0;
+  padding: var(--e4);
+  text-align: center;
+  color: var(--gris-texte);
+  font-size: var(--t-normal);
+}
+
+/*
+ * Ce qu'on consulte, oppose a ce sur quoi on agit.
+ *
+ * Tous les blocs de l'ecran etaient des cartes blanches identiques : rien ne
+ * reculait, et l'oeil devait tout lire pour trouver l'essentiel. Le suivi et la
+ * paie du mois se posent donc sur le fond, cernes d'un trait discontinu.
+ */
+.carte.discrete {
+  background: transparent;
+  box-shadow: none;
+  border-style: dashed;
+}
+
 /* Le releve des corrections d'un conducteur, sur la fiche du directeur. */
 .corrections-conducteur {
   margin: 10px 0 0;

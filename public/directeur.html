@@ -25,61 +25,64 @@
     </nav>
   </header>
 
+  <!--
+    L'ordre de cet ecran repond a une question, dans cet ordre : de quelle
+    semaine parle-t-on, qu'est-ce qui m'attend, et les fiches. Le suivi et la
+    paie du mois viennent apres, en retrait : on les consulte, on n'y agit pas
+    chaque matin.
+  -->
   <main>
     <section class="carte">
-      <div class="rangee">
-        <div class="champ-court">
-          <label for="annee">Année</label>
-          <input id="annee" type="number" min="2020" max="2100" step="1">
+      <div class="barre-outils">
+        <div class="rangee">
+          <div class="champ-court">
+            <label for="annee">Année</label>
+            <input id="annee" type="number" min="2020" max="2100" step="1">
+          </div>
+          <div class="champ-court">
+            <label for="semaine">Semaine n°</label>
+            <input id="semaine" type="number" min="1" max="53" step="1">
+          </div>
+          <button class="principal" id="btn-charger" type="button">Afficher</button>
         </div>
-        <div class="champ-court">
-          <label for="semaine">Semaine n°</label>
-          <input id="semaine" type="number" min="1" max="53" step="1">
+        <div class="actions">
+          <button class="petit" id="btn-precedente" type="button">◀ Précédente</button>
+          <button class="petit" id="btn-suivante" type="button">Suivante ▶</button>
         </div>
-        <button class="principal" id="btn-charger" type="button">Afficher</button>
-        <button class="petit" id="btn-precedente" type="button">◀ Précédente</button>
-        <button class="petit" id="btn-suivante" type="button">Suivante ▶</button>
-        <span class="pousse"></span>
-        <div class="champ-moyen">
-          <label for="portee-export">Contenu de l'export</label>
-          <select id="portee-export">
-            <option value="validee">Fiches validées</option>
-            <option value="">Toutes les fiches</option>
-            <option value="soumise">Fiches à vérifier</option>
-          </select>
-        </div>
-        <button class="valide" id="btn-export-xlsx" type="button">Export Excel</button>
-        <button id="btn-export-csv" type="button">Export CSV</button>
       </div>
       <p class="aide" id="periode"></p>
     </section>
 
-    <!--
-      Trois cartes pleine largeur menaient ici vers trois ecrans que la barre du
-      haut proposait deja : la meme navigation, deux fois, et le contenu reel du
-      tableau de bord repousse sous la ligne de flottaison. Il en reste une
-      rangee de raccourcis — qui garde ce que la barre ne peut pas dire :
-      l'apercu du mois en cours.
-    -->
-    <section class="carte">
-      <div class="barre-outils">
-        <div>
-          <h2 class="serree">Préparer la paie</h2>
-          <p class="aide suite" id="apercu-mois"></p>
-        </div>
-        <div class="actions">
-          <button class="petit" id="btn-calendrier-bas" type="button">Calendrier du mois</button>
-          <button class="petit" id="btn-non-productif-bas" type="button">Non productif</button>
-          <button class="petit" id="btn-paie-non-productif" type="button">Paie non productif</button>
-          <button class="principal" id="btn-mensuel" type="button">Tableau mensuel</button>
-        </div>
-      </div>
+    <section class="carte" id="bloc-appels">
+      <h2>Ce qui vous attend</h2>
+      <div id="appels"></div>
+      <p class="aide detache serree" id="contexte-semaine"></p>
     </section>
 
-    <section class="indicateurs" id="indicateurs"></section>
+    <div id="fiches"></div>
 
-    <section class="carte detache">
-      <h2>Suivi des chefs d'équipe</h2>
+    <!--
+      Le suivi et l'export regardent la meme semaine sous deux angles : ce que
+      chaque chef a rendu, et ce qu'on en sort. Ils tenaient dans deux cartes
+      eloignees l'une de l'autre ; les voici ensemble, et l'export n'occupe plus
+      le haut de l'ecran alors qu'on ne s'en sert qu'une fois la semaine close.
+    -->
+    <section class="carte discrete">
+      <div class="barre-outils detache-apres">
+        <h2 class="serree">Suivi des chefs d'équipe</h2>
+        <div class="actions">
+          <div class="champ-moyen">
+            <label for="portee-export">Contenu de l'export</label>
+            <select id="portee-export">
+              <option value="validee">Fiches validées</option>
+              <option value="">Toutes les fiches</option>
+              <option value="soumise">Fiches à vérifier</option>
+            </select>
+          </div>
+          <button class="petit" id="btn-export-xlsx" type="button">Export Excel</button>
+          <button class="petit" id="btn-export-csv" type="button">Export CSV</button>
+        </div>
+      </div>
       <div class="enveloppe-table">
         <table id="suivi">
           <thead>
@@ -94,7 +97,20 @@
       </div>
     </section>
 
-    <div id="fiches"></div>
+    <section class="carte discrete">
+      <div class="barre-outils">
+        <div>
+          <h2 class="serree">Préparer la paie du mois</h2>
+          <p class="aide suite" id="apercu-mois"></p>
+        </div>
+        <div class="actions">
+          <button class="petit" id="btn-calendrier-bas" type="button">Calendrier du mois</button>
+          <button class="petit" id="btn-non-productif-bas" type="button">Non productif</button>
+          <button class="petit" id="btn-paie-non-productif" type="button">Paie non productif</button>
+          <button class="principal" id="btn-mensuel" type="button">Tableau mensuel</button>
+        </div>
+      </div>
+    </section>
 
   </main>
 
