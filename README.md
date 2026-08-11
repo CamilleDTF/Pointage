@@ -792,6 +792,16 @@ Le classeur Excel lit les mêmes taux que l'écran — ses formules les portaien
   de jours, qui se compte depuis le pointage. Tout jour travaillé y donne droit **sauf**
   s'il est couvert par un grand déplacement, dont l'indemnité comprend déjà le repas.
   La règle est dans `joursPanierRepas` (`public/js/regles.js`).
+- **Jour férié** *(validé)* — le code `F` est le **seul qui garde ses heures** : un férié
+  peut se travailler. Le code dit ce qu'était la journée, les heures ce qu'on y a fait, et
+  ces heures se paient **double**. Elles figurent déjà dans le total de la semaine — donc
+  dans le salaire mensualisé : ce qui s'ajoute au tableau de paie est le **supplément**,
+  une fois le taux. Un férié **chômé** porte le code sans heures : il compte au nombre de
+  jours, et ne vaut rien de plus.
+- **Titre-restaurant (EDENRED)** *(validé)* — **11,70 € par jour travaillé**, pour le
+  **personnel non productif** uniquement. Contrairement au panier repas du chantier, il
+  n'est pas retiré les jours de grand déplacement : c'est un titre remis, pas une
+  indemnité de repas. Il se verse net.
 - **Grand déplacement** *(validé)* — le chef d'équipe compte lui-même, ligne par
   ligne, les **jours passés sous chacun des deux taux** (colonnes `GD 72` et
   `GD 80`). Le taux se déduisait auparavant de la ville du chantier : c'était faux

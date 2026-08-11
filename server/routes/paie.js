@@ -167,6 +167,7 @@ routes.get('/api/mois', A.exigerDirecteur, (req, res) => {
       joursGD72: s.joursGD72,
       joursGD80: s.joursGD80,
       joursFeries: s.joursFeries,
+      minutesFeries: s.minutesFeries,
     };
     return demandee === 'direction' ? { ...commun, ...M.valoriser(s, { taux: bareme }) } : commun;
   });

@@ -192,7 +192,7 @@ function gabaritTableauMois(mois) {
         `<td class="num">${nombre(s.joursPanier)}</td>`,
         `<td class="num">${nombre(s.joursGD72)}</td>`,
         `<td class="num">${nombre(s.joursGD80)}</td>`,
-        `<td class="num">${nombre(s.joursFeries)}</td>`,
+        `<td class="num" title="${s.minutesFeries ? `dont ${versTexte(s.minutesFeries)} travaillées` : 'aucune heure travaillée'}">${nombre(s.joursFeries)}</td>`,
       ];
       if (!direction) return `<tr>${base.join('')}</tr>`;
 
