@@ -21,6 +21,7 @@ const V = require('./visa');
 const CAL = require('./calendrier');
 const NP = require('./non-productif');
 const T = require('./taux');
+const CONS = require('./conservation');
 const AL = require('./alerte');
 const C = require('./courriel');
 
@@ -1206,6 +1207,28 @@ app.put('/api/salaries/:id/nom', A.exigerConnexion, (req, res) => {
 });
 
 /* ---------------------------- Parc de vehicules ---------------------------- */
+
+/* --------------------------- Conservation des donnees ---------------------- */
+
+/*
+ * Qui peut etre anonymise, et le dossier complet d'une personne.
+ *
+ * Rien ne se declenche tout seul : l'ecran dit ce qui est concerne, la direction
+ * decide. Un effacement automatique, un jour de mauvais reglage, effacerait ce
+ * que personne n'a decide d'effacer.
+ */
+app.get('/api/admin/conservation', A.exigerDirecteur, (req, res) => {
+  res.json({ dureeMois: CONS.DUREE_CONSERVATION_MOIS, candidats: CONS.candidats() });
+});
+
+app.post('/api/admin/conservation/:id/anonymiser', A.exigerDirecteur, (req, res) => {
+  repondre(res, CONS.anonymiser(req.params.id, req.utilisateur));
+});
+
+/* Ce qu'on remet a un salarie qui demande a savoir ce qui est detenu sur lui. */
+app.get('/api/admin/salaries/:id/dossier', A.exigerDirecteur, (req, res) => {
+  repondre(res, CONS.dossierSalarie(req.params.id));
+});
 
 /* ------------------------------ Taux de la paie ---------------------------- */
 

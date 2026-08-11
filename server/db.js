@@ -460,6 +460,19 @@ ajouterColonne('fiches', 'conducteur_id', 'INTEGER REFERENCES utilisateurs(id) O
 ajouterColonne('salaries', 'productif', 'INTEGER NOT NULL DEFAULT 1');
 
 /*
+ * La date a laquelle un salarie a ete anonymise, et rien d'autre.
+ *
+ * Une fiche de pointage justifie des heures de travail : elle ne se garde pas
+ * indefiniment, mais elle ne s'efface pas non plus d'un trait — elle sert de
+ * preuve, aux deux parties. La reponse retenue est l'archivage intermediaire :
+ * ce qui identifie la personne disparait, ce qui prouve les heures reste.
+ *
+ * Cette colonne dit seulement que c'est fait, et quand. Le nom, lui, a ete
+ * remplace sur place : il n'y a nulle part ou le retrouver.
+ */
+ajouterColonne('salaries', 'anonymise_le', 'TEXT');
+
+/*
  * Le pointage du personnel non productif : uniquement ce qui s'ecarte de
  * l'ordinaire.
  *
