@@ -312,6 +312,20 @@
 
   /* ------------------------------- Lectures -------------------------------- */
 
+  /*
+   * Le journal de la demonstration : meme role que celui de l'application —
+   * dire qui a fait quoi, et quoi exactement.
+   */
+  function journaliser(fiche, action, detail) {
+    fiche.journal = fiche.journal || [];
+    fiche.journal.push({
+      action,
+      detail: String(detail || ''),
+      horodatage: maintenant(),
+      auteur: session ? session.nom : null,
+    });
+  }
+
   function enrichir(fiche) {
     const sortie = copie(fiche);
     sortie.chef_nom = utilisateurs.find((u) => u.id === fiche.chef_id).nom;
@@ -991,13 +1005,19 @@
       const options = optionsControle(fiche);
       fiche.anomalies = R.controlerFiche(fiche, fiche.lignes, options);
       fiche.ailleurs = options.ailleurs;
-      fiche.journal = [];
+      fiche.journal = (fiche.journal || []).slice().reverse();
       return { fiche };
     }],
 
     ['PUT', /^\/api\/fiches\/(\d+)$/, (m, corps) => {
       const u = exigerConnexion();
       const fiche = ficheAccessible(m[1], u);
+      // Une fiche validee ne se reecrit pas — pour personne, directeur compris.
+      if (fiche.statut === 'validee') {
+        erreur(409, u.role === 'directeur'
+          ? 'Cette fiche est validée : ouvrez un rectificatif pour la corriger.'
+          : 'Cette fiche est validée : demandez un rectificatif à la direction.');
+      }
       if (u.role !== 'directeur' && !['brouillon', 'rejetee'].includes(fiche.statut)) {
         erreur(409, "Fiche déjà transmise au directeur : elle n'est plus modifiable.");
       }
@@ -1097,6 +1117,7 @@
       if (!fiche) erreur(404, 'Fiche introuvable.');
 
       if (corps.decision === 'valider') {
+        if (fiche.statut === 'validee') erreur(409, 'Cette fiche est déjà validée.');
         const complet = enrichir(fiche);
         const bloquantes = R.controlerFiche(complet, complet.lignes).filter((a) => a.niveau === 'bloquant');
         if (bloquantes.length) {
@@ -1108,15 +1129,36 @@
         fiche.statut = 'validee';
         fiche.validee_le = maintenant();
         fiche.motif_rejet = '';
+
+        // La copie figee de ce qui est valide — comme server/fiches.js.
+        fiche.versions = fiche.versions || [];
+        fiche.versions.push({ version: fiche.version || 1, contenu: JSON.parse(JSON.stringify(enrichir(fiche))) });
+        journaliser(fiche, 'validation', `version ${fiche.version || 1}`);
       } else if (corps.decision === 'rejeter') {
         if (!String(corps.motif || '').trim()) erreur(400, "Indiquez le motif du renvoi au chef d'équipe.");
         fiche.statut = 'rejetee';
         fiche.motif_rejet = String(corps.motif).trim();
         fiche.validee_le = null;
       } else if (corps.decision === 'rouvrir') {
+        /*
+         * Rouvrir une fiche validee ouvre un RECTIFICATIF : la version validee
+         * reste archivee, une suivante se prepare, et le motif est exige.
+         */
+        const rectificatif = fiche.statut === 'validee';
+        if (rectificatif && !String(corps.motif || '').trim()) {
+          erreur(400, 'Indiquez le motif du rectificatif : cette fiche a déjà été validée.');
+        }
         fiche.statut = 'brouillon';
         fiche.soumise_le = null;
         fiche.validee_le = null;
+        if (rectificatif) {
+          fiche.version = (fiche.version || 1) + 1;
+          journaliser(
+            fiche,
+            'rectificatif_ouvert',
+            `Version ${fiche.version} ouverte — ${String(corps.motif).trim()}`
+          );
+        }
       }
       return { fiche: enrichir(fiche) };
     }],

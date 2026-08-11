@@ -335,6 +335,29 @@ Les fiches saisies **avant** cette règle n'ont pas d'empreinte : on ne peut pas
 reconstruire après coup ce que quelqu'un a signé, et le prétendre serait pire que de
 l'admettre. Leur signature tombe donc à la première réécriture.
 
+### Une fiche validée ne se réécrit pas : elle se rectifie
+
+Une fiche validée part en paie. Elle justifie des heures et porte les signatures des
+opérateurs — et le directeur pouvait la réécrire en place, le journal n'en gardant qu'un
+« Fiche corrigée par le directeur » qui ne disait pas quoi. On ne pouvait donc plus
+répondre à la seule question qui compte devant un désaccord : **qu'est-ce qui a été
+validé, exactement, et quand ?**
+
+Chaque validation dépose maintenant une **copie figée** de la fiche — en-tête, lignes,
+journées, signatures — dans `fiche_versions`. Elle n'est plus jamais modifiée.
+
+| | |
+|---|---|
+| **Fiche validée** | Non modifiable, pour tout le monde, directeur compris. Les cases sont fermées à l'écran, pas seulement refusées par le serveur. |
+| **La corriger** | *Ouvrir un rectificatif* : la version validée est conservée, une nouvelle est préparée. Le **motif est obligatoire**. |
+| **Le rectificatif validé** | Devient la version suivante. Le relevé de ce qui a changé depuis la précédente est écrit en français au journal. |
+| **Les versions passées** | Restent lisibles telles quelles, signatures comprises (`/api/fiches/:id/historique`). |
+
+Ce n'est pas une contrainte de principe : c'est ce qui permet de répondre « voici la
+version 1, validée le 11 août, signée par untel ; voici la version 2, ouverte le 3
+septembre parce qu'un férié avait été oublié, et voici ligne par ligne ce qui les
+sépare ».
+
 ### Ce qui a changé se lit, des deux côtés
 
 Les opérateurs ont signé une version du pointage ; le directeur en valide une autre.
@@ -803,6 +826,7 @@ test/
   signatures.test.js    Une signature ne survit ni au changement de personne ni à celui du pointage
   identite.test.js      Le registre tranche : nom relu, numéro non honoré retiré
   export-csv.test.js    Le CSV n'ouvre pas une formule chez le comptable
+  versions.test.js      Une fiche validée se rectifie, elle ne se réécrit pas
   paie-non-productif.test.js  Leur valorisation : mensualisation, majorations, indemnités
 scripts/
   tester-courriel.js    Essai d'envoi, et diagnostic des réglages SMTP
