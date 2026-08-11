@@ -854,7 +854,8 @@ server/
   alerte.js     Message prévenant le conducteur (SMS, WhatsApp, courriel) — sans aucun lien
   courriel.js   Envoi SMTP, et dépôt sur disque à défaut de serveur d'envoi
   fournisseurs-courriel.js  Réglages SMTP devinés depuis les MX du domaine
-  index.js      API HTTP et service des fichiers statiques
+  index.js      Configuration, montage des routes, fichiers statiques, démarrage
+  routes/       Une famille de routes par fichier — voir ci-dessous
   seed.js       Jeu de données initial
 public/
   index.html      Connexion
