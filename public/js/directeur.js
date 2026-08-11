@@ -256,19 +256,50 @@ window.allerA = allerA;
  * suivante. Lui montrer la difference lui evite de comparer deux ecrans — ou,
  * plus probablement, de ne rien comparer du tout.
  */
+const INTITULES_RELEVE = {
+  correction_conducteur: 'Corrigé par',
+  correction_directeur: 'Corrigé par',
+  correction_rectificatif: 'Corrigé par',
+  rectificatif_ouvert: 'Rectificatif ouvert par',
+  rectificatif_valide: 'Rectificatif validé par',
+  signature_invalidee: 'Signature à reprendre —',
+  identite_corrigee: 'Identité rétablie —',
+};
+
 function relevesConducteur(fiche) {
-  const releves = (fiche.journal || []).filter((e) => e.action === 'correction_conducteur');
+  const releves = (fiche.journal || []).filter((e) => INTITULES_RELEVE[e.action]);
   if (!releves.length) return '';
 
+  // Le journal arrive du plus recent au plus ancien : on le remet dans l'ordre
+  // ou les choses se sont passees, qui est celui ou on les lit.
   return releves
+    .slice()
+    .reverse()
     .map(
       (e) => `<div class="corrections-conducteur">
-        <strong>Corrigé par ${echapper(e.auteur || 'le conducteur de travaux')}</strong>
+        <strong>${INTITULES_RELEVE[e.action]} ${echapper(e.auteur || 'la direction')}</strong>
         le ${echapper(dateFrancaise(e.horodatage))} :
         ${echapper(e.detail.split(' ; ').join('\n'))}
       </div>`
     )
     .join('');
+}
+
+/**
+ * Le bandeau d'une fiche validee.
+ *
+ * Elle est partie en paie et porte les signatures des operateurs : elle ne se
+ * corrige plus a la main. Le dire vaut mieux que de laisser cliquer dans des
+ * cases dont l'enregistrement sera refuse.
+ */
+function bandeauValidee(fiche) {
+  if (fiche.statut !== 'validee') return '';
+  return `<p class="aide" style="background:#eef6ee;border-left:3px solid var(--vert);padding:8px 10px;margin:0 0 12px">
+      <strong>Fiche validée${fiche.version > 1 ? ` — version ${fiche.version}` : ''}</strong>${
+        fiche.validee_le ? ` le ${echapper(dateFrancaise(fiche.validee_le))}` : ''
+      } : elle n'est plus modifiable. Pour la corriger, ouvrez un <strong>rectificatif</strong> —
+      la version validée est conservée telle quelle.
+    </p>`;
 }
 
 function construireFiche(fiche) {
@@ -328,6 +359,7 @@ function construireFiche(fiche) {
 
     <div style="margin-top:14px">
       ${fiche.motif_rejet ? `<p class="aide" style="color:var(--rouge);font-weight:600">Renvoyée : ${echapper(fiche.motif_rejet)}</p>` : ''}
+      ${bandeauValidee(fiche)}
       ${bandeauVisa(fiche)}
       ${relevesConducteur(fiche)}
       <div class="grille trois" style="margin-bottom:12px">
@@ -362,12 +394,16 @@ function construireFiche(fiche) {
         <span class="aide etat-enregistrement" style="margin:0"></span>
         <span class="pousse"></span>
         <button class="petit" data-action="excel">Fiche Excel</button>
-        ${fiche.visa_statut === 'attente' ? '<button class="petit" data-action="relancer">Relancer le conducteur</button>' : ''}
-        <button class="petit" data-action="rouvrir">Rouvrir pour le chef</button>
-        <button class="petit danger" data-action="rejeter">Renvoyer au chef</button>
-        <button class="petit valide" data-action="valider">${
-          fiche.visa_statut === 'attente' ? 'Valider sans le visa' : 'Valider'
-        }</button>
+        ${
+          fiche.statut === 'validee'
+            ? '<button class="petit" data-action="rouvrir">Ouvrir un rectificatif</button>'
+            : `${fiche.visa_statut === 'attente' ? '<button class="petit" data-action="relancer">Relancer le conducteur</button>' : ''}
+               <button class="petit" data-action="rouvrir">Rouvrir pour le chef</button>
+               <button class="petit danger" data-action="rejeter">Renvoyer au chef</button>
+               <button class="petit valide" data-action="valider">${
+                 fiche.visa_statut === 'attente' ? 'Valider sans le visa' : 'Valider'
+               }</button>`
+        }
       </div>
     </div>`;
 
@@ -404,6 +440,18 @@ function bandeauVisa(fiche) {
 function cablerFiche(bloc, fiche) {
   const enregistrerPlusTard = antiRebond(() => enregistrerFiche(bloc, fiche.id), 900);
 
+  /*
+   * Une fiche validee ne se corrige pas a la main : les cases sont fermees
+   * plutot que laissees ouvertes sur un enregistrement qui sera refuse. Le
+   * bandeau dit par ou passer — le rectificatif.
+   */
+  if (fiche.statut === 'validee') {
+    bloc.querySelectorAll('.cellule, .entete').forEach((champ) => { champ.disabled = true; });
+    cablerDecisions(bloc, fiche);
+    afficherAnomalies(bloc, fiche.anomalies || []);
+    return;
+  }
+
   bloc.querySelectorAll('.cellule, .entete').forEach((champ) => {
     champ.addEventListener('input', enregistrerPlusTard);
     champ.addEventListener('change', enregistrerPlusTard);
@@ -432,6 +480,11 @@ function cablerFiche(bloc, fiche) {
     });
   });
 
+  cablerDecisions(bloc, fiche);
+  afficherAnomalies(bloc, fiche.anomalies || []);
+}
+
+function cablerDecisions(bloc, fiche) {
   bloc.querySelectorAll('button[data-action]').forEach((bouton) => {
     bouton.addEventListener('click', async (e) => {
       e.preventDefault();
@@ -445,16 +498,38 @@ function cablerFiche(bloc, fiche) {
         const nom = fiche.visa_courriel || 'le conducteur de travaux';
         if (!confirm(`${nom} n'a pas encore visé cette fiche. La valider quand même ?`)) return;
       }
-      await enregistrerFiche(bloc, fiche.id);
+
       let motif = '';
       if (action === 'rejeter') {
         motif = prompt('Motif du renvoi au chef d’équipe :') || '';
         if (!motif.trim()) return;
       }
+      /*
+       * Rouvrir une fiche validee, c'est ouvrir un rectificatif : elle est
+       * partie en paie, et le motif est la premiere chose qu'on cherchera dans
+       * six mois. Le serveur l'exige aussi — on ne demande pas ici ce qu'on
+       * pourrait contourner la.
+       */
+      if (action === 'rouvrir' && fiche.statut === 'validee') {
+        motif = prompt(
+          'Cette fiche a été validée. Ouvrir un rectificatif conserve la version validée '
+            + 'et en prépare une nouvelle.\n\nMotif du rectificatif :'
+        ) || '';
+        if (!motif.trim()) return;
+      }
+
+      // Une fiche validee est figee : rien a enregistrer avant de decider, et
+      // l'enregistrement serait refuse.
+      if (fiche.statut !== 'validee') await enregistrerFiche(bloc, fiche.id);
+
       try {
         await API.post(`/api/fiches/${fiche.id}/decision`, { decision: action, motif });
         message(
-          { valider: 'Fiche validée.', rejeter: 'Fiche renvoyée au chef d’équipe.', rouvrir: 'Fiche rouverte.' }[action],
+          {
+            valider: 'Fiche validée.',
+            rejeter: 'Fiche renvoyée au chef d’équipe.',
+            rouvrir: fiche.statut === 'validee' ? 'Rectificatif ouvert.' : 'Fiche rouverte.',
+          }[action],
           'succes'
         );
         await charger();
@@ -464,8 +539,6 @@ function cablerFiche(bloc, fiche) {
       }
     });
   });
-
-  afficherAnomalies(bloc, fiche.anomalies || []);
 }
 
 function recalculerTotal(rang) {
