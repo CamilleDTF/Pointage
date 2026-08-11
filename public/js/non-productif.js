@@ -250,7 +250,7 @@ function ouvrirJour(salarieId, date) {
         </div>
       </div>
 
-      <div class="rangee" style="margin-top:14px">
+      <div class="rangee detache">
         <button class="petit" type="button" data-effacer>Revenir à l'ordinaire</button>
         <span class="pousse"></span>
         <button class="petit" type="button" data-fermer>Annuler</button>

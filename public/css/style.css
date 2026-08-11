@@ -10,6 +10,34 @@
   --texte: #1d2530;
   --rayon: 10px;
   --ombre: 0 1px 3px rgba(16, 65, 107, 0.12);
+
+  /*
+   * Une echelle, et une seule.
+   *
+   * Les ecrans s'etaient couverts d'ajustements ecrits a la main — un
+   * `style="width:150px"` par-ci, un `style="margin:0"` par-la — poses un par un
+   * au fil des ajouts. Chacun se defendait ; ensemble ils donnaient un patchwork,
+   * ou deux blocs voisins ne respiraient jamais pareil.
+   *
+   * Ces valeurs sont donc les seules autorisees. Une mesure qui n'est pas dans
+   * cette liste est un choix qu'il faut justifier, pas une habitude.
+   */
+  --e1: 4px;
+  --e2: 8px;
+  --e3: 12px;
+  --e4: 16px;
+  --e5: 24px;
+  --e6: 32px;
+
+  /* Trois tailles de texte. Il y en avait huit, ce qui revenait a n'en avoir aucune. */
+  --t-petit: 0.78rem;
+  --t-normal: 0.92rem;
+  --t-grand: 1.05rem;
+
+  /* Largeurs de champ : les seules, pour que deux formulaires s'alignent. */
+  --champ-court: 110px;
+  --champ-moyen: 170px;
+  --champ-long: 260px;
 }
 
 * { box-sizing: border-box; }
@@ -38,10 +66,35 @@ header.appbar {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
-header.appbar .titre { font-weight: 700; font-size: 1rem; flex: 1; line-height: 1.25; }
+header.appbar .titre { font-weight: 700; font-size: var(--t-grand); flex: 1; line-height: 1.25; }
 header.appbar .titre small { display: block; font-weight: 400; opacity: 0.8; font-size: 0.75rem; }
 header.appbar button { background: rgba(255, 255, 255, 0.15); color: #fff; border-color: transparent; }
 header.appbar button:hover { background: rgba(255, 255, 255, 0.28); }
+
+/*
+ * La barre portait cinq boutons de meme poids : rien ne disait lequel menait
+ * ailleurs et lequel fermait la session. Ils se groupent desormais — les ecrans
+ * ensemble, le compte a part, separes d'un filet — et le bouton de sortie perd
+ * son fond, puisqu'il ne se cherche que quand on le veut.
+ */
+header.appbar nav {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  flex-wrap: wrap;
+}
+header.appbar nav .separateur-nav {
+  width: 1px;
+  align-self: stretch;
+  margin: var(--e1) var(--e1);
+  background: rgba(255, 255, 255, 0.25);
+}
+header.appbar nav button.discret {
+  background: transparent;
+  font-weight: 500;
+  opacity: 0.85;
+}
+header.appbar nav button.discret:hover { background: rgba(255, 255, 255, 0.18); opacity: 1; }
 
 main { max-width: 1400px; margin: 0 auto; padding: 16px; }
 
@@ -62,11 +115,53 @@ main { max-width: 1400px; margin: 0 auto; padding: 16px; }
   color: var(--bleu);
 }
 
-.grille { display: grid; gap: 12px; }
+.grille { display: grid; gap: var(--e3); }
 .grille.deux { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .grille.trois { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
-.rangee { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.rangee { display: flex; flex-wrap: wrap; gap: var(--e3); align-items: flex-end; }
 .pousse { margin-left: auto; }
+
+/*
+ * Les largeurs de champ, nommees plutot qu'ecrites au pixel dans chaque page.
+ * Trois suffisent : une annee, un mois, un intitule. Le quatrieme cas qui se
+ * presentera prendra la plus proche plutot que d'inventer sa mesure.
+ */
+.champ-court { width: var(--champ-court); }
+.champ-moyen { width: var(--champ-moyen); }
+.champ-long { width: var(--champ-long); }
+.champ-libre { flex: 1; min-width: 220px; }
+
+/*
+ * Les quatre respirations, au lieu d'une marge ecrite au cas par cas.
+ *
+ * On comptait onze valeurs differentes de `margin-top` dans les pages — 6, 8,
+ * 10, 12, 14, 16, 22, 26 px — toutes posees a l'oeil, un jour ou l'autre. Rien
+ * ne s'alignait, et personne n'aurait su dire laquelle etait la bonne.
+ */
+.serree { margin: 0; }
+.suite { margin: var(--e1) 0 0; }
+.detache { margin-top: var(--e3); }
+.detache.plus { margin-top: var(--e5); }
+.detache-apres { margin-bottom: var(--e3); }
+.aide.a-droite { text-align: right; max-width: 380px; }
+
+/*
+ * Barre d'outils d'un ecran : les reglages a gauche, les actions a droite.
+ * C'est la disposition que chaque page bricolait avec un `pousse` et trois
+ * marges ; elle est ici une fois pour toutes.
+ */
+.barre-outils {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e3);
+  align-items: flex-end;
+}
+.barre-outils > .actions {
+  display: flex;
+  gap: var(--e2);
+  align-items: flex-end;
+  margin-left: auto;
+}
 
 /* -------------------------------- Champs --------------------------------- */
 
@@ -125,6 +220,110 @@ button.valide:hover { filter: brightness(1.1); }
 button.danger { background: var(--rouge); border-color: var(--rouge); color: #fff; }
 button.danger:hover { filter: brightness(1.1); }
 button.petit { padding: 6px 10px; font-size: 0.82rem; }
+
+/*
+ * Un champ dans un tableau se tait tant qu'on ne s'en occupe pas.
+ *
+ * L'ecran Parametres alignait trente-neuf lignes de cinq boites blanches
+ * bordees : deux cents contours pour une page ou l'on ne corrige, le plus
+ * souvent, qu'une seule valeur. Le contour n'apparait donc qu'au survol et a la
+ * saisie — la donnee se lit comme du texte, et reste modifiable au meme endroit,
+ * sans rien changer a la facon de s'en servir.
+ */
+/*
+ * Les cellules de saisie de la grille du directeur.
+ *
+ * Elles portaient chacune leur `padding` et leur `min-width` en dur, recopies
+ * de colonne en colonne : sept variantes pour sept colonnes qui font toutes la
+ * meme chose. Une classe par nature de donnee suffit.
+ */
+.cellule { padding: 5px 8px; text-align: center; }
+.cellule.heures, .cellule.zone, .cellule.deplacement { min-width: 56px; }
+.cellule.route, .cellule.trajet { min-width: 60px; }
+.cellule.masque-type { min-width: 62px; }
+.cellule.observation { min-width: 150px; text-align: left; }
+.cellule.code {
+  padding: 2px;
+  font-size: 0.72rem;
+  margin-top: var(--e1);
+  min-width: 56px;
+}
+
+/*
+ * Le code d'absence sous chaque journee se tait quand il n'a rien a dire.
+ *
+ * Sur la carte d'un salarie, sept menus deroulants s'alignent sous les sept
+ * jours. Six affichent « — » la plupart du temps : ils remplissaient un tiers de
+ * la carte d'un bruit qui ne disait rien. Vide, le menu n'est plus qu'un tiret
+ * gris ; des qu'il porte un code, il reprend son contour — et le code, lui, doit
+ * se voir de loin.
+ *
+ * `:has()` n'est pas connu des navigateurs les plus anciens : ils garderont
+ * l'affichage precedent, ce qui reste correct.
+ */
+.jour select.code:has(option[value=""]:checked) {
+  border-color: transparent;
+  background: transparent;
+  color: #9aa4b0;
+}
+.jour select.code:hover, .jour select.code:focus {
+  border-color: var(--gris-bord);
+  background: #fff;
+}
+.jour select.code { font-weight: 600; }
+
+.cellule-calme {
+  border-color: transparent;
+  background: transparent;
+  padding: 6px 8px;
+}
+.cellule-calme:hover { border-color: var(--gris-bord); background: #fff; }
+.cellule-calme:focus { border-color: var(--bleu-clair); background: #fff; }
+/* Une case a completer garde son signal : c'est tout l'objet du signal. */
+.cellule-calme.champ-bloquant, .cellule-calme.champ-alerte { border-color: currentColor; }
+select/*
+ * Les cellules de saisie de la grille du directeur.
+ *
+ * Elles portaient chacune leur `padding` et leur `min-width` en dur, recopies
+ * de colonne en colonne : sept variantes pour sept colonnes qui font toutes la
+ * meme chose. Une classe par nature de donnee suffit.
+ */
+.cellule { padding: 5px 8px; text-align: center; }
+.cellule.heures, .cellule.zone, .cellule.deplacement { min-width: 56px; }
+.cellule.route, .cellule.trajet { min-width: 60px; }
+.cellule.masque-type { min-width: 62px; }
+.cellule.observation { min-width: 150px; text-align: left; }
+.cellule.code {
+  padding: 2px;
+  font-size: 0.72rem;
+  margin-top: var(--e1);
+  min-width: 56px;
+}
+
+/*
+ * Le code d'absence sous chaque journee se tait quand il n'a rien a dire.
+ *
+ * Sur la carte d'un salarie, sept menus deroulants s'alignent sous les sept
+ * jours. Six affichent « — » la plupart du temps : ils remplissaient un tiers de
+ * la carte d'un bruit qui ne disait rien. Vide, le menu n'est plus qu'un tiret
+ * gris ; des qu'il porte un code, il reprend son contour — et le code, lui, doit
+ * se voir de loin.
+ *
+ * `:has()` n'est pas connu des navigateurs les plus anciens : ils garderont
+ * l'affichage precedent, ce qui reste correct.
+ */
+.jour select.code:has(option[value=""]:checked) {
+  border-color: transparent;
+  background: transparent;
+  color: #9aa4b0;
+}
+.jour select.code:hover, .jour select.code:focus {
+  border-color: var(--gris-bord);
+  background: #fff;
+}
+.jour select.code { font-weight: 600; }
+
+.cellule-calme { padding-right: var(--e5); }
 
 /* -------------------------------- Etiquettes ----------------------------- */
 
@@ -467,10 +666,39 @@ input[readonly] { background: #f7f9fc; color: var(--gris-texte); }
 
 /* ------------------------------- Indicateurs ----------------------------- */
 
-.indicateurs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-.indicateur { background: #fff; border: 1px solid var(--gris-bord); border-radius: var(--rayon); padding: 14px; }
-.indicateur .valeur { font-size: 1.6rem; font-weight: 700; color: var(--bleu); line-height: 1.1; }
-.indicateur .libelle { font-size: 0.76rem; color: var(--gris-texte); text-transform: uppercase; letter-spacing: 0.03em; }
+/*
+ * Six indicateurs sur une ligne, de meme hauteur.
+ *
+ * Ils s'etiraient auparavant a la largeur disponible : un libelle un peu long
+ * passait sur deux lignes et sa carte grandissait seule, ce qui suffisait a
+ * donner a la rangee un air de bric-a-brac. La hauteur est donc commune, et le
+ * libelle tient sur une ligne — c'est un tableau de bord, pas une notice.
+ */
+.indicateurs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--e3);
+  align-items: stretch;
+}
+.indicateur {
+  background: #fff;
+  border: 1px solid var(--gris-bord);
+  border-radius: var(--rayon);
+  padding: var(--e3) var(--e4);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--e1);
+  min-height: 76px;
+}
+.indicateur .valeur { font-size: 1.5rem; font-weight: 700; color: var(--bleu); line-height: 1.1; }
+.indicateur .libelle {
+  font-size: 0.72rem;
+  color: var(--gris-texte);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  line-height: 1.25;
+}
 
 /* --------------------------------- Divers -------------------------------- */
 

@@ -15,21 +15,24 @@
       Pointage hebdomadaire — Direction
       <small id="entete-nom">…</small>
     </div>
-    <button class="petit" id="btn-calendrier" type="button">Calendrier du mois</button>
-    <button class="petit" id="btn-non-productif" type="button">Personnel non productif</button>
-    <button class="petit" id="btn-mensuel-haut" type="button">Tableau mensuel</button>
-    <button class="petit" id="btn-admin" type="button">Paramètres</button>
-    <button class="petit" id="btn-quitter" type="button">Quitter</button>
+    <nav>
+      <button class="petit" id="btn-mensuel-haut" type="button">Tableau mensuel</button>
+      <button class="petit" id="btn-calendrier" type="button">Calendrier</button>
+      <button class="petit" id="btn-non-productif" type="button">Non productif</button>
+      <span class="separateur-nav"></span>
+      <button class="petit discret" id="btn-admin" type="button">Paramètres</button>
+      <button class="petit discret" id="btn-quitter" type="button">Quitter</button>
+    </nav>
   </header>
 
   <main>
     <section class="carte">
       <div class="rangee">
-        <div style="width:110px">
+        <div class="champ-court">
           <label for="annee">Année</label>
           <input id="annee" type="number" min="2020" max="2100" step="1">
         </div>
-        <div style="width:120px">
+        <div class="champ-court">
           <label for="semaine">Semaine n°</label>
           <input id="semaine" type="number" min="1" max="53" step="1">
         </div>
@@ -37,7 +40,7 @@
         <button class="petit" id="btn-precedente" type="button">◀ Précédente</button>
         <button class="petit" id="btn-suivante" type="button">Suivante ▶</button>
         <span class="pousse"></span>
-        <div style="width:170px">
+        <div class="champ-moyen">
           <label for="portee-export">Contenu de l'export</label>
           <select id="portee-export">
             <option value="validee">Fiches validées</option>
@@ -51,49 +54,31 @@
       <p class="aide" id="periode"></p>
     </section>
 
+    <!--
+      Trois cartes pleine largeur menaient ici vers trois ecrans que la barre du
+      haut proposait deja : la meme navigation, deux fois, et le contenu reel du
+      tableau de bord repousse sous la ligne de flottaison. Il en reste une
+      rangee de raccourcis — qui garde ce que la barre ne peut pas dire :
+      l'apercu du mois en cours.
+    -->
     <section class="carte">
-      <div class="rangee">
+      <div class="barre-outils">
         <div>
-          <h2 style="margin:0">Tableau mensuel pour la paie</h2>
-          <p class="aide" style="margin:4px 0 0" id="apercu-mois"></p>
+          <h2 class="serree">Préparer la paie</h2>
+          <p class="aide suite" id="apercu-mois"></p>
         </div>
-        <span class="pousse"></span>
-        <button class="principal" id="btn-mensuel" type="button">Ouvrir le tableau mensuel</button>
-      </div>
-    </section>
-
-    <section class="carte">
-      <div class="rangee">
-        <div>
-          <h2 style="margin:0">Calendrier du mois</h2>
-          <p class="aide" style="margin:4px 0 0">
-            Tout l'effectif, jour par jour : qui a travaillé, qui était en congé, et les jours
-            sans pointage ni justification.
-          </p>
+        <div class="actions">
+          <button class="petit" id="btn-calendrier-bas" type="button">Calendrier du mois</button>
+          <button class="petit" id="btn-non-productif-bas" type="button">Non productif</button>
+          <button class="petit" id="btn-paie-non-productif" type="button">Paie non productif</button>
+          <button class="principal" id="btn-mensuel" type="button">Tableau mensuel</button>
         </div>
-        <span class="pousse"></span>
-        <button class="principal" id="btn-calendrier-bas" type="button">Ouvrir le calendrier</button>
-      </div>
-    </section>
-
-    <section class="carte">
-      <div class="rangee">
-        <div>
-          <h2 style="margin:0">Personnel non productif</h2>
-          <p class="aide" style="margin:4px 0 0">
-            Administratif, encadrement, atelier : 7 h par jour ouvré, et un tableau de paie
-            à part — ils ne figurent sur aucune fiche de chantier.
-          </p>
-        </div>
-        <span class="pousse"></span>
-        <button class="petit" id="btn-non-productif-bas" type="button">Calendrier</button>
-        <button class="principal" id="btn-paie-non-productif" type="button">Tableau de paie</button>
       </div>
     </section>
 
     <section class="indicateurs" id="indicateurs"></section>
 
-    <section class="carte" style="margin-top:16px">
+    <section class="carte detache">
       <h2>Suivi des chefs d'équipe</h2>
       <div class="enveloppe-table">
         <table id="suivi">

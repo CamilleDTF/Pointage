@@ -281,7 +281,8 @@ async function chargerVehicules() {
   if (!table) return;
   const { vehicules } = await API.get('/api/admin/vehicules');
   const champ = (v, nom, largeur) =>
-    `<input value="${echapper(v[nom])}" style="width:${largeur}" onchange="corrigerVehicule(${v.id}, '${nom}', this.value, this)">`;
+    `<input value="${echapper(v[nom])}" class="cellule-calme" style="width:${largeur}"
+       onchange="corrigerVehicule(${v.id}, '${nom}', this.value, this)">`;
 
   table.querySelector('tbody').innerHTML = vehicules
     .map(
@@ -331,13 +332,13 @@ async function chargerNonProductifs() {
     ? salaries
         .map(
           (s) => `<tr style="${s.actif ? '' : 'opacity:.5'}">
-            <td><input value="${echapper(s.matricule || '')}" style="width:100px"
+            <td><input value="${echapper(s.matricule || '')}" class="cellule-calme champ-court"
                        onchange="corrigerSalarie(${s.id}, 'matricule', this.value, this)"></td>
-            <td><input value="${echapper(s.nom)}" style="width:150px"
+            <td><input value="${echapper(s.nom)}" class="cellule-calme champ-moyen"
                        onchange="corrigerSalarie(${s.id}, 'nom', this.value, this)"></td>
-            <td><input value="${echapper(s.prenom)}" style="width:130px"
+            <td><input value="${echapper(s.prenom)}" class="cellule-calme champ-court"
                        onchange="corrigerSalarie(${s.id}, 'prenom', this.value, this)"></td>
-            <td class="num"><input type="number" min="0" step="0.01" style="width:100px"
+            <td class="num"><input type="number" min="0" step="0.01" class="cellule-calme champ-court"
                        value="${s.taux_horaire || ''}" placeholder="—"
                        onchange="fixerTaux(${s.id}, this.value)"></td>
             <td><button class="petit" onclick="basculerSalarie(${s.id}, ${s.actif ? 0 : 1})">${
@@ -383,7 +384,7 @@ async function chargerConducteurs() {
       'les lignes SMTP de <code>configuration.txt</code> (voir <code>TESTER-COURRIEL.bat</code>).';
 
   const champ = (c, nom, valeur, largeur, type = 'text') =>
-    `<input type="${type}" value="${echapper(valeur)}" style="width:${largeur}"
+    `<input type="${type}" value="${echapper(valeur)}" class="cellule-calme" style="width:${largeur}"
             onchange="corrigerConducteur(${c.id}, '${nom}', this.value, this)">`;
 
   table.querySelector('tbody').innerHTML = conducteurs.length
@@ -420,7 +421,7 @@ async function chargerConducteurs() {
     .map(
       (chef) => `<tr>
         <td>${echapper(chef.nom)}</td>
-        <td><select onchange="rattacherChef(${chef.id}, this.value)" style="min-width:280px">${options(
+        <td><select class="cellule-calme" onchange="rattacherChef(${chef.id}, this.value)" style="min-width:280px">${options(
           chef.conducteur_id
         )}</select></td>
       </tr>`
@@ -599,11 +600,11 @@ async function chargerAdmin() {
         // cases, parce que c'est ainsi qu'on corrige une orthographe.
         const { nom, prenom } = Regles.separerNomPrenom(u.nom);
         return `<tr style="${u.actif ? '' : 'opacity:.5'}">
-        <td><input value="${echapper(nom)}" style="width:150px"
+        <td><input value="${echapper(nom)}" class="cellule-calme champ-moyen"
                    onchange="corrigerCompte(${u.id}, 'nom', this.value, this)"></td>
-        <td><input value="${echapper(prenom)}" style="width:130px"
+        <td><input value="${echapper(prenom)}" class="cellule-calme champ-court"
                    onchange="corrigerCompte(${u.id}, 'prenom', this.value, this)"></td>
-        <td><input value="${echapper(u.identifiant)}" style="width:130px"
+        <td><input value="${echapper(u.identifiant)}" class="cellule-calme champ-court"
                    onchange="corrigerCompte(${u.id}, 'identifiant', this.value, this)"></td>
         <td>${u.role}</td>
         <td>
@@ -625,14 +626,14 @@ async function chargerAdmin() {
   $('table-salaries').querySelector('tbody').innerHTML = salaries
     .map(
       (s) => `<tr style="${s.actif ? '' : 'opacity:.5'}">
-        <td><input value="${echapper(s.matricule || '')}" style="width:95px"
+        <td><input value="${echapper(s.matricule || '')}" class="cellule-calme champ-court"
                    onchange="corrigerSalarie(${s.id}, 'matricule', this.value, this)"></td>
-        <td><input value="${echapper(s.nom)}" style="width:150px"
+        <td><input value="${echapper(s.nom)}" class="cellule-calme champ-moyen"
                    onchange="corrigerSalarie(${s.id}, 'nom', this.value, this)"></td>
-        <td><input value="${echapper(s.prenom)}" style="width:150px"
+        <td><input value="${echapper(s.prenom)}" class="cellule-calme champ-moyen"
                    onchange="corrigerSalarie(${s.id}, 'prenom', this.value, this)"></td>
-        <td><select onchange="affecter(${s.id}, this.value)">${options(s.chef_id)}</select></td>
-        <td class="num"><input class="taux" type="number" min="0" step="0.01" style="width:92px;text-align:right"
+        <td><select class="cellule-calme" onchange="affecter(${s.id}, this.value)">${options(s.chef_id)}</select></td>
+        <td class="num"><input class="cellule-calme taux" type="number" min="0" step="0.01" style="width:92px;text-align:right"
                value="${s.taux_horaire || ''}" placeholder="—"
                onchange="fixerTaux(${s.id}, this.value)"></td>
         <td><button class="petit" onclick="basculerSalarie(${s.id}, ${s.actif ? 0 : 1})">${s.actif ? 'Sortie' : 'Réactiver'}</button></td>

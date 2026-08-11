@@ -22,18 +22,18 @@
   <main>
     <section class="carte">
       <div class="rangee">
-        <div style="width:150px">
+        <div class="champ-moyen">
           <label for="mois">Mois</label>
           <select id="mois"></select>
         </div>
-        <div style="width:110px">
+        <div class="champ-court">
           <label for="annee">Année</label>
           <input id="annee" type="number" min="2020" max="2100" step="1">
         </div>
         <button class="petit" id="btn-precedent" type="button">◀ Précédent</button>
         <button class="petit" id="btn-suivant" type="button">Suivant ▶</button>
         <span class="pousse"></span>
-        <div style="width:190px">
+        <div class="champ-moyen">
           <label for="filtre-equipe">Équipe</label>
           <select id="filtre-equipe"></select>
         </div>
@@ -45,7 +45,7 @@
     <section class="carte">
       <div id="calendrier-mensuel"></div>
       <div class="legende-annee" id="legende-calendrier"></div>
-      <p class="aide" style="margin-top:10px">
+      <p class="aide detache">
         Une ligne par personne, une colonne par jour. Une case vide en semaine est un
         <strong>jour sans pointage et sans justification</strong> : c'est ce qu'il faut aller
         chercher. Un congé enregistré ici explique l'absence de fiche ; des heures pointées
@@ -87,11 +87,11 @@
           <input id="conge-fin" type="date">
         </div>
       </div>
-      <div style="margin-top:12px">
+      <div class="detache">
         <label for="conge-commentaire">Commentaire (facultatif)</label>
         <input id="conge-commentaire" placeholder="précision utile au suivi">
       </div>
-      <div class="rangee" style="margin-top:16px">
+      <div class="rangee detache">
         <span class="pousse"></span>
         <button class="petit" id="btn-annuler-conge" type="button">Annuler</button>
         <button class="principal" id="btn-valider-conge" type="button">Enregistrer</button>

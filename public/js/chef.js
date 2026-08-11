@@ -651,7 +651,7 @@ function carteSalarie(ligne, index) {
       <span class="total">${versTexte(ligne.total_minutes)}</span>
     </summary>
     <div class="corps">
-      <div style="margin-bottom:12px">
+      <div class="detache-apres">
         <label>Salarié</label>
         ${champNom(ligne)}
       </div>
@@ -659,7 +659,7 @@ function carteSalarie(ligne, index) {
       <label>Heures de travail (hors repas et trajet)</label>
       <div class="jours">${jours}</div>
 
-      <div class="grille trois" style="margin-top:14px">
+      <div class="grille trois detache">
         <div><label>Heures route 100%</label><input class="route" value="${versSaisie(ligne.minutes_route)}" placeholder="0h00"></div>
         <div><label>Heures trajet 50%</label><input class="trajet" value="${versSaisie(ligne.minutes_trajet)}" placeholder="0h00"></div>
         <div><label>Jours en zone</label><input class="zone" type="number" min="0" max="7" step="0.5" value="${ligne.jours_zone || ''}"></div>
@@ -668,12 +668,12 @@ function carteSalarie(ligne, index) {
         <div><label>Jours GD 80</label><input class="gd80" type="number" min="0" max="7" step="1" value="${ligne.nb_gd80 || ''}"></div>
       </div>
 
-      <div style="margin-top:12px">
+      <div class="detache">
         <label>Observations</label>
         <input class="observation" value="${echapper(ligne.observation)}">
       </div>
 
-      <div style="margin-top:12px">
+      <div class="detache">
         <label>Signature du salarié (obligatoire)</label>
         <div class="signature">
           <div class="apercu-signature"></div>
@@ -890,7 +890,7 @@ function ouvrirFenetreSignature(nom, index, auxChangements) {
     <div class="fenetre-corps">
       <h2>Signature — ${echapper(nom || `ligne ${index + 1}`)}</h2>
       <div class="signature"><canvas class="toile-signature" style="height:180px"></canvas></div>
-      <div class="rangee" style="margin-top:12px">
+      <div class="rangee detache">
         <button type="button" class="petit effacer">Effacer</button>
         <span class="pousse"></span>
         <button type="button" class="petit fermer">Annuler</button>
@@ -1175,14 +1175,14 @@ function proposerAlerte(alerte) {
       </p>
       <textarea readonly style="min-height:150px;font-size:0.86rem">${echapper(alerte.texte)}</textarea>
       ${blocAlerte(alerte)}
-      <div class="rangee" style="margin-top:12px">
+      <div class="rangee detache">
         <span class="pousse"></span>
         <button class="petit principal" type="button" data-fermer>Fermer</button>
       </div>
       ${
         alerte.telephone
-          ? `<p class="aide" style="margin-top:10px">${echapper(alerte.telephone)}</p>`
-          : `<p class="aide" style="margin-top:10px">Aucun numéro enregistré pour ${echapper(alerte.nom)} :
+          ? `<p class="aide detache">${echapper(alerte.telephone)}</p>`
+          : `<p class="aide detache">Aucun numéro enregistré pour ${echapper(alerte.nom)} :
              copiez le message et envoyez-le par vos propres moyens. La direction peut ajouter son
              numéro dans Paramètres.</p>`
       }

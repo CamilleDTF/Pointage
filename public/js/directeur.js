@@ -222,7 +222,7 @@ function afficherLienVisa(visa) {
       </p>
       <textarea readonly style="min-height:130px;font-size:0.86rem">${echapper(alerte.texte || '')}</textarea>
       ${blocAlerte(alerte, 'data-copier-message')}
-      <div class="rangee" style="margin-top:14px">
+      <div class="rangee detache">
         <span class="pousse"></span>
         <button class="petit principal" type="button" data-fermer>Fermer</button>
       </div>
@@ -322,8 +322,8 @@ function construireFiche(fiche) {
             .join('');
           return `<td class="num ${j >= 5 ? 'weekend' : ''}">
             <input class="cellule heures" data-jour="${j}" value="${Regles.versSaisieJour(jour)}"
-                   style="padding:5px;text-align:center;min-width:56px">
-            <select class="cellule code" data-jour="${j}" style="padding:2px;font-size:0.72rem;margin-top:3px">
+                  >
+            <select class="cellule code" data-jour="${j}">
               <option value="">—</option>${codes}
             </select>
           </td>`;
@@ -334,16 +334,16 @@ function construireFiche(fiche) {
         <td style="min-width:170px">${echapper(ligne.nom_affiche)}</td>
         ${cellulesJours}
         <td class="num total" style="font-weight:700">${versTexte(ligne.total_minutes)}</td>
-        <td class="num"><input class="cellule route" value="${versSaisie(ligne.minutes_route)}" style="padding:5px;text-align:center;min-width:60px"></td>
-        <td class="num"><input class="cellule trajet" value="${versSaisie(ligne.minutes_trajet)}" style="padding:5px;text-align:center;min-width:60px"></td>
-        <td class="num"><input class="cellule zone" type="number" min="0" max="7" step="0.5" value="${ligne.jours_zone || ''}" style="padding:5px;text-align:center;min-width:56px"></td>
-        <td class="num"><select class="cellule masque-type" style="padding:5px;min-width:62px">
+        <td class="num"><input class="cellule route" value="${versSaisie(ligne.minutes_route)}"></td>
+        <td class="num"><input class="cellule trajet" value="${versSaisie(ligne.minutes_trajet)}"></td>
+        <td class="num"><input class="cellule zone" type="number" min="0" max="7" step="0.5" value="${ligne.jours_zone || ''}"></td>
+        <td class="num"><select class="cellule masque-type">
           <option value=""${!ligne.type_masque ? ' selected' : ''}>—</option>
           <option value="VA"${ligne.type_masque === 'VA' ? ' selected' : ''}>VA</option>
           <option value="AA"${ligne.type_masque === 'AA' ? ' selected' : ''}>AA</option>
         </select></td>
-        <td class="num"><input class="cellule deplacement" type="number" min="0" step="1" value="${ligne.nb_deplacement || ''}" style="padding:5px;text-align:center;min-width:56px"></td>
-        <td><input class="cellule observation" value="${echapper(ligne.observation)}" style="padding:5px;min-width:150px"></td>
+        <td class="num"><input class="cellule deplacement" type="number" min="0" step="1" value="${ligne.nb_deplacement || ''}"></td>
+        <td><input class="cellule observation" value="${echapper(ligne.observation)}"></td>
         <td class="num">${ligne.signature ? '<span title="Signée">✔</span>' : '<span style="color:var(--rouge)" title="Signature manquante">✘</span>'}</td>
       </tr>`;
     })
@@ -354,15 +354,15 @@ function construireFiche(fiche) {
       <strong>${echapper(fiche.chef_nom)}</strong>
       <span>${echapper(fiche.chantier || 'chantier non renseigné')} — ${echapper(fiche.ville)}</span>
       ${badgeStatut(Regles.etatAffiche(fiche))}
-      <span class="pousse aide" style="margin:0">${lignes.length} salarié(s) · ${versTexte(fiche.total_minutes)}</span>
+      <span class="pousse aide serree">${lignes.length} salarié(s) · ${versTexte(fiche.total_minutes)}</span>
     </summary>
 
-    <div style="margin-top:14px">
+    <div class="detache">
       ${fiche.motif_rejet ? `<p class="aide" style="color:var(--rouge);font-weight:600">Renvoyée : ${echapper(fiche.motif_rejet)}</p>` : ''}
       ${bandeauValidee(fiche)}
       ${bandeauVisa(fiche)}
       ${relevesConducteur(fiche)}
-      <div class="grille trois" style="margin-bottom:12px">
+      <div class="grille trois detache-apres">
         <div><label>Chantier</label><input class="entete" data-champ="chantier" value="${echapper(fiche.chantier)}"></div>
         <div><label>Ville</label><input class="entete" data-champ="ville" value="${echapper(fiche.ville)}"></div>
         <div><label>Conducteur du véhicule</label><input class="entete" data-champ="conducteur_vehicule" value="${echapper(fiche.conducteur_vehicule)}"></div>
@@ -388,10 +388,10 @@ function construireFiche(fiche) {
         </table>
       </div>
 
-      <ul class="anomalies" style="margin-top:12px"></ul>
+      <ul class="anomalies detache"></ul>
 
-      <div class="rangee" style="margin-top:12px">
-        <span class="aide etat-enregistrement" style="margin:0"></span>
+      <div class="rangee detache">
+        <span class="aide etat-enregistrement serree"></span>
         <span class="pousse"></span>
         <button class="petit" data-action="excel">Fiche Excel</button>
         ${

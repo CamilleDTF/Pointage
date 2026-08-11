@@ -290,7 +290,7 @@ function blocAlerte(alerte, attributCopier = 'data-copier') {
           : 'Copiez le message et envoyez-le par le moyen de votre choix.'
       }</p>`;
 
-  return `<div class="rangee" style="margin-top:12px">
+  return `<div class="rangee detache">
         ${moyens.join('\n        ')}
         <button class="petit" type="button" ${attributCopier}>Copier le message</button>
       </div>${note}`;

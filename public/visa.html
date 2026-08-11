@@ -32,8 +32,8 @@
       <section class="carte">
         <div class="rangee">
           <div>
-            <h2 style="margin:0" id="titre-fiche"></h2>
-            <p class="aide" id="sous-titre" style="margin:4px 0 0"></p>
+            <h2 class="serree" id="titre-fiche"></h2>
+            <p class="aide" id="sous-titre" class="suite"></p>
           </div>
           <span class="pousse"></span>
           <span id="badge-visa"></span>
@@ -50,7 +50,7 @@
         <div class="enveloppe-table">
           <table class="grille-pointage" id="grille"></table>
         </div>
-        <p class="aide" id="observations" style="margin-top:12px"></p>
+        <p class="aide" id="observations" class="detache"></p>
       </section>
 
       <!--
@@ -74,7 +74,7 @@
           <button class="petit principal" id="btn-enregistrer" type="button">Enregistrer les corrections</button>
           <span class="aide" id="etat-correction"></span>
         </div>
-        <p class="aide" style="margin-top:8px">
+        <p class="aide detache">
           Une ligne vide en bas du tableau permet d'ajouter un opérateur oublié : tapez
           son nom, la liste vous le propose.
         </p>
@@ -87,12 +87,12 @@
           En la renvoyant, elle repart au chef d'équipe avec votre commentaire.
         </p>
 
-        <div style="margin-top:14px">
+        <div class="detache">
           <label for="commentaire">Commentaire — obligatoire pour un renvoi, facultatif pour un visa</label>
           <textarea id="commentaire" placeholder="Ce qui doit être corrigé, ou une remarque à conserver avec la fiche"></textarea>
         </div>
 
-        <div class="rangee" style="margin-top:14px">
+        <div class="rangee detache">
           <button class="valide" id="btn-viser" type="button">✓ Viser cette fiche</button>
           <button class="danger" id="btn-renvoyer" type="button">↩ Renvoyer au chef d'équipe</button>
         </div>

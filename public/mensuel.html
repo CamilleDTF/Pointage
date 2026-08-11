@@ -22,15 +22,15 @@
   <main>
     <section class="carte">
       <div class="rangee">
-        <div style="width:150px">
+        <div class="champ-moyen">
           <label for="mois">Mois</label>
           <select id="mois"></select>
         </div>
-        <div style="width:110px">
+        <div class="champ-court">
           <label for="annee-mois">Année</label>
           <input id="annee-mois" type="number" min="2020" max="2100" step="1">
         </div>
-        <div style="width:230px">
+        <div class="champ-long">
           <label for="version-mois">Version</label>
           <select id="version-mois">
             <option value="public">Publique — heures et primes</option>
@@ -40,11 +40,11 @@
         <button class="principal" id="btn-voir-mois" type="button">Afficher</button>
         <button class="valide" id="btn-export-mois" type="button">Télécharger</button>
         <span class="pousse"></span>
-        <p class="aide" id="apercu-mois" style="margin:0;text-align:right;max-width:380px"></p>
+        <p class="aide" id="apercu-mois" class="aide serree a-droite"></p>
       </div>
 
-      <div class="rangee masque" id="bloc-panier" style="margin-top:10px">
-        <span class="aide" style="margin:0">
+      <div class="rangee masque" id="bloc-panier" class="detache">
+        <span class="aide serree">
           Panier repas : <strong>12,20 € par jour travaillé</strong>, hors jours de grand
           déplacement — l'indemnité de déplacement comprend déjà le repas. Rien à saisir :
           le montant est fixe et les jours se comptent depuis le pointage.

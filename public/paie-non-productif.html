@@ -23,11 +23,11 @@
   <main>
     <section class="carte">
       <div class="rangee">
-        <div style="width:150px">
+        <div class="champ-moyen">
           <label for="mois">Mois</label>
           <select id="mois"></select>
         </div>
-        <div style="width:110px">
+        <div class="champ-court">
           <label for="annee">Année</label>
           <input id="annee" type="number" min="2020" max="2100" step="1">
         </div>
@@ -35,9 +35,9 @@
         <button class="valide" id="btn-export" type="button">Télécharger</button>
         <button class="petit" id="btn-masquer" type="button">Masquer</button>
         <span class="pousse"></span>
-        <p class="aide" id="apercu" style="margin:0;text-align:right;max-width:360px"></p>
+        <p class="aide" id="apercu" class="aide serree a-droite"></p>
       </div>
-      <p class="aide" style="margin-top:10px">
+      <p class="aide detache">
         Tableau distinct de celui des chantiers : ce personnel ne figure sur aucune fiche.
         Le salaire de base vaut <strong>151,67 h</strong> par mois ; ne s'y ajoutent que les
         heures particulières, les grands déplacements et les primes saisies au calendrier.

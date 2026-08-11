@@ -46,11 +46,11 @@
         </tr></thead>
         <tbody></tbody>
       </table></div>
-      <div class="rangee" style="margin-top:10px">
-        <input id="s-matricule" placeholder="matricule" style="width:100px">
-        <input id="s-nom" placeholder="NOM" style="flex:1;min-width:110px">
-        <input id="s-prenom" placeholder="Prénom" style="flex:1;min-width:110px">
-        <select id="s-chef" style="flex:1;min-width:130px"></select>
+      <div class="rangee detache">
+        <input id="s-matricule" placeholder="matricule" class="champ-court">
+        <input id="s-nom" placeholder="NOM" class="champ-libre">
+        <input id="s-prenom" placeholder="Prénom" class="champ-libre">
+        <select id="s-chef" class="champ-libre"></select>
         <button class="petit principal" id="btn-ajout-salarie" type="button">Ajouter</button>
       </div>
     </section>
@@ -72,10 +72,10 @@
         </tr></thead>
         <tbody></tbody>
       </table></div>
-      <div class="rangee" style="margin-top:10px">
-        <input id="np-matricule" placeholder="matricule" style="width:100px">
-        <input id="np-nom" placeholder="NOM" style="flex:1;min-width:110px">
-        <input id="np-prenom" placeholder="Prénom" style="flex:1;min-width:110px">
+      <div class="rangee detache">
+        <input id="np-matricule" placeholder="matricule" class="champ-court">
+        <input id="np-nom" placeholder="NOM" class="champ-libre">
+        <input id="np-prenom" placeholder="Prénom" class="champ-libre">
         <button class="petit principal" id="btn-ajout-nonproductif" type="button">Ajouter</button>
       </div>
     </section>
@@ -86,10 +86,10 @@
         <thead><tr><th>Nom</th><th>Prénom</th><th>Identifiant</th><th>Rôle</th><th>Actions</th></tr></thead>
         <tbody></tbody>
       </table></div>
-      <div class="rangee" style="margin-top:10px">
-        <input id="u-nom" placeholder="NOM Prénom" style="flex:2;min-width:140px">
-        <input id="u-identifiant" placeholder="identifiant" style="flex:1;min-width:110px">
-        <input id="u-pin" placeholder="code" inputmode="numeric" style="width:90px">
+      <div class="rangee detache">
+        <input id="u-nom" placeholder="NOM Prénom" class="champ-libre">
+        <input id="u-identifiant" placeholder="identifiant" class="champ-libre">
+        <input id="u-pin" placeholder="code" inputmode="numeric" class="champ-court">
         <button class="petit principal" id="btn-ajout-chef" type="button">Ajouter un chef</button>
       </div>
     </section>
@@ -122,13 +122,13 @@
         </tr></thead>
         <tbody></tbody>
       </table></div>
-      <div class="rangee" style="margin-top:10px">
-        <input id="c-nom" placeholder="NOM" style="flex:1;min-width:110px">
-        <input id="c-prenom" placeholder="Prénom" style="flex:1;min-width:110px">
-        <input id="c-identifiant" placeholder="identifiant" style="flex:1;min-width:110px">
-        <input id="c-pin" placeholder="code" inputmode="numeric" style="width:90px">
-        <input id="c-courriel" type="email" placeholder="prenom.nom@societe.fr" style="flex:2;min-width:180px">
-        <input id="c-telephone" type="tel" placeholder="06 12 34 56 78" style="width:140px">
+      <div class="rangee detache">
+        <input id="c-nom" placeholder="NOM" class="champ-libre">
+        <input id="c-prenom" placeholder="Prénom" class="champ-libre">
+        <input id="c-identifiant" placeholder="identifiant" class="champ-libre">
+        <input id="c-pin" placeholder="code" inputmode="numeric" class="champ-court">
+        <input id="c-courriel" type="email" placeholder="prenom.nom@societe.fr" class="champ-libre">
+        <input id="c-telephone" type="tel" placeholder="06 12 34 56 78" class="champ-court">
         <button class="petit principal" id="btn-ajout-conducteur" type="button">Ajouter</button>
       </div>
 
@@ -155,11 +155,11 @@
         </tr></thead>
         <tbody></tbody>
       </table></div>
-      <div class="rangee" style="margin-top:10px">
-        <input id="v-immat" placeholder="AA-123-BB" style="width:130px">
-        <input id="v-marque" placeholder="Marque" style="flex:1;min-width:110px">
-        <input id="v-modele" placeholder="Modèle" style="flex:1;min-width:110px">
-        <input id="v-motorisation" placeholder="Motorisation" style="flex:1;min-width:110px">
+      <div class="rangee detache">
+        <input id="v-immat" placeholder="AA-123-BB" class="champ-court">
+        <input id="v-marque" placeholder="Marque" class="champ-libre">
+        <input id="v-modele" placeholder="Modèle" class="champ-libre">
+        <input id="v-motorisation" placeholder="Motorisation" class="champ-libre">
         <button class="petit principal" id="btn-ajout-vehicule" type="button">Ajouter</button>
       </div>
     </section>
@@ -173,12 +173,12 @@
         de janvier et de retrouver, au centime, ce qui avait été payé.
       </p>
 
-      <div class="rangee" style="margin-bottom:12px">
-        <div style="width:150px">
+      <div class="rangee detache-apres">
+        <div class="champ-moyen">
           <label for="taux-mois">Voir les taux de</label>
           <select id="taux-mois"></select>
         </div>
-        <div style="width:110px">
+        <div class="champ-court">
           <label for="taux-annee">Année</label>
           <input id="taux-annee" type="number" min="2020" max="2100" step="1">
         </div>
@@ -194,7 +194,7 @@
         <tbody></tbody>
       </table></div>
 
-      <p class="aide" style="margin-top:10px">
+      <p class="aide detache">
         La <strong>part nette estimée</strong> n'est pas un calcul de paie : c'est
         l'ordre de grandeur du classeur, qui sert à se faire une idée avant que la paie
         tranche. Les colonnes « net » de l'application en portent le nom.
@@ -222,14 +222,14 @@
         <tbody></tbody>
       </table></div>
 
-      <h2 style="margin-top:22px">Dossier d'un salarié</h2>
+      <h2 class="detache plus">Dossier d'un salarié</h2>
       <p class="aide">
         Tout ce que l'application détient sur une personne, rassemblé en une fois : c'est
         ce qu'on lui remet si elle demande à savoir. Le chercher à la main dans six
         tables, le jour où la demande arrive, serait la meilleure façon d'en oublier une.
       </p>
       <div class="rangee">
-        <div style="flex:1;min-width:220px">
+        <div class="champ-libre">
           <label for="dossier-salarie">Salarié</label>
           <select id="dossier-salarie"></select>
         </div>
@@ -253,7 +253,7 @@
         </tr></thead>
         <tbody></tbody>
       </table></div>
-      <p class="aide" style="margin-top:10px">
+      <p class="aide detache">
         Le retard se compte en jours calendaires depuis le dimanche de la semaine pointée, et
         la date retenue est celle de la <strong>première</strong> demande de validation : un
         chef qui envoie le lundi est à l'heure, même si sa fiche lui revient ensuite pour

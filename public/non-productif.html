@@ -23,11 +23,11 @@
   <main>
     <section class="carte">
       <div class="rangee">
-        <div style="width:150px">
+        <div class="champ-moyen">
           <label for="mois">Mois</label>
           <select id="mois"></select>
         </div>
-        <div style="width:110px">
+        <div class="champ-court">
           <label for="annee">Année</label>
           <input id="annee" type="number" min="2020" max="2100" step="1">
         </div>
@@ -40,7 +40,7 @@
     <section class="carte">
       <div id="calendrier-np"></div>
       <div class="legende-annee" id="legende-np"></div>
-      <p class="aide" style="margin-top:10px">
+      <p class="aide detache">
         Ils sont à <strong>7 h par jour ouvré</strong> : il n'y a rien à saisir pour un mois
         ordinaire. <strong>Cliquez sur une case</strong> pour déclarer ce qui s'en écarte —
         une absence, un grand déplacement, ou des heures particulières.
@@ -66,7 +66,7 @@
         </tr></thead>
         <tbody></tbody>
       </table></div>
-      <p class="aide" style="margin-top:10px">
+      <p class="aide detache">
         Les heures sont comptées à 7 h par jour travaillé. Une prime se saisit depuis le
         bouton de la colonne <strong>Primes</strong>.
       </p>

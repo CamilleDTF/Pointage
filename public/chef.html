@@ -38,25 +38,25 @@
         <span id="resume-calendrier" class="etats-resume"></span>
       </summary>
 
-      <div class="rangee" style="margin-top:14px">
-        <div style="width:120px">
+      <div class="rangee detache">
+        <div class="champ-court">
           <label for="annee-calendrier">Année</label>
           <input id="annee-calendrier" type="number" min="2020" max="2100" step="1">
         </div>
       </div>
 
-      <div id="calendrier" style="margin-top:16px"></div>
+      <div id="calendrier" class="detache"></div>
       <p class="aide">Cliquez sur une semaine pour ouvrir sa fiche.<span id="note-mise-en-service"></span></p>
     </details>
 
     <section class="carte">
       <h2>Semaine</h2>
       <div class="rangee">
-        <div style="width:110px">
+        <div class="champ-court">
           <label for="annee">Année</label>
           <input id="annee" type="number" min="2020" max="2100" step="1">
         </div>
-        <div style="width:110px">
+        <div class="champ-court">
           <label for="semaine">Semaine n°</label>
           <input id="semaine" type="number" min="1" max="53" step="1">
         </div>
@@ -71,11 +71,11 @@
         que la semaine n'en compte qu'une : la plupart des semaines n'ont rien a
         choisir, et un selecteur a une seule entree n'aide personne.
       -->
-      <div class="masque" id="bloc-chantiers" style="margin-top:10px">
+      <div class="masque" id="bloc-chantiers" class="detache">
         <label>Chantiers de la semaine</label>
         <div class="rangee" id="onglets-chantiers"></div>
       </div>
-      <div class="rangee" style="margin-top:8px">
+      <div class="rangee detache">
         <button class="petit" id="btn-second-chantier" type="button">+ Autre chantier cette semaine</button>
         <span class="aide" id="aide-second-chantier"></span>
       </div>
@@ -111,13 +111,13 @@
 
       <section class="carte">
         <h2>Heures par salarié</h2>
-        <p class="aide" style="margin-bottom:12px">
+        <p class="aide detache-apres">
           Saisissez les heures en <strong>7h30</strong>, <strong>7:30</strong> ou <strong>7,5</strong>.
           Hors temps de repas et de trajet. Pour un jour non travaillé, saisissez <strong>0</strong>
           ou choisissez un code d'absence : chaque jour du lundi au vendredi doit être renseigné.
           Ce qu'il reste à compléter apparaît <span style="color:var(--rouge);font-weight:600">encadré en rouge</span>.
         </p>
-        <p class="aide" style="margin-bottom:12px">
+        <p class="aide detache-apres">
           Les colonnes <strong>GD 72</strong> et <strong>GD 80</strong> attendent le
           <strong>nombre de jours</strong> passés par le salarié sous chacun des deux taux de
           grand déplacement. Le <strong>panier repas</strong> n'est pas à saisir : il est acquis
@@ -146,7 +146,7 @@
             <textarea id="commentaire_responsable" data-entete="commentaire_responsable"></textarea>
           </div>
         </div>
-        <div class="grille deux" style="margin-top:12px">
+        <div class="grille deux detache">
           <div>
             <label for="nom_responsable">Nom du responsable de chantier</label>
             <input id="nom_responsable" data-entete="nom_responsable">
@@ -155,7 +155,7 @@
             <label>Signature du responsable de chantier</label>
             <div class="signature">
               <canvas id="signature-responsable"></canvas>
-              <button class="petit" type="button" id="effacer-responsable" style="margin-top:6px">Effacer</button>
+              <button class="petit" type="button" id="effacer-responsable" class="detache">Effacer</button>
             </div>
           </div>
         </div>
@@ -169,16 +169,16 @@
             <select id="conducteur_id" data-entete="conducteur_id"></select>
           </div>
           <div>
-            <p class="aide" id="aide-conducteur" style="margin-top:26px"></p>
+            <p class="aide" id="aide-conducteur" class="detache plus"></p>
           </div>
         </div>
       </section>
 
       <section class="carte" id="bloc-controles">
         <h2>Contrôles avant transmission</h2>
-        <div class="rangee" style="margin-bottom:12px">
+        <div class="rangee detache-apres">
           <button class="petit" id="btn-jours-vides" type="button">Mettre à 0 les jours non travaillés</button>
-          <span class="aide" style="margin:0">
+          <span class="aide serree">
             Remplit d'un <strong>0h00</strong> chaque jour du lundi au vendredi resté vide,
             sur les lignes où un salarié est renseigné.
           </span>
@@ -188,7 +188,7 @@
 
       <section class="carte">
         <div class="rangee">
-          <span id="etat-sauvegarde" class="aide" style="margin:0"></span>
+          <span id="etat-sauvegarde" class="aide serree"></span>
           <span class="pousse"></span>
           <button id="btn-excel" type="button">Télécharger en Excel</button>
           <button id="btn-reprendre" class="masque" type="button">Reprendre pour modifier</button>
