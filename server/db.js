@@ -155,6 +155,34 @@ CREATE TABLE IF NOT EXISTS conges (
  * corriger une fiche validee ouvre un RECTIFICATIF, qui deviendra la version
  * suivante et laissera la precedente intacte a cote.
  */
+/*
+ * Les taux de la paie, avec leur date d'effet.
+ *
+ * Le panier a 12,20 €, le grand deplacement a 72 ou 80 €, la prime de zone :
+ * tout cela vivait en dur dans le code. Un accord d'entreprise, un avenant, une
+ * decision interne, et il fallait une nouvelle version du logiciel — pire, on
+ * perdait la possibilite de recalculer decembre avec les taux de decembre.
+ *
+ * Un taux est donc une valeur QUI COMMENCE A UNE DATE. Celui qui s'applique a
+ * un mois est le dernier dont la date d'effet est atteinte. Les anciens ne sont
+ * jamais modifies : c'est ce qui permet de rejouer un mois passe et de
+ * retrouver, au centime, ce qui avait ete paye.
+ *
+ * La date d'effet est toujours un premier du mois : la paie se decide par mois,
+ * pas par jour, et une date libre ferait naitre la question « ce mois-la, quel
+ * taux fallait-il appliquer ? ».
+ */
+CREATE TABLE IF NOT EXISTS taux (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  cle      TEXT    NOT NULL,
+  valeur   REAL    NOT NULL,
+  debut    TEXT    NOT NULL,
+  note     TEXT    NOT NULL DEFAULT '',
+  cree_le  TEXT    NOT NULL DEFAULT (datetime('now')),
+  cree_par INTEGER REFERENCES utilisateurs(id),
+  UNIQUE (cle, debut)
+);
+
 CREATE TABLE IF NOT EXISTS fiche_versions (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   fiche_id    INTEGER NOT NULL REFERENCES fiches(id) ON DELETE CASCADE,

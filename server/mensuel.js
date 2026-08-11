@@ -20,6 +20,7 @@
 
 const { db } = require('./db');
 const D = require('./domaine');
+const T = require('./taux');
 
 const arrondiQuart = (valeur) => Math.round(valeur * 4) / 4;
 
@@ -237,29 +238,34 @@ function cumulerMois(salarie) {
  * Sans taux horaire renseigne, rien n'est calcule : un salaire faux serait pire
  * qu'une case vide. C'est `tauxManquant` qui le signale a l'ecran.
  */
-const HEURES_MENSUELLES_BASE = 151.67; // duree legale mensualisee
-const PART_NET = 0.77;                 // du brut au net, taux du classeur
-const PRIME_AMIANTE_1 = 5;             // par jour en masque VA
-const PRIME_AMIANTE_2 = 10;            // par jour en masque AA
-const ABATTEMENT_PRIME_AMIANTE = 0.8;
-const MONTANT_GD_72 = 72;
-const MONTANT_GD_80 = 80;
-
-function valoriser(salarie, { montantPanier = D.MONTANT_PANIER_REPAS } = {}) {
+/**
+ * Valorise un salarie avec les taux d'un mois donne.
+ *
+ * Les montants ne sont plus ecrits ici : ils viennent de `server/taux.js`, avec
+ * leur date d'effet. Rejouer un mois passe redonne donc les montants de ce
+ * mois-la, meme si un accord a change les taux depuis.
+ *
+ * `montantPanier` reste accepte pour la simulation a l'ecran — le directeur
+ * essaie une valeur avant de la fixer — mais il ne sert qu'a cela.
+ */
+function valoriser(salarie, { montantPanier, taux: bareme = T.DEFAUTS } = {}) {
   const taux = Number(salarie.tauxHoraire) || 0;
   const h = (minutes) => (Number(minutes) || 0) / 60;
+  const partNet = bareme.part_net_estimee;
 
   if (!taux) {
     return { tauxManquant: true, tauxHoraire: 0, salaireBrut: 0, salaireNet: 0, heuresSupBrut: 0,
       heuresSupNet: 0, primeAmiante: 0, paniers: 0, grandDeplacement: 0, trajet: 0, totalBrut: 0, totalNet: 0 };
   }
 
-  const salaireBrut = HEURES_MENSUELLES_BASE * taux;
-  const heuresSupBrut = taux * 1.25 * h(salarie.minutes25) + taux * 1.5 * h(salarie.minutes50);
+  const salaireBrut = bareme.heures_mensuelles * taux;
+  const heuresSupBrut =
+    taux * bareme.majoration_hs_25 * h(salarie.minutes25) + taux * bareme.majoration_hs_50 * h(salarie.minutes50);
   const primeAmiante =
-    (salarie.joursAmiante1 * PRIME_AMIANTE_1 + salarie.joursAmiante2 * PRIME_AMIANTE_2) * ABATTEMENT_PRIME_AMIANTE;
-  const paniers = salarie.joursPanier * montantPanier;
-  const grandDeplacement = salarie.joursGD72 * MONTANT_GD_72 + salarie.joursGD80 * MONTANT_GD_80;
+    (salarie.joursAmiante1 * bareme.prime_zone_va + salarie.joursAmiante2 * bareme.prime_zone_aa)
+    * bareme.abattement_prime_zone;
+  const paniers = salarie.joursPanier * (montantPanier === undefined ? bareme.panier_repas : montantPanier);
+  const grandDeplacement = salarie.joursGD72 * bareme.gd_72 + salarie.joursGD80 * bareme.gd_80;
   // Trajet paye a 50 %, route a 100 % : la convention des deux colonnes de la fiche.
   const trajet = taux * (h(salarie.minutesTrajet) / 2) + taux * h(salarie.minutesRoute);
 
@@ -268,25 +274,16 @@ function valoriser(salarie, { montantPanier = D.MONTANT_PANIER_REPAS } = {}) {
     tauxManquant: false,
     tauxHoraire: taux,
     salaireBrut,
-    salaireNet: salaireBrut * PART_NET,
+    salaireNet: salaireBrut * partNet,
     heuresSupBrut,
-    heuresSupNet: heuresSupBrut * PART_NET,
+    heuresSupNet: heuresSupBrut * partNet,
     primeAmiante,
     paniers,
     grandDeplacement,
     trajet,
     totalBrut,
-    totalNet: salaireBrut * PART_NET + heuresSupBrut * PART_NET + primeAmiante + paniers + grandDeplacement + trajet,
+    totalNet: salaireBrut * partNet + heuresSupBrut * partNet + primeAmiante + paniers + grandDeplacement + trajet,
   };
 }
 
-module.exports = {
-  agregerMois,
-  valoriser,
-  // Partagees avec la paie du personnel non productif : les memes taux, ecrits
-  // une seule fois. Deux copies de 151,67 finiraient par ne plus se ressembler.
-  HEURES_MENSUELLES_BASE,
-  PART_NET,
-  MONTANT_GD_72,
-  MONTANT_GD_80,
-};
+module.exports = { agregerMois, valoriser };

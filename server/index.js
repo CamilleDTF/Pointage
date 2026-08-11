@@ -20,6 +20,7 @@ const I = require('./indicateurs');
 const V = require('./visa');
 const CAL = require('./calendrier');
 const NP = require('./non-productif');
+const T = require('./taux');
 const AL = require('./alerte');
 const C = require('./courriel');
 
@@ -826,7 +827,7 @@ app.get(
     }
 
     const donnees = M.agregerMois(annee, mois, { statut: req.query.statut || 'validee' });
-    const buffer = await XM.exporterMois(donnees, { version });
+    const buffer = await XM.exporterMois(donnees, { version, taux: T.tauxDuMois(annee, mois) });
     const nom = nomFichier(
       `pointage_mensuel_${annee}_${String(mois).padStart(2, '0')}_${version}.xlsx`
     );
@@ -879,6 +880,9 @@ app.get('/api/mois', A.exigerDirecteur, (req, res) => {
   }
 
   const donnees = M.agregerMois(annee, mois, { statut: req.query.statut || 'validee' });
+  // Les taux du MOIS demande, pas ceux d'aujourd'hui : rejouer un mois passe
+  // doit redonner ce qui avait ete paye.
+  const bareme = T.tauxDuMois(annee, mois);
 
   const salaries = donnees.salaries.map((s) => {
     const commun = {
@@ -900,16 +904,14 @@ app.get('/api/mois', A.exigerDirecteur, (req, res) => {
       joursGD80: s.joursGD80,
       joursFeries: s.joursFeries,
     };
-    // Le montant du panier n'est plus un parametre : c'est une valeur de la
-    // maison, portee par les regles metier (D.MONTANT_PANIER_REPAS).
-    return demandee === 'direction' ? { ...commun, ...M.valoriser(s) } : commun;
+    return demandee === 'direction' ? { ...commun, ...M.valoriser(s, { taux: bareme }) } : commun;
   });
 
   res.json({
     annee,
     mois,
     version: demandee,
-    montantPanier: D.MONTANT_PANIER_REPAS,
+    montantPanier: bareme.panier_repas,
     // Horaire de reference du mois, la case "Mois" du classeur de paie.
     joursOuvres: D.joursOuvresDuMois(annee, mois),
     heuresReference: D.heuresReferenceMois(annee, mois),

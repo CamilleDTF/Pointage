@@ -16,7 +16,7 @@
 
 const { db, journaliser } = require('./db');
 const D = require('./domaine');
-const M = require('./mensuel');
+const T = require('./taux');
 
 /** Les jours du mois, avec ce qui distingue un jour ouvre d'un week-end. */
 function joursDuMois(annee, mois) {
@@ -259,7 +259,7 @@ function heuresSupDuMois(cases) {
  * c'est le regime ordinaire d'une prime, a la difference d'une indemnite de
  * grand deplacement, qui se verse nette.
  */
-function valoriser(ligne) {
+function valoriser(ligne, bareme = T.DEFAUTS) {
   const taux = Number(ligne.taux_horaire) || 0;
   const h = (minutes) => (Number(minutes) || 0) / 60;
   const { minutes25, minutes50 } = heuresSupDuMois(ligne.jours);
@@ -272,9 +272,10 @@ function valoriser(ligne) {
     };
   }
 
-  const salaireBrut = M.HEURES_MENSUELLES_BASE * taux;
-  const heuresSupBrut = taux * 1.25 * h(minutes25) + taux * 1.5 * h(minutes50);
-  const grandDeplacement = ligne.joursGD72 * M.MONTANT_GD_72 + ligne.joursGD80 * M.MONTANT_GD_80;
+  const salaireBrut = bareme.heures_mensuelles * taux;
+  const heuresSupBrut =
+    taux * bareme.majoration_hs_25 * h(minutes25) + taux * bareme.majoration_hs_50 * h(minutes50);
+  const grandDeplacement = ligne.joursGD72 * bareme.gd_72 + ligne.joursGD80 * bareme.gd_80;
   const primes = Number(ligne.montantPrimes) || 0;
 
   const totalBrut = salaireBrut + heuresSupBrut + primes + grandDeplacement;
@@ -284,15 +285,15 @@ function valoriser(ligne) {
     minutes25,
     minutes50,
     salaireBrut,
-    salaireNet: salaireBrut * M.PART_NET,
+    salaireNet: salaireBrut * bareme.part_net_estimee,
     heuresSupBrut,
-    heuresSupNet: heuresSupBrut * M.PART_NET,
+    heuresSupNet: heuresSupBrut * bareme.part_net_estimee,
     primes,
     grandDeplacement,
     totalBrut,
     // Le grand deplacement est une indemnite : il se verse net. La prime, elle,
     // suit le salaire.
-    totalNet: (salaireBrut + heuresSupBrut + primes) * M.PART_NET + grandDeplacement,
+    totalNet: (salaireBrut + heuresSupBrut + primes) * bareme.part_net_estimee + grandDeplacement,
   };
 }
 
@@ -304,6 +305,8 @@ function valoriser(ligne) {
  */
 function paieDuMois(annee, mois) {
   const donnees = moisComplet(annee, mois);
+  // Les taux du mois demande : un mois passe se rejoue avec les siens.
+  const bareme = T.tauxDuMois(annee, mois);
   return {
     annee,
     mois,
@@ -320,7 +323,7 @@ function paieDuMois(annee, mois) {
       joursGD72: ligne.joursGD72,
       joursGD80: ligne.joursGD80,
       detailPrimes: ligne.primes,
-      ...valoriser(ligne),
+      ...valoriser(ligne, bareme),
     })),
   };
 }

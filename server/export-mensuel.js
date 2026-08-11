@@ -15,6 +15,7 @@
 
 const ExcelJS = require('exceljs');
 const D = require('./domaine');
+const T = require('./taux');
 
 const POLICE = 'Calibri';
 const JAUNE = 'FFFFF2CC';   // case a completer par le directeur, une fois remplie
@@ -119,7 +120,7 @@ function ecrireLegende(ws, ligne) {
 
 /* ---------------------------- Feuille d'un salarie ------------------------- */
 
-function ecrireFeuilleSalarie(ws, salarie, ligneDansTotal, ligneTotalGenerale, financier = true) {
+function ecrireFeuilleSalarie(ws, salarie, ligneDansTotal, ligneTotalGenerale, financier = true, bareme = T.DEFAUTS) {
   for (const [col, largeur] of Object.entries(LARGEURS_SALARIE)) ws.getColumn(col).width = largeur;
 
   ws.mergeCells('A1:AA1');
@@ -301,19 +302,25 @@ function ecrireBlocPaie(ws, ligneDansTotal, ligneTotalGenerale) {
     ws.getCell(ref).font = { name: POLICE, size: 11, bold: true };
   }
 
+  /*
+   * Les taux du mois, pas ceux d'aujourd'hui : le classeur telecharge doit dire
+   * la meme chose que l'ecran, et un mois passe se rejoue avec ses propres
+   * montants.
+   */
+  const net = bareme.part_net_estimee;
   const formules = {
     AD25: `J25*${taux}`,
-    AF25: 'AD25*0.77',
-    AH25: '((S22*5)+(T22*10))*0.8',
+    AF25: `AD25*${net}`,
+    AH25: `((S22*${bareme.prime_zone_va})+(T22*${bareme.prime_zone_aa}))*${bareme.abattement_prime_zone}`,
     // Panier repas : un montant fixe par jour ouvrant droit. La colonne V porte
     // deja les jours calcules — travailles moins ceux de grand deplacement.
-    AJ25: `V22*${D.MONTANT_PANIER_REPAS}`,
-    AL25: '(X22*72)+(Y22*80)',
+    AJ25: `V22*${bareme.panier_repas}`,
+    AL25: `(X22*${bareme.gd_72})+(Y22*${bareme.gd_80})`,
     AN25: `(${taux}*Q22/2)+(${taux}*R22)`,
-    AD28: `(${taux}*1.25*N22)+(${taux}*1.5*O22)+(${taux}*2*P22)+(${taux}*M22*2)+(${taux}*L22*2)`,
-    AF28: 'AD28*0.77',
+    AD28: `(${taux}*${bareme.majoration_hs_25}*N22)+(${taux}*${bareme.majoration_hs_50}*O22)+(${taux}*2*P22)+(${taux}*M22*2)+(${taux}*L22*2)`,
+    AF28: `AD28*${net}`,
     AD31: `((J25*${taux})/J24)*J27`,
-    AF31: 'AD31*0.77',
+    AF31: `AD31*${net}`,
     AD34: 'AD25+AH25+AJ25+AL25+AD28+AD31+AN25',
     AJ34: '(AD25*1.5)+(AD28*1.5)+(AD31*1.5)+AH25+AJ25+AL25+AN25',
     AD37: 'AF25+AH25+AJ25+AF28+AL25+AF31+AN25',
@@ -490,7 +497,7 @@ function ecrireFeuilleTotal(ws, mois, financier = true) {
  * publique se transmet a qui doit verifier des heures sans avoir a connaitre
  * les salaires.
  */
-async function exporterMois(mois, { version = 'direction' } = {}) {
+async function exporterMois(mois, { version = 'direction', taux: bareme = T.DEFAUTS } = {}) {
   const financier = version !== 'public';
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Pointage DTF';
@@ -501,7 +508,7 @@ async function exporterMois(mois, { version = 'direction' } = {}) {
 
   mois.salaries.forEach((salarie, i) => {
     const ws = wb.addWorksheet(salarie.feuille);
-    ecrireFeuilleSalarie(ws, salarie, 4 + i, ligneTotalGenerale, financier);
+    ecrireFeuilleSalarie(ws, salarie, 4 + i, ligneTotalGenerale, financier, bareme);
   });
 
   if (!mois.salaries.length) {

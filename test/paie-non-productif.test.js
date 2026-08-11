@@ -20,7 +20,10 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'pointage-paie-np-'
 
 const { db } = require('../server/db');
 const NP = require('../server/non-productif');
-const M = require('../server/mensuel');
+// Les taux viennent du meme registre que le code : un test qui recopierait
+// 151,67 finirait par ne plus verifier la meme chose que l'application.
+const T = require('../server/taux');
+const BAREME = T.DEFAUTS;
 
 test.after(() => fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true }));
 
@@ -52,14 +55,14 @@ test('un mois sans rien declarer vaut le salaire mensualise, et rien d autre', (
 
   // 151,67 h et non 147 h : le salaire est mensualise, il ne suit pas le nombre
   // de jours ouvres du mois.
-  assert.equal(arrondi(c.salaireBrut), arrondi(M.HEURES_MENSUELLES_BASE * 20));
+  assert.equal(arrondi(c.salaireBrut), arrondi(BAREME.heures_mensuelles * 20));
   assert.equal(c.minutes25, 0, 'sept heures par jour font trente-cinq heures : rien a majorer');
   assert.equal(c.minutes50, 0);
   assert.equal(c.heuresSupBrut, 0);
   assert.equal(c.grandDeplacement, 0);
   assert.equal(c.primes, 0);
   assert.equal(arrondi(c.totalBrut), arrondi(c.salaireBrut));
-  assert.equal(arrondi(c.totalNet), arrondi(c.salaireBrut * M.PART_NET));
+  assert.equal(arrondi(c.totalNet), arrondi(c.salaireBrut * BAREME.part_net_estimee));
 });
 
 /*
@@ -73,7 +76,7 @@ test('une absence se compte sans toucher au salaire de base', () => {
   assert.equal(c.joursAbsence, 1);
   assert.deepEqual(c.absences, { VM: 1 });
   assert.equal(c.joursTravailles, 20);
-  assert.equal(arrondi(c.salaireBrut), arrondi(M.HEURES_MENSUELLES_BASE * 20));
+  assert.equal(arrondi(c.salaireBrut), arrondi(BAREME.heures_mensuelles * 20));
 });
 
 /*
@@ -105,12 +108,12 @@ test('le grand deplacement se verse net, la prime suit le salaire', () => {
   const c = ligneDe('B1');
   assert.equal(c.joursGD72, 1);
   assert.equal(c.joursGD80, 1);
-  assert.equal(c.grandDeplacement, M.MONTANT_GD_72 + M.MONTANT_GD_80);
+  assert.equal(c.grandDeplacement, BAREME.gd_72 + BAREME.gd_80);
   assert.equal(c.primes, 300);
 
   const soumis = c.salaireBrut + c.heuresSupBrut + 300;
   assert.equal(arrondi(c.totalBrut), arrondi(soumis + 152));
-  assert.equal(arrondi(c.totalNet), arrondi(soumis * M.PART_NET + 152));
+  assert.equal(arrondi(c.totalNet), arrondi(soumis * BAREME.part_net_estimee + 152));
 
   // Un jour de grand deplacement reste travaille : il garde ses heures.
   assert.equal(c.joursTravailles, 20);
