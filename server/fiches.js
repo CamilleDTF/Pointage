@@ -637,13 +637,6 @@ function enregistrerFiche(ficheId, corps, utilisateur) {
   if (estConducteur && !(fiche.statut === 'soumise' && fiche.visa_statut === 'attente')) {
     return { erreur: 'Cette fiche n attend plus votre visa : elle n est plus modifiable.', code: 409 };
   }
-  if (!estDirecteur && !estConducteur && !['brouillon', 'rejetee'].includes(fiche.statut)) {
-    return {
-      erreur: 'Fiche deja transmise au directeur : elle n est plus modifiable. Demandez sa reouverture.',
-      code: 409,
-    };
-  }
-
   /*
    * Une fiche validee ne se reecrit pas — pour personne, directeur compris.
    *
@@ -652,13 +645,25 @@ function enregistrerFiche(ficheId, corps, utilisateur) {
    * qu'aucune trace ne dise quoi. La corriger reste possible, mais par la porte
    * prevue : rouvrir la fiche ouvre un rectificatif, qui deviendra la version
    * suivante et laissera celle-ci intacte.
+   *
+   * Ce controle passe avant celui de la fiche transmise : un chef devant une
+   * fiche validee doit lire ce qui la concerne — qu'il y a un rectificatif a
+   * demander — et non qu'elle « vient d'etre transmise ».
    */
   if (fiche.statut === 'validee') {
     return {
-      erreur:
-        'Cette fiche est validee : elle n est plus modifiable. Ouvrez un rectificatif pour la corriger.',
+      erreur: estDirecteur
+        ? 'Cette fiche est validee : ouvrez un rectificatif pour la corriger.'
+        : 'Cette fiche est validee : demandez un rectificatif a la direction.',
       code: 409,
       rectificatifPossible: estDirecteur,
+    };
+  }
+
+  if (!estDirecteur && !estConducteur && !['brouillon', 'rejetee'].includes(fiche.statut)) {
+    return {
+      erreur: 'Fiche deja transmise au directeur : elle n est plus modifiable. Demandez sa reouverture.',
+      code: 409,
     };
   }
 
