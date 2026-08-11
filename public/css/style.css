@@ -107,13 +107,22 @@ main { max-width: 1400px; margin: 0 auto; padding: 16px; }
   margin-bottom: 16px;
 }
 
-.carte > h2 {
-  margin: 0 0 12px;
+/*
+ * Le titre d'une carte, qu'il soit pose directement ou range dans la barre
+ * d'outils avec les boutons. Seul `.carte > h2` etait prevu : un titre glisse
+ * dans une barre d'outils retombait sur le gros noir du navigateur, et deux
+ * cartes voisines n'avaient plus le meme en-tete.
+ */
+.carte > h2,
+.carte > .barre-outils h2 {
   font-size: 0.95rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--bleu);
 }
+/* L'ecart sous le titre n'appartient qu'a la carte : dans une barre d'outils,
+   c'est la barre qui espace, et `.serree` doit pouvoir avoir le dernier mot. */
+.carte > h2 { margin: 0 0 12px; }
 
 .grille { display: grid; gap: var(--e3); }
 .grille.deux { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
