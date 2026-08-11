@@ -727,6 +727,36 @@ forme conditionnelle : l'alerte s'éteint d'elle-même, sans rien à effacer. El
 porte que sur les semaines effectivement pointées : un emplacement de semaine
 inutilisé ne réclame rien. La légende figure en haut de chaque feuille.
 
+### Combien de temps on garde, et ce qu'il reste après
+
+Une fiche de pointage justifie des heures de travail. Elle ne se garde pas
+indéfiniment — la CNIL demande une durée définie, et l'archivage intermédiaire du suivi
+du temps de travail va jusqu'à **cinq ans** — mais elle ne s'efface pas non plus d'un
+trait : c'est une preuve, et elle sert aux deux parties.
+
+La réponse retenue est l'**anonymisation**, pas la suppression (*Paramètres ▸
+Conservation des données*) :
+
+| Ce qui disparaît | Ce qui reste |
+|---|---|
+| Nom, prénom, matricule | Les journées et les totaux |
+| La **signature manuscrite** — elle identifie son auteur autant que son nom | Les fiches validées et leurs versions archivées |
+| Le nom partout où il avait été recopié : lignes de fiche, versions archivées, relevés du journal | Le relevé de ce qui a changé, sans la personne nommée |
+
+Supprimer aurait vidé des fiches validées et fait bouger des totaux de mois passés : on
+aurait détruit la preuve en croyant protéger la personne, et contredit la règle même qui
+rend une fiche validée intangible.
+
+**Rien ne se déclenche tout seul.** L'écran dit qui est concerné — les salariés sortis de
+l'effectif et sans activité depuis cinq ans ; la direction agit, personne par personne.
+Un effacement automatique, un jour de mauvais réglage, effacerait ce que personne n'a
+décidé d'effacer.
+
+Le même écran produit le **dossier complet d'une personne** en un fichier : pointages,
+congés, jours non productifs, primes. C'est ce qu'on remet à un salarié qui demande à
+savoir ce qui est détenu sur lui — le rassembler à la main dans six tables, le jour où la
+demande arrive, serait la meilleure façon d'en oublier une.
+
 ### Les taux ont une date d'effet
 
 Le panier à 12,20 €, le grand déplacement à 72 et 80 €, la prime de zone à 5 et 10 €,
@@ -814,6 +844,7 @@ server/
   export.js     Génération des classeurs Excel et du CSV
   mensuel.js    Agrégation d'un mois et valorisation de la paie
   taux.js       Les montants de la paie et leur date d'effet
+  conservation.js  Durée de conservation, anonymisation, dossier d'un salarié
   export-mensuel.js  Le classeur mensuel, versions publique et direction
   indicateurs.js Suivi des chefs : assiduité, retards, fiches renvoyées
   calendrier.js Vue mensuelle par personne, et registre des congés
@@ -857,6 +888,7 @@ test/
   export-csv.test.js    Le CSV n'ouvre pas une formule chez le comptable
   versions.test.js      Une fiche validée se rectifie, elle ne se réécrit pas
   taux.test.js          Un mois se recalcule avec les taux qui s'appliquaient à lui
+  conservation.test.js  Anonymiser efface le nom partout, et ne détruit aucune heure
   paie-non-productif.test.js  Leur valorisation : mensualisation, majorations, indemnités
 scripts/
   tester-courriel.js    Essai d'envoi, et diagnostic des réglages SMTP

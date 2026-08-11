@@ -28,6 +28,7 @@
         <button class="onglet" type="button" data-onglet="conducteurs">Conducteurs de travaux</button>
         <button class="onglet" type="button" data-onglet="vehicules">Véhicules</button>
         <button class="onglet" type="button" data-onglet="taux">Taux de la paie</button>
+        <button class="onglet" type="button" data-onglet="conservation">Conservation des données</button>
         <button class="onglet" type="button" data-onglet="indicateurs">Indicateurs de suivi</button>
       </div>
     </section>
@@ -198,6 +199,42 @@
         l'ordre de grandeur du classeur, qui sert à se faire une idée avant que la paie
         tranche. Les colonnes « net » de l'application en portent le nom.
       </p>
+    </section>
+
+    <section class="carte panneau masque" id="panneau-conservation">
+      <h2>Conservation des données</h2>
+      <p class="aide" id="aide-conservation"></p>
+      <p class="aide">
+        <strong>Anonymiser plutôt que supprimer.</strong> Le nom, le prénom, le matricule
+        et la signature manuscrite disparaissent — partout, y compris dans les fiches
+        archivées et le journal. Les heures, elles, restent : une fiche validée justifie
+        un salaire, et cette preuve sert aux deux parties. Rien ne se déclenche tout
+        seul ; c'est vous qui décidez, personne par personne.
+      </p>
+
+      <div class="enveloppe-table"><table id="table-conservation">
+        <thead><tr>
+          <th>Salarié</th>
+          <th>Matricule</th>
+          <th>Dernier pointage</th>
+          <th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table></div>
+
+      <h2 style="margin-top:22px">Dossier d'un salarié</h2>
+      <p class="aide">
+        Tout ce que l'application détient sur une personne, rassemblé en une fois : c'est
+        ce qu'on lui remet si elle demande à savoir. Le chercher à la main dans six
+        tables, le jour où la demande arrive, serait la meilleure façon d'en oublier une.
+      </p>
+      <div class="rangee">
+        <div style="flex:1;min-width:220px">
+          <label for="dossier-salarie">Salarié</label>
+          <select id="dossier-salarie"></select>
+        </div>
+        <button class="petit principal" id="btn-dossier" type="button">Télécharger le dossier</button>
+      </div>
     </section>
 
     <section class="carte panneau masque" id="panneau-indicateurs">

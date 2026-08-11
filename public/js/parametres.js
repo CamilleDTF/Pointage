@@ -45,7 +45,7 @@ surClic('btn-retour', () => { location.href = '/directeur.html'; });
 surClic('btn-quitter', deconnexion);
 
 /* Les volets de l'ecran Parametres. */
-const PANNEAUX = ['effectif', 'nonproductif', 'comptes', 'conducteurs', 'vehicules', 'taux', 'indicateurs'];
+const PANNEAUX = ['effectif', 'nonproductif', 'comptes', 'conducteurs', 'vehicules', 'taux', 'conservation', 'indicateurs'];
 
 surEvenement('onglets-parametres', 'click', (e) => {
   const onglet = e.target.closest('.onglet');
@@ -65,7 +65,93 @@ function ouvrirPanneau(nom) {
   if (nom === 'conducteurs') chargerConducteurs();
   if (nom === 'vehicules') chargerVehicules();
   if (nom === 'taux') chargerTaux();
+  if (nom === 'conservation') chargerConservation();
   if (nom === 'indicateurs') chargerIndicateurs();
+}
+
+/* -------------------------- Conservation des donnees ----------------------- */
+
+/*
+ * Ce que le RGPD demande de savoir faire, et que la documentation seule ne fait
+ * pas : dire qui est concerne par la duree de conservation, effacer ce qui
+ * identifie une personne, et rassembler son dossier si elle le demande.
+ */
+async function chargerConservation() {
+  let donnees;
+  try {
+    donnees = await API.get('/api/admin/conservation');
+  } catch (e) {
+    message(e.message, 'erreur');
+    return;
+  }
+
+  const ans = Math.round(donnees.dureeMois / 12);
+  $('aide-conservation').innerHTML =
+    `Durée de conservation retenue : <strong>${ans} ans</strong> après le dernier pointage `
+    + `(${donnees.dureeMois} mois). Seuls les salariés <strong>sortis de l'effectif</strong> `
+    + 'et sans activité depuis cette durée apparaissent ici.';
+
+  const corps = $('table-conservation').querySelector('tbody');
+  if (!donnees.candidats.length) {
+    corps.innerHTML = '<tr><td colspan="4" class="vide">Personne n\'est concerné pour l\'instant.</td></tr>';
+  } else {
+    corps.innerHTML = donnees.candidats
+      .map((s) => {
+        const derniere = s.derniere.periode
+          ? `semaine ${String(s.derniere.periode).slice(4)} / ${String(s.derniere.periode).slice(0, 4)}`
+          : s.derniere.date || 'aucun pointage';
+        return `<tr>
+          <td>${echapper(`${s.nom} ${s.prenom}`.trim())}</td>
+          <td>${echapper(s.matricule || '—')}</td>
+          <td>${echapper(derniere)}</td>
+          <td><button class="petit danger" onclick="anonymiser(${s.id}, '${echapper(`${s.nom} ${s.prenom}`.trim())}')">Anonymiser</button></td>
+        </tr>`;
+      })
+      .join('');
+  }
+
+  // La liste du dossier : tout le monde, y compris les personnes deja sorties.
+  const { salaries } = await API.get('/api/admin/utilisateurs');
+  $('dossier-salarie').innerHTML = salaries
+    .map((s) => `<option value="${s.id}">${echapper(`${s.nom} ${s.prenom}`.trim())}${s.actif ? '' : ' (sorti)'}</option>`)
+    .join('');
+}
+
+window.anonymiser = async (id, nom) => {
+  if (!confirm(
+    `Anonymiser ${nom} ?\n\nSon nom, son matricule et ses signatures seront effacés partout, `
+      + 'y compris dans les fiches archivées. Ses heures et ses fiches validées seront conservées.\n\n'
+      + 'Cette opération est irréversible.'
+  )) return;
+
+  try {
+    const r = await API.post(`/api/admin/conservation/${id}/anonymiser`);
+    await chargerConservation();
+    message(`${nom} est désormais ${r.etiquette}.`, 'succes', 7000);
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
+};
+
+surClic('btn-dossier', async () => {
+  const id = $('dossier-salarie').value;
+  if (!id) return;
+  try {
+    const dossier = await API.get(`/api/admin/salaries/${id}/dossier`);
+    const nom = `${dossier.salarie.nom}_${dossier.salarie.prenom}`.replace(/\s+/g, '_');
+    telechargerJson(dossier, `dossier_${nom}.json`);
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
+});
+
+/** Depose un objet sur le disque, sans passer par le serveur. */
+function telechargerJson(donnees, nomFichier) {
+  const lien = document.createElement('a');
+  lien.href = URL.createObjectURL(new Blob([JSON.stringify(donnees, null, 2)], { type: 'application/json' }));
+  lien.download = nomFichier;
+  lien.click();
+  URL.revokeObjectURL(lien.href);
 }
 
 /* ----------------------------- Taux de la paie ---------------------------- */
