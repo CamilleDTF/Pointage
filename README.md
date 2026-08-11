@@ -68,6 +68,21 @@ node scripts/importer-effectif.js votre-fichier.xlsx --appliquer
 
 Les chefs se connectent alors avec les identifiants et les codes de ce fichier.
 
+### Sur un serveur, et non sur un poste
+
+`DEMARRER.bat` tient l'application dans sa fenêtre : la fermer, ou se déconnecter
+du serveur, arrête tout. Sur une machine qui doit tourner seule, installez-la en
+service :
+
+- **Windows** : clic droit sur **`INSTALLER-SERVICE.bat`** → *Exécuter en tant
+  qu'administrateur*. `ETAT-SERVICE.bat` dit ensuite si elle tourne, et montre
+  son journal.
+- **Linux** : `docker compose up -d`, ou le service systemd donné dans
+  [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md).
+
+Dans les deux cas, la même page décrit comment la rendre joignable **en HTTPS**
+depuis un chantier — nécessaire dès que la saisie sort du dépôt.
+
 ### Comptes
 
 Sur une installation neuve, le premier compte se crée en ligne de commande — les

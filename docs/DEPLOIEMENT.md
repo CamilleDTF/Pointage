@@ -11,9 +11,11 @@ sans abonnement.
 |---|---|---|---|
 | **A. Oracle Cloud Always Free + Tailscale** ← retenue | **0 €** (carte demandée à l'inscription, jamais débitée) | Un compte Oracle Cloud, créé par vous | Votre cas : aucune machine à administrer chez vous |
 | B. Un NAS ou un PC de l'entreprise | 0 € | Un accès administrateur à la machine | Si vous obtenez cet accès plus tard |
+| **D. Un serveur Windows** | 0 € | Un accès administrateur à la machine | **Si on vous confie une machine virtuelle Windows** |
 | C. Réseau local seul | 0 € | Une machine au dépôt | **Seulement si** la saisie a toujours lieu au dépôt |
 
-Les options A et B installent exactement la même chose : seule la machine change.
+Ces options installent exactement la même chose : seule la machine change, et
+la façon de la faire démarrer toute seule (Docker, systemd, service Windows).
 Passer de l'une à l'autre plus tard ne demande aucune modification du code, juste
 une copie du fichier de base de données.
 
@@ -166,6 +168,131 @@ aléatoires>`. Puis :
 install -d -o pointage -g pointage /var/lib/pointage
 systemctl enable --now pointage
 ```
+
+---
+
+## Option D — un serveur Windows
+
+Si la machine qu'on vous confie tourne sous Windows, l'application s'y installe
+en **service** : elle démarre avec le serveur, tourne sans session ouverte, et
+repart seule après un plantage.
+
+> `DEMARRER.bat` ne convient pas sur un serveur. Il est fait pour un poste où
+> quelqu'un est assis : il tient l'application dans sa fenêtre, ouvre le
+> navigateur, et **fermer la fenêtre — ou simplement se déconnecter du serveur —
+> arrête tout**. C'est le piège de cette configuration, et la première panne du
+> lundi matin.
+
+### 1. Installer Node.js — pour toute la machine
+
+Depuis [nodejs.org](https://nodejs.org), le bouton **LTS**, avec l'installateur
+`.msi`. Il place Node dans `C:\Program Files\nodejs`, visible de tous les comptes.
+
+Ce point n'est pas un détail : un service ne tourne pas sous votre compte mais
+sous le compte **Système**, qui n'a ni votre `PATH` ni vos variables. Une
+installation par utilisateur (fnm, nvm, un dossier sous `AppData`) marche pour
+vous et pour personne d'autre — le service échouerait au démarrage avec un
+message qui ne dit pas pourquoi. Le script d'installation refuse ce cas et vous
+le dit.
+
+### 2. Poser le dossier et lancer l'installation
+
+Décompressez l'archive dans un chemin court et sans parenthèses, par exemple
+`C:\Pointage`. Puis **clic droit sur `INSTALLER-SERVICE.bat` → Exécuter en tant
+qu'administrateur** — un double-clic suffit aussi, les droits sont demandés
+tout seuls.
+
+Il fait tout : il installe les composants, crée le compte directeur à la
+première fois, enregistre le service, ouvre le port dans le pare-feu, puis
+vérifie que l'application **répond vraiment** avant de vous annoncer que c'est
+bon. Comptez deux minutes.
+
+Pour un autre port : `INSTALLER-SERVICE.bat -Port 8080`.
+Si un proxy se charge déjà de joindre l'application, `-SansPareFeu` laisse le
+pare-feu fermé.
+
+### 3. Une fois installé
+
+| Fichier | Ce qu'il fait |
+|---|---|
+| `ETAT-SERVICE.bat` | Dit si le service tourne et montre les vingt dernières lignes du journal. **C'est le fichier à lancer quand « ça ne répond plus »** : il distingue le service arrêté du service démarré dont l'application est tombée. |
+| `ARRETER-SERVICE.bat` | Retire le service. Les données ne sont pas touchées. |
+| `INSTALLER-SERVICE.bat` | Relançable : il remplace le service en place, sans perdre les données. C'est aussi ce qui applique une mise à jour de l'application. |
+
+Le service apparaît dans `services.msc` sous **Pointage hebdomadaire**, et se
+pilote comme les autres :
+
+```
+net stop Pointage
+net start Pointage
+```
+
+Son journal est dans `data\service.log`, remis à zéro au-delà de 5 Mo.
+
+> **Comment Windows arrive à piloter Node.** Windows ne sait pas gérer
+> n'importe quel programme en service : il attend un exécutable qui sache lui
+> répondre, et `node.exe` ne le sait pas — un `sc create` pointé droit dessus
+> donne le fameux *« le service n'a pas répondu à temps »* (erreur 1053).
+> L'installateur télécharge donc **NSSM** (300 Ko, [nssm.cc](https://nssm.cc)),
+> qui fait l'intermédiaire. Si le téléchargement est bloqué — c'est fréquent sur
+> un réseau d'entreprise — il bascule tout seul sur le **planificateur de
+> tâches** livré avec Windows : même résultat au démarrage, sans l'entrée dans
+> `services.msc`. Il vous dit lequel des deux il a posé.
+
+### 4. Rendre l'application joignable depuis les chantiers
+
+L'installation ne l'expose que sur le réseau local, en clair. **Ne vous arrêtez
+pas là si la saisie a lieu sur chantier** : `http://` transporte les codes en
+clair, et les navigateurs refusent l'ajout à l'écran d'accueil sur un site qui
+n'est pas en HTTPS.
+
+Tailscale existe aussi pour Windows et reste le chemin le plus court :
+
+```powershell
+winget install tailscale.tailscale
+tailscale up
+tailscale serve --bg 3000
+```
+
+Vous obtenez une adresse `https://<machine>.<votre-réseau>.ts.net`, son
+certificat compris et renouvelé tout seul, joignable en 4G, sans ouvrir le
+moindre port sur Internet.
+
+Si vous disposez d'un nom de domaine public pointant sur ce serveur, un reverse
+proxy fait le même office : [Caddy](https://caddyserver.com) obtient et
+renouvelle le certificat sans configuration, avec un fichier de deux lignes.
+
+```
+pointage.mon-entreprise.fr {
+    reverse_proxy 127.0.0.1:3000
+}
+```
+
+Dans les deux cas, ajoutez ensuite `COOKIE_SECURE=true` dans `configuration.txt`
+et relancez le service : le cookie de session ne circulera plus jamais en clair,
+même si quelqu'un ouvre l'adresse en `http://`.
+
+### 5. Sauvegardes
+
+Toute la base tient dans `data\pointage.db`. Une tâche planifiée quotidienne
+suffit — à créer une fois, dans le Planificateur de tâches, sur ce script :
+
+```powershell
+# C:\Pointage\sauvegarder.ps1
+$horodatage = Get-Date -Format 'yyyyMMdd-HHmm'
+$destination = 'D:\Sauvegardes\Pointage'
+New-Item -ItemType Directory -Force -Path $destination | Out-Null
+Copy-Item 'C:\Pointage\data\pointage.db' "$destination\pointage-$horodatage.db"
+Get-ChildItem $destination -Filter 'pointage-*.db' |
+    Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-90) } | Remove-Item
+```
+
+Arrêtez le service le temps de la copie (`net stop Pointage` / `net start
+Pointage`), ou installez `sqlite3.exe` et utilisez `.backup`, qui copie sans
+interrompre le service.
+
+**Copiez ces archives hors du serveur.** Une sauvegarde qui vit sur le disque
+qu'elle protège ne protège de rien.
 
 ---
 

@@ -5,6 +5,11 @@ data/
 demo/demonstration.html
 configuration.txt
 
+# Le service Windows : nssm.exe est telecharge a l'installation, et le lanceur
+# est reecrit a chaque fois. Ni l'un ni l'autre n'est du code de ce depot.
+outils/
+scripts/service-lancer.cmd
+
 # Rapports produits par les lanceurs Windows, a cote de DEMARRER.bat.
 # Ils contiennent l'etat d'un poste particulier, pas du code.
 diagnostic.txt
