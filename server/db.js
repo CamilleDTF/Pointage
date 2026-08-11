@@ -592,6 +592,37 @@ if (!/CHECK \(role IN \([^)]*'admin'/.test(schemaDe('utilisateurs').sql)) {
   }
 }
 
+/*
+ * Le coffre de la paie.
+ *
+ * Une seule ligne, qui ne contient aucune cle : deux enveloppes scellees, dont
+ * chacune rend la meme cle a qui sait l'ouvrir — la phrase de la direction, ou
+ * la cle de secours imprimee. Voler cette table ne donne rien ; il faut un
+ * secret qui n'y figure pas.
+ */
+db.exec(`
+CREATE TABLE IF NOT EXISTS coffre_paie (
+  id                INTEGER PRIMARY KEY CHECK (id = 1),
+  sel_phrase        TEXT NOT NULL,
+  enveloppe_phrase  TEXT NOT NULL,
+  sel_secours       TEXT NOT NULL,
+  enveloppe_secours TEXT NOT NULL,
+  cree_le           TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+
+/*
+ * Les trois seules colonnes qui portent de l'argent, dans leur version scellee.
+ *
+ * Elles doublent les colonnes en clair plutot que de les remplacer : la
+ * migration a besoin des deux le temps de chiffrer, et une base ou le coffre
+ * n'est pas encore cree continue de fonctionner comme avant. Le clair est remis
+ * a zero une fois le scelle ecrit — c'est la creation du coffre qui bascule.
+ */
+ajouterColonne('salaries', 'taux_horaire_scelle', "TEXT NOT NULL DEFAULT ''");
+ajouterColonne('primes_non_productifs', 'montant_scelle', "TEXT NOT NULL DEFAULT ''");
+ajouterColonne('taux', 'valeur_scellee', "TEXT NOT NULL DEFAULT ''");
+
 ajouterColonne('utilisateurs', 'question_reprise', "TEXT NOT NULL DEFAULT ''");
 ajouterColonne('utilisateurs', 'reponse_reprise_hash', "TEXT NOT NULL DEFAULT ''");
 ajouterColonne('utilisateurs', 'reprise_le', 'TEXT');

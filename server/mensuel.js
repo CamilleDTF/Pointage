@@ -21,6 +21,7 @@
 const { db } = require('./db');
 const D = require('./domaine');
 const T = require('./taux');
+const COFFRE = require('./coffre');
 
 const arrondiQuart = (valeur) => Math.round(valeur * 4) / 4;
 
@@ -73,7 +74,7 @@ function semaineVide(semaine) {
  * `statut` filtre les fiches prises en compte (par defaut, seules les fiches
  * validees alimentent la paie).
  */
-function agregerMois(annee, mois, { statut = 'validee' } = {}) {
+function agregerMois(annee, mois, { statut = 'validee', cleCoffre = null } = {}) {
   const semaines = D.semainesDuMois(annee, mois);
 
   const conditions = semaines.map((_, i) => `(f.annee = @a${i} AND f.semaine = @s${i})`).join(' OR ');
@@ -85,7 +86,7 @@ function agregerMois(annee, mois, { statut = 'validee' } = {}) {
     .prepare(
       `SELECT l.*, f.annee, f.semaine, f.chantier, f.ville, f.zone_deplacement, f.statut,
               s.matricule, s.nom AS salarie_nom, s.prenom AS salarie_prenom,
-              s.taux_horaire
+              s.taux_horaire, s.taux_horaire_scelle
          FROM fiche_lignes l
          JOIN fiches f ON f.id = l.fiche_id
          LEFT JOIN salaries s ON s.id = l.salarie_id
@@ -110,7 +111,7 @@ function agregerMois(annee, mois, { statut = 'validee' } = {}) {
         nom: ligne.salarie_nom || nom,
         prenom: ligne.salarie_prenom || reste.join(' '),
         nom_affiche: ligne.nom_affiche.trim(),
-        tauxHoraire: Number(ligne.taux_horaire) || 0,
+        tauxHoraire: COFFRE.montantDe(cleCoffre, ligne, 'taux_horaire', 'taux_horaire_scelle') || 0,
         semaines: semaines.map(semaineVide),
       });
     }

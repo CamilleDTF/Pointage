@@ -21,6 +21,7 @@
  */
 
 const { db, journaliser } = require('./db');
+const COFFRE = require('./coffre');
 
 /*
  * Le catalogue. Rien ne se calcule avec un taux absent d'ici : une cle inconnue
@@ -95,30 +96,48 @@ const premierDuMois = (annee, mois) => `${annee}-${String(mois).padStart(2, '0')
  * date d'effet est atteinte. Une cle sans aucune entree retombe sur sa valeur
  * d'origine — mieux vaut le montant d'hier qu'un zero silencieux.
  */
-function tauxDuMois(annee, mois) {
+function tauxDuMois(annee, mois, cleCoffre) {
   const limite = premierDuMois(annee, mois);
   const lignes = db
     .prepare(
-      `SELECT cle, valeur FROM taux t
+      `SELECT cle, valeur, valeur_scellee FROM taux t
         WHERE debut <= ?
           AND debut = (SELECT MAX(debut) FROM taux WHERE cle = t.cle AND debut <= ?)`
     )
     .all(limite, limite);
 
+  /*
+   * Un parametre scelle qu'on ne sait pas ouvrir retombe sur sa valeur
+   * d'origine, comme un parametre jamais saisi. C'est volontaire : mieux vaut
+   * le montant de la convention qu'un zero silencieux, et l'ecran qui affiche
+   * des montants exige de toute facon la phrase avant d'aller plus loin.
+   */
   const resultat = { ...DEFAUTS };
-  for (const ligne of lignes) resultat[ligne.cle] = Number(ligne.valeur);
+  for (const ligne of lignes) {
+    const valeur = COFFRE.montantDe(cleCoffre, ligne, 'valeur', 'valeur_scellee');
+    if (valeur !== null) resultat[ligne.cle] = valeur;
+  }
   return resultat;
 }
 
 /** Le catalogue, chaque taux accompagne de son histoire. */
-function historique() {
+function historique(cleCoffre) {
   const entrees = db
     .prepare(
-      `SELECT t.id, t.cle, t.valeur, t.debut, t.note, u.nom AS auteur
+      `SELECT t.id, t.cle, t.valeur, t.valeur_scellee, t.debut, t.note, u.nom AS auteur
          FROM taux t LEFT JOIN utilisateurs u ON u.id = t.cree_par
         ORDER BY t.cle, t.debut DESC`
     )
-    .all();
+    .all()
+    /*
+     * La valeur scellee ne quitte jamais le serveur : ni ouverte sans cle, ni
+     * telle quelle. Un chiffre qu'on ne peut pas lire n'a rien a faire dans une
+     * reponse d'API — au mieux il n'y sert a rien, au pire il donne prise.
+     */
+    .map(({ valeur, valeur_scellee, ...reste }) => ({
+      ...reste,
+      valeur: COFFRE.montantDe(cleCoffre, { valeur, valeur_scellee }, 'valeur', 'valeur_scellee'),
+    }));
 
   return CATALOGUE.map((t) => ({
     ...t,
@@ -133,7 +152,7 @@ function historique() {
  * jour meme — mais cela reste trace : un montant de paie qui change sans qu'on
  * sache qui l'a change ne vaut pas mieux qu'un montant en dur.
  */
-function definir({ cle, valeur, annee, mois, note }, utilisateur) {
+function definir({ cle, valeur, annee, mois, note }, utilisateur, cleCoffre) {
   if (!CLES.includes(cle)) return { erreur: `Taux inconnu : ${cle}.`, code: 400 };
 
   /*
@@ -157,27 +176,47 @@ function definir({ cle, valeur, annee, mois, note }, utilisateur) {
   // Ce que ce mois valait AVANT le changement — pas seulement ce qui portait
   // deja cette date d'effet. C'est ce qu'on veut lire dans six mois : « le
   // panier est passe de 12,20 a 12,50 a compter de janvier ».
-  const avant = tauxDuMois(an, m)[cle];
+  const avant = tauxDuMois(an, m, cleCoffre)[cle];
 
+  /*
+   * Le coffre en place, la valeur part scellee et la colonne en clair reste a
+   * zero. Sans coffre, on ecrit comme avant : la bascule reste un geste de la
+   * direction, et une installation qui ne l'a pas fait continue de tourner.
+   */
+  const scelle = cleCoffre ? COFFRE.chiffrerMontant(cleCoffre, montant) : '';
   db.prepare(
-    `INSERT INTO taux (cle, valeur, debut, note, cree_par) VALUES (@cle, @valeur, @debut, @note, @par)
-     ON CONFLICT (cle, debut) DO UPDATE SET valeur = @valeur, note = @note, cree_par = @par,
+    `INSERT INTO taux (cle, valeur, valeur_scellee, debut, note, cree_par)
+     VALUES (@cle, @valeur, @scelle, @debut, @note, @par)
+     ON CONFLICT (cle, debut) DO UPDATE SET valeur = @valeur, valeur_scellee = @scelle,
+                                            note = @note, cree_par = @par,
                                             cree_le = datetime('now')`
-  ).run({ cle, valeur: montant, debut, note: String(note || '').trim().slice(0, 300), par: utilisateur ? utilisateur.id : null });
+  ).run({
+    cle,
+    valeur: scelle ? 0 : montant,
+    scelle,
+    debut,
+    note: String(note || '').trim().slice(0, 300),
+    par: utilisateur ? utilisateur.id : null,
+  });
 
+  /*
+   * Le journal dit ce qui a change et quand, jamais combien — des lors que le
+   * coffre existe. Ecrire « le panier passe de 12,20 a 12,50 » ferait sortir en
+   * clair, dans une table lisible par qui tient l'application, ce qu'on vient
+   * precisement d'y ranger. Sans coffre, on garde la trace complete : elle est
+   * utile, et rien n'est encore protege.
+   */
   const libelle = (CATALOGUE.find((t) => t.cle === cle) || {}).libelle || cle;
-  journaliser(
-    null,
-    utilisateur ? utilisateur.id : null,
-    'taux_modifie',
-    `${libelle} : ${avant === montant ? '' : `${avant} → `}${montant} à compter du ${debut}`
-  );
+  const trace = scelle
+    ? `${libelle} : nouvelle valeur à compter du ${debut}`
+    : `${libelle} : ${avant === montant ? '' : `${avant} → `}${montant} à compter du ${debut}`;
+  journaliser(null, utilisateur ? utilisateur.id : null, 'taux_modifie', trace);
   return { ok: true, cle, valeur: montant, debut };
 }
 
 /** Retire une date d'effet. L'amorce d'origine, elle, ne se retire pas. */
 function supprimer(id, utilisateur) {
-  const ligne = db.prepare('SELECT cle, valeur, debut FROM taux WHERE id = ?').get(Number(id));
+  const ligne = db.prepare('SELECT cle, valeur, valeur_scellee, debut FROM taux WHERE id = ?').get(Number(id));
   if (!ligne) return { erreur: 'Taux introuvable.', code: 404 };
   if (ligne.debut === DEBUT_ORIGINE) {
     return { erreur: 'La valeur d’origine ne se supprime pas : donnez-lui plutôt une nouvelle date d’effet.', code: 409 };
@@ -188,7 +227,9 @@ function supprimer(id, utilisateur) {
     null,
     utilisateur ? utilisateur.id : null,
     'taux_supprime',
-    `${ligne.cle} : ${ligne.valeur} du ${ligne.debut}`
+    ligne.valeur_scellee
+      ? `${ligne.cle} : date d'effet du ${ligne.debut}`
+      : `${ligne.cle} : ${ligne.valeur} du ${ligne.debut}`
   );
   return { ok: true };
 }

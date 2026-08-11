@@ -235,6 +235,43 @@ button.petit { padding: 6px 10px; font-size: 0.82rem; }
  * reprend la couleur sans en reprendre la casse : deux titres tout en capitales
  * l'un sous l'autre ne se hierarchisent plus.
  */
+/*
+ * L'etat d'une chose a faire, ou faite. Repris de la page d'accueil : un
+ * avertissement et une confirmation qui ne se ressemblent pas du tout obligent
+ * a relire, alors qu'ils repondent a la meme question.
+ */
+.etat-paie {
+  display: flex; align-items: flex-start; gap: var(--e3);
+  padding: var(--e3) var(--e4); margin-bottom: var(--e3);
+  border: 1px solid #f0d9b5; border-left: 4px solid var(--orange);
+  background: #fffaf3; border-radius: var(--rayon);
+}
+.etat-paie .signe { color: #b45f09; }
+.etat-paie strong { display: block; }
+.etat-paie .precision { color: var(--gris-texte); font-size: var(--t-petit); }
+.etat-paie.fait { border-color: #bfe3ce; border-left-color: var(--vert); background: #f2faf5; }
+.etat-paie.fait .signe { color: var(--vert); }
+
+/*
+ * La cle de secours, telle qu'on la recopie sur un papier. Chasse fixe et
+ * lettres espacees : elle sera lue a voix haute ou transcrite a la main, et
+ * c'est le seul moment ou elle existe.
+ */
+.cle-secours {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 1.5rem;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: var(--bleu);
+  background: #f7f9fc;
+  border: 1px dashed var(--gris-bord);
+  border-radius: var(--rayon);
+  padding: var(--e4);
+  text-align: center;
+  margin: var(--e3) 0;
+  user-select: all;
+}
+
 h3.titre-bloc {
   font-size: var(--t-grand);
   color: var(--bleu);

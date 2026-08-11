@@ -30,7 +30,82 @@
         <button class="onglet" type="button" data-onglet="taux">Taux de la paie</button>
         <button class="onglet" type="button" data-onglet="conservation">Conservation des données</button>
         <button class="onglet" type="button" data-onglet="indicateurs">Indicateurs de suivi</button>
+        <button class="onglet" type="button" data-onglet="coffre">Coffre de la paie</button>
         <button class="onglet" type="button" data-onglet="compte">Mon compte</button>
+      </div>
+    </section>
+
+    <!--
+      Le coffre de la paie.
+
+      Le cloisonnement par les ecrans ne protege que ceux qui passent par eux.
+      Une lecture directe du fichier `pointage.db` — une sauvegarde, un
+      instantane de machine, un acces au serveur — livrait tous les taux sans le
+      moindre identifiant. Le coffre deplace le mur de l'ecran vers la donnee.
+    -->
+    <section class="carte panneau masque" id="panneau-coffre">
+      <h2>Coffre de la paie</h2>
+      <div id="etat-coffre"></div>
+
+      <div id="creation-coffre" class="masque">
+        <p class="aide detache-apres">
+          Trois choses seulement portent de l'argent : les <strong>taux horaires</strong>,
+          les <strong>primes</strong> et les <strong>paramètres de paie</strong>. Tout le reste
+          s'en déduit. Une fois chiffrées, elles rendent les tableaux mensuels et les exports
+          incalculables sans votre phrase — y compris pour qui détiendrait le fichier de la base.
+        </p>
+        <p class="aide detache-apres">
+          <strong>Votre code à 6 chiffres ne peut pas servir de clé</strong> : un million de
+          combinaisons se testent hors ligne en quelques minutes. Choisissez une phrase d'au moins
+          douze caractères — une phrase entière se retient mieux qu'un mot de passe tordu.
+        </p>
+        <div class="rangee">
+          <div class="champ-libre">
+            <label for="coffre-phrase">Phrase du coffre</label>
+            <input id="coffre-phrase" type="password" autocomplete="new-password">
+          </div>
+          <div class="champ-libre">
+            <label for="coffre-phrase2">Répétez-la</label>
+            <input id="coffre-phrase2" type="password" autocomplete="new-password">
+          </div>
+          <button class="principal" id="btn-creer-coffre" type="button">Créer le coffre</button>
+        </div>
+        <p class="aide suite" id="aide-coffre"></p>
+      </div>
+
+      <!-- La cle de secours n'existe en clair qu'ici, une seule fois. -->
+      <div id="secours-coffre" class="masque">
+        <div class="etat-paie">
+          <span class="signe">▲</span>
+          <span class="texte">
+            <strong>Notez cette clé de secours maintenant. Elle ne sera plus jamais affichée.</strong>
+            <span class="precision">
+              Elle seule permet de rouvrir le coffre si vous oubliez votre phrase. Imprimez-la,
+              rangez-la ailleurs que sur le serveur. Sans elle ni la phrase, les taux horaires et
+              les primes sont définitivement illisibles.
+            </span>
+          </span>
+        </div>
+        <p class="cle-secours" id="valeur-secours"></p>
+        <div class="rangee">
+          <button class="petit" id="btn-imprimer-secours" type="button">Imprimer</button>
+          <button class="valide" id="btn-secours-note" type="button">Je l'ai notée</button>
+        </div>
+      </div>
+
+      <div id="phrase-coffre" class="masque">
+        <h3 class="titre-bloc detache plus">Changer la phrase</h3>
+        <p class="aide detache-apres">
+          La clé de secours déjà imprimée reste valable : elle n'a pas à être réimprimée.
+        </p>
+        <div class="rangee">
+          <div class="champ-libre">
+            <label for="coffre-nouvelle">Nouvelle phrase</label>
+            <input id="coffre-nouvelle" type="password" autocomplete="new-password">
+          </div>
+          <button class="principal" id="btn-changer-phrase" type="button">Changer</button>
+        </div>
+        <p class="aide suite" id="aide-phrase-coffre"></p>
       </div>
     </section>
 

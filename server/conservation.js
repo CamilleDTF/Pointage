@@ -27,6 +27,7 @@
  */
 
 const { db, journaliser } = require('./db');
+const COFFRE = require('./coffre');
 
 /*
  * Cinq ans apres le dernier pointage. C'est la borne haute de l'archivage
@@ -181,7 +182,7 @@ function anonymiser(salarieId, utilisateur) {
  * main dans six tables, le jour ou la demande arrive, serait la meilleure facon
  * d'en oublier une.
  */
-function dossierSalarie(salarieId) {
+function dossierSalarie(salarieId, cleCoffre = null) {
   const salarie = db.prepare('SELECT * FROM salaries WHERE id = ?').get(Number(salarieId));
   if (!salarie) return { erreur: 'Salarie introuvable.', code: 404 };
 
@@ -210,7 +211,13 @@ function dossierSalarie(salarieId) {
       prenom: salarie.prenom,
       actif: salarie.actif,
       productif: salarie.productif,
-      tauxHoraire: salarie.taux_horaire,
+      /*
+       * Le dossier remis a un salarie qui demande ce qu'on detient sur lui.
+       * Coffre ouvert, son taux y figure — c'est SON salaire, il a le droit de
+       * le lire. Coffre ferme, la ligne dit qu'il existe sans le divulguer,
+       * plutot que d'afficher un zero qu'on prendrait pour la verite.
+       */
+      tauxHoraire: COFFRE.montantDe(cleCoffre, salarie, 'taux_horaire', 'taux_horaire_scelle'),
       anonymiseLe: salarie.anonymise_le,
     },
     pointages,
@@ -221,8 +228,12 @@ function dossierSalarie(salarieId) {
       .prepare('SELECT date, code_absence, minutes, gd FROM jours_non_productifs WHERE salarie_id = ? ORDER BY date')
       .all(salarie.id),
     primes: db
-      .prepare('SELECT annee, mois, libelle, montant FROM primes_non_productifs WHERE salarie_id = ? ORDER BY annee, mois')
-      .all(salarie.id),
+      .prepare('SELECT annee, mois, libelle, montant, montant_scelle FROM primes_non_productifs WHERE salarie_id = ? ORDER BY annee, mois')
+      .all(salarie.id)
+      .map(({ montant, montant_scelle, ...reste }) => ({
+        ...reste,
+        montant: COFFRE.montantDe(cleCoffre, { montant, montant_scelle }, 'montant', 'montant_scelle'),
+      })),
   };
 }
 

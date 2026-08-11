@@ -35,7 +35,7 @@ function surClic(id, action) {
  * de toute facon — c'est lui qui fait autorite — mais afficher un onglet qui
  * repondrait 403 serait une promesse en trompe-l'oeil. On le retire donc.
  */
-const RESERVE_A_LA_DIRECTION = ['taux'];
+const RESERVE_A_LA_DIRECTION = ['taux', 'coffre'];
 let estAdministrateur = false;
 
 async function demarrer() {
@@ -115,7 +115,7 @@ surClic('btn-retour', () => { location.href = '/directeur.html'; });
 surClic('btn-quitter', deconnexion);
 
 /* Les volets de l'ecran Parametres. */
-const PANNEAUX = ['effectif', 'nonproductif', 'comptes', 'conducteurs', 'vehicules', 'taux', 'conservation', 'indicateurs', 'compte'];
+const PANNEAUX = ['effectif', 'nonproductif', 'comptes', 'conducteurs', 'vehicules', 'taux', 'conservation', 'indicateurs', 'coffre', 'compte'];
 
 surEvenement('onglets-parametres', 'click', (e) => {
   const onglet = e.target.closest('.onglet');
@@ -138,7 +138,101 @@ function ouvrirPanneau(nom) {
   if (nom === 'conservation') chargerConservation();
   if (nom === 'indicateurs') chargerIndicateurs();
   if (nom === 'compte') chargerMonCompte();
+  if (nom === 'coffre') chargerCoffre();
 }
+
+/* ---------------------------- Coffre de la paie ---------------------------- */
+
+async function chargerCoffre() {
+  let etat;
+  try {
+    etat = await API.get('/api/coffre');
+  } catch (e) {
+    $('etat-coffre').innerHTML = `<p class="aide" style="color:var(--rouge)">${echapper(e.message)}</p>`;
+    return;
+  }
+
+  const zone = $('etat-coffre');
+  $('creation-coffre').classList.toggle('masque', etat.existe);
+  $('phrase-coffre').classList.toggle('masque', !etat.existe);
+
+  if (!etat.existe) {
+    /*
+     * Le nombre de montants encore en clair est affiche tel quel : une promesse
+     * d'etancheite se verifie, elle ne se declare pas.
+     */
+    zone.innerHTML = `<div class="etat-paie">
+      <span class="signe">▲</span>
+      <span class="texte">
+        <strong>Le coffre n'est pas créé : ${etat.montantsEnClair} montant(s) sont lisibles dans le fichier de la base.</strong>
+        <span class="precision">Une sauvegarde, un instantané de la machine ou un accès au serveur les livrent sans identifiant.</span>
+      </span>
+    </div>`;
+    return;
+  }
+
+  const propre = etat.montantsEnClair === 0;
+  zone.innerHTML = `<div class="etat-paie${propre ? ' fait' : ''}">
+    <span class="signe">${propre ? '✓' : '▲'}</span>
+    <span class="texte">
+      <strong>${propre
+        ? 'Coffre en place : aucun montant ne subsiste en clair.'
+        : `Coffre en place, mais ${etat.montantsEnClair} montant(s) restent en clair.`}</strong>
+      <span class="precision">Créé le ${echapper((etat.creeLe || '').slice(0, 10))}. La phrase ouvre les montants pour ${Math.round(etat.dureeSeanceMs / 60000)} minutes.</span>
+    </span>
+  </div>`;
+}
+
+surClic('btn-creer-coffre', async () => {
+  const aide = $('aide-coffre');
+  const phrase = $('coffre-phrase').value;
+  if (phrase !== $('coffre-phrase2').value) {
+    aide.textContent = 'Les deux phrases ne sont pas identiques.';
+    aide.style.color = 'var(--rouge)';
+    return;
+  }
+  try {
+    const r = await API.post('/api/coffre', { phrase });
+    Paie.poser(r.seance, r.dureeMs);
+    $('coffre-phrase').value = '';
+    $('coffre-phrase2').value = '';
+    $('valeur-secours').textContent = r.secours;
+    $('creation-coffre').classList.add('masque');
+    $('secours-coffre').classList.remove('masque');
+    aide.textContent = '';
+  } catch (e) {
+    aide.textContent = e.message;
+    aide.style.color = 'var(--rouge)';
+  }
+});
+
+surClic('btn-imprimer-secours', () => window.print());
+
+surClic('btn-secours-note', async () => {
+  /*
+   * On efface la cle de l'ecran des que la direction dit l'avoir notee. Elle
+   * n'existe plus nulle part ensuite — ni en base, ni ici : seule son enveloppe
+   * est conservee, et une enveloppe ne se relit pas.
+   */
+  $('valeur-secours').textContent = '';
+  $('secours-coffre').classList.add('masque');
+  await chargerCoffre();
+  message('Coffre créé. Les montants sont désormais chiffrés dans la base.', 'succes', 5000);
+});
+
+surClic('btn-changer-phrase', async () => {
+  const aide = $('aide-phrase-coffre');
+  try {
+    if (!(await ouvrirLesMontants())) return;
+    await API.post('/api/coffre/phrase', { nouvelle: $('coffre-nouvelle').value });
+    $('coffre-nouvelle').value = '';
+    aide.textContent = 'Phrase changée. La clé de secours imprimée reste valable.';
+    aide.style.color = 'var(--vert)';
+  } catch (e) {
+    aide.textContent = e.message;
+    aide.style.color = 'var(--rouge)';
+  }
+});
 
 /* ------------------------------- Mon compte ------------------------------- */
 

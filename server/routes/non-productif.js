@@ -16,7 +16,8 @@ const A = require('../auth');
 const XNP = require('../export-non-productif');
 const CAL = require('../calendrier');
 const NP = require('../non-productif');
-const { asyncRoute, nomFichier, repondre } = require('./commun');
+const COFFRE = require('../coffre');
+const { asyncRoute, nomFichier, repondre, autoriserMontants } = require('./commun');
 
 const routes = express.Router();
 
@@ -36,7 +37,20 @@ routes.get('/api/non-productif', A.exigerDirecteur, (req, res) => {
   if (!Number.isInteger(mois) || mois < 1 || mois > 12) {
     return res.status(400).json({ erreur: 'Mois invalide (1 a 12).' });
   }
-  res.json({ ...NP.moisComplet(annee, mois), codesAbsence: D.CODES_ABSENCE, motifsConge: CAL.MOTIFS_CONGE });
+  /*
+   * La grille du mois ne porte aucun montant : heures, absences, grands
+   * deplacements. Elle s'affiche donc coffre ferme — c'est la valorisation, en
+   * dessous, qui reclame la phrase. Les primes s'y montrent sans leur somme
+   * tant que le coffre n'est pas ouvert.
+   */
+  const ouverture = COFFRE.existe()
+    ? COFFRE.cleDeSeance(req.get('X-Seance-Paie'), req.utilisateur.id)
+    : null;
+  res.json({
+    ...NP.moisComplet(annee, mois, ouverture),
+    codesAbsence: D.CODES_ABSENCE,
+    motifsConge: CAL.MOTIFS_CONGE,
+  });
 });
 
 routes.put('/api/non-productif/jour', A.exigerDirecteur, (req, res) => {
@@ -56,6 +70,14 @@ routes.put('/api/non-productif/jour', A.exigerDirecteur, (req, res) => {
 });
 
 routes.post('/api/non-productif/primes', A.exigerDirecteur, (req, res) => {
+  // Poser une prime, c'est ecrire un montant : coffre ouvert, il faut la cle,
+  // sinon la somme resterait en clair a cote de celles qu'on vient de sceller.
+  let cleCoffre = null;
+  if (COFFRE.existe()) {
+    const ouvert = autoriserMontants(req, res);
+    if (!ouvert) return undefined;
+    cleCoffre = ouvert.cle;
+  }
   repondre(
     res,
     NP.ajouterPrime(
@@ -66,7 +88,8 @@ routes.post('/api/non-productif/primes', A.exigerDirecteur, (req, res) => {
         libelle: req.body.libelle,
         montant: req.body.montant,
       },
-      req.utilisateur
+      req.utilisateur,
+      cleCoffre
     )
   );
 });
@@ -91,11 +114,10 @@ routes.get('/api/non-productif/paie', A.exigerDirecteur, (req, res) => {
   if (!Number.isInteger(mois) || mois < 1 || mois > 12) {
     return res.status(400).json({ erreur: 'Mois invalide (1 a 12).' });
   }
-  if (!A.consommerBilletPaie(req, req.query.billet)) {
-    return res.status(403).json({ erreur: 'Les montants demandent votre code directeur.', codeDemande: true });
-  }
+  const ouvert = autoriserMontants(req, res);
+  if (!ouvert) return undefined;
 
-  res.json(NP.paieDuMois(annee, mois));
+  res.json(NP.paieDuMois(annee, mois, ouvert.cle));
 });
 
 /* Le meme tableau, en classeur. Il porte les memes montants, donc le meme billet. */
@@ -111,11 +133,10 @@ routes.get(
     if (!Number.isInteger(mois) || mois < 1 || mois > 12) {
       return res.status(400).json({ erreur: 'Mois invalide (1 a 12).' });
     }
-    if (!A.consommerBilletPaie(req, req.query.billet)) {
-      return res.status(403).json({ erreur: 'Les montants demandent votre code directeur.', codeDemande: true });
-    }
+    const ouvert = autoriserMontants(req, res);
+    if (!ouvert) return undefined;
 
-    const buffer = await XNP.exporterPaieNonProductif(NP.paieDuMois(annee, mois));
+    const buffer = await XNP.exporterPaieNonProductif(NP.paieDuMois(annee, mois, ouvert.cle));
     const nom = nomFichier(`paie_non_productif_${annee}_${String(mois).padStart(2, '0')}.xlsx`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${nom}"`);
@@ -135,10 +156,20 @@ routes.get('/api/admin/non-productifs', A.exigerAdministration, (req, res) => {
   const salaries = db
     .prepare('SELECT * FROM salaries WHERE productif = 0 ORDER BY nom, prenom')
     .all();
+  const cle = COFFRE.existe() && !A.estAdmin(req)
+    ? COFFRE.cleDeSeance(req.get('X-Seance-Paie'), req.utilisateur.id)
+    : null;
   res.json({
-    salaries: A.estAdmin(req)
-      ? salaries.map(({ taux_horaire, ...reste }) => reste)
-      : salaries,
+    salaries: salaries.map(({ taux_horaire, taux_horaire_scelle, ...reste }) =>
+      A.estAdmin(req)
+        ? reste
+        : {
+            ...reste,
+            taux_horaire: COFFRE.montantDe(
+              cle, { taux_horaire, taux_horaire_scelle }, 'taux_horaire', 'taux_horaire_scelle'
+            ),
+          }
+    ),
   });
 });
 

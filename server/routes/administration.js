@@ -16,8 +16,9 @@ const A = require('../auth');
 const I = require('../indicateurs');
 const T = require('../taux');
 const CONS = require('../conservation');
+const COFFRE = require('../coffre');
 const C = require('../courriel');
-const { DEBUT_SERVICE, repondre } = require('./commun');
+const { DEBUT_SERVICE, repondre, autoriserMontants } = require('./commun');
 
 const routes = express.Router();
 
@@ -28,8 +29,27 @@ const routes = express.Router();
  * ligne en base. Il ne doit pas voyager jusqu'a l'administrateur : c'est un
  * salaire, meme quand il se presente comme une colonne d'effectif.
  */
-const sansTaux = (req, salaries) =>
-  A.estAdmin(req) ? salaries.map(({ taux_horaire, ...reste }) => reste) : salaries;
+function sansTaux(req, salaries) {
+  /*
+   * Le scelle ne sort jamais, pour personne : c'est un chiffre illisible, il
+   * n'aide aucun ecran et il donnerait prise a qui le collecterait. Le taux
+   * lui-meme n'apparait qu'ouvert, et seulement pour une seance de paie en
+   * cours — sinon la colonne reste vide, ce qui est la verite : la direction
+   * n'a pas encore ouvert le coffre.
+   */
+  const cle = COFFRE.existe() && !A.estAdmin(req)
+    ? COFFRE.cleDeSeance(req.get('X-Seance-Paie'), req.utilisateur.id)
+    : null;
+
+  return salaries.map(({ taux_horaire, taux_horaire_scelle, ...reste }) => {
+    if (A.estAdmin(req)) return reste;
+    return {
+      ...reste,
+      taux_horaire:
+        COFFRE.montantDe(cle, { taux_horaire, taux_horaire_scelle }, 'taux_horaire', 'taux_horaire_scelle'),
+    };
+  });
+}
 
 routes.get('/api/admin/utilisateurs', A.exigerAdministration, (req, res) => {
   res.json({
@@ -236,6 +256,28 @@ routes.put('/api/admin/salaries/:id', A.exigerAdministration, (req, res) => {
     .filter((c) => c !== 'taux_horaire' || !A.estAdmin(req));
   const maj = {};
   for (const champ of champs) if (req.body[champ] !== undefined) maj[champ] = req.body[champ];
+
+  /*
+   * Le taux horaire, coffre ouvert, part scelle et laisse la colonne en clair a
+   * zero. La phrase est donc exigee pour EN POSER un, pas seulement pour en
+   * lire : sans cela, on saisirait un taux qui ne se rangerait nulle part, ou
+   * pire, qui resterait en clair a cote de ceux qu'on vient de proteger.
+   */
+  if (maj.taux_horaire !== undefined && COFFRE.existe()) {
+    const cle = COFFRE.cleDeSeance(req.get('X-Seance-Paie'), req.utilisateur.id);
+    if (!cle) {
+      return res.status(423).json({
+        erreur: 'Les montants sont dans le coffre : ouvrez-le avec votre phrase pour poser un taux.',
+        coffreFerme: true,
+      });
+    }
+    const montant = Number(maj.taux_horaire);
+    maj.taux_horaire_scelle = Number.isFinite(montant) && montant > 0
+      ? COFFRE.chiffrerMontant(cle, montant)
+      : '';
+    maj.taux_horaire = 0;
+  }
+
   if (!Object.keys(maj).length) return res.json({ ok: true });
   const set = Object.keys(maj).map((c) => `${c} = @${c}`).join(', ');
   db.prepare(`UPDATE salaries SET ${set} WHERE id = @id`).run({ ...maj, id: Number(req.params.id) });
@@ -308,7 +350,12 @@ routes.post('/api/admin/conservation/:id/anonymiser', A.exigerAdministration, (r
 
 /* Ce qu'on remet a un salarie qui demande a savoir ce qui est detenu sur lui. */
 routes.get('/api/admin/salaries/:id/dossier', A.exigerDirecteur, (req, res) => {
-  repondre(res, CONS.dossierSalarie(req.params.id));
+  // Le dossier peut porter un taux et des primes : ouvert si la seance l'est,
+  // muet sinon — jamais faux.
+  const cle = COFFRE.existe()
+    ? COFFRE.cleDeSeance(req.get('X-Seance-Paie'), req.utilisateur.id)
+    : null;
+  repondre(res, CONS.dossierSalarie(req.params.id, cle));
 });
 
 /* ------------------------------ Taux de la paie ---------------------------- */
@@ -321,10 +368,24 @@ routes.get('/api/admin/taux', A.exigerDirecteur, (req, res) => {
   const maintenant = new Date();
   const annee = Number(req.query.annee) || maintenant.getFullYear();
   const mois = Number(req.query.mois) || maintenant.getMonth() + 1;
-  res.json({ catalogue: T.historique(), applicables: T.tauxDuMois(annee, mois), annee, mois });
+  /*
+   * Cet ecran ne montre que des montants : coffre ferme, il n'a rien a dire.
+   * Mieux vaut le refuser franchement que d'afficher un catalogue de valeurs
+   * nulles, qu'on prendrait pour des taux remis a zero.
+   */
+  const ouvert = COFFRE.existe() ? autoriserMontants(req, res) : { cle: null };
+  if (!ouvert) return undefined;
+  res.json({
+    catalogue: T.historique(ouvert.cle),
+    applicables: T.tauxDuMois(annee, mois, ouvert.cle),
+    annee,
+    mois,
+  });
 });
 
 routes.post('/api/admin/taux', A.exigerDirecteur, (req, res) => {
+  const ouvert = COFFRE.existe() ? autoriserMontants(req, res) : { cle: null };
+  if (!ouvert) return undefined;
   repondre(
     res,
     T.definir(
@@ -335,7 +396,8 @@ routes.post('/api/admin/taux', A.exigerDirecteur, (req, res) => {
         mois: req.body.mois,
         note: req.body.note,
       },
-      req.utilisateur
+      req.utilisateur,
+      ouvert.cle
     )
   );
 });

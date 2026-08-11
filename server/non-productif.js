@@ -17,6 +17,7 @@
 const { db, journaliser } = require('./db');
 const D = require('./domaine');
 const T = require('./taux');
+const COFFRE = require('./coffre');
 
 /** Les jours du mois, avec ce qui distingue un jour ouvre d'un week-end. */
 function joursDuMois(annee, mois) {
@@ -36,17 +37,29 @@ function joursDuMois(annee, mois) {
  * L'etat d'une case se lit dans l'ordre du plus precis au plus general : ce que
  * le directeur a declare l'emporte sur la regle, et la regle sur le calendrier.
  */
-function moisComplet(annee, mois) {
+function moisComplet(annee, mois, cleCoffre = null) {
   const jours = joursDuMois(annee, mois);
   const premier = jours[0].date;
   const dernier = jours[jours.length - 1].date;
 
   const personnes = db
     .prepare(
-      `SELECT id, matricule, nom, prenom, taux_horaire
+      `SELECT id, matricule, nom, prenom, taux_horaire, taux_horaire_scelle
          FROM salaries WHERE actif = 1 AND productif = 0 ORDER BY nom, prenom`
     )
-    .all();
+    .all()
+    /*
+     * Le taux est resolu ici, une fois, et les colonnes brutes disparaissent.
+     * Ainsi rien en aval n'a besoin de savoir si le coffre existe : la suite du
+     * calcul lit un nombre, comme avant, et le scelle ne part dans aucune
+     * reponse d'API.
+     */
+    .map(({ taux_horaire, taux_horaire_scelle, ...reste }) => ({
+      ...reste,
+      tauxHoraire:
+        COFFRE.montantDe(cleCoffre, { taux_horaire, taux_horaire_scelle }, 'taux_horaire', 'taux_horaire_scelle')
+        || 0,
+    }));
 
   const declares = db
     .prepare(
@@ -96,10 +109,15 @@ function moisComplet(annee, mois) {
 
   const primes = db
     .prepare(
-      `SELECT id, salarie_id, libelle, montant FROM primes_non_productifs
+      `SELECT id, salarie_id, libelle, montant, montant_scelle FROM primes_non_productifs
         WHERE annee = ? AND mois = ? ORDER BY id`
     )
-    .all(annee, mois);
+    .all(annee, mois)
+    // Le scelle ne sort pas d'ici : ni ouvert sans cle, ni tel quel.
+    .map(({ montant, montant_scelle, ...reste }) => ({
+      ...reste,
+      montant: COFFRE.montantDe(cleCoffre, { montant, montant_scelle }, 'montant', 'montant_scelle'),
+    }));
   for (const ligne of lignes) {
     ligne.primes = primes.filter((p) => p.salarie_id === ligne.id);
     ligne.montantPrimes = ligne.primes.reduce((t, p) => t + (Number(p.montant) || 0), 0);
@@ -186,7 +204,7 @@ function declarerJour({ salarieId, date, code, gd, minutes }, utilisateur) {
   return { ok: true };
 }
 
-function ajouterPrime({ salarieId, annee, mois, libelle, montant }, utilisateur) {
+function ajouterPrime({ salarieId, annee, mois, libelle, montant }, utilisateur, cleCoffre = null) {
   const personne = db
     .prepare('SELECT id, nom, prenom FROM salaries WHERE id = ? AND productif = 0')
     .get(Number(salarieId));
@@ -195,18 +213,29 @@ function ajouterPrime({ salarieId, annee, mois, libelle, montant }, utilisateur)
   const somme = Number(montant);
   if (!Number.isFinite(somme) || somme === 0) return { erreur: 'Indiquez un montant.', code: 400 };
 
+  const scelle = cleCoffre ? COFFRE.chiffrerMontant(cleCoffre, somme) : '';
   const r = db
     .prepare(
-      `INSERT INTO primes_non_productifs (salarie_id, annee, mois, libelle, montant)
-       VALUES (?, ?, ?, ?, ?)`
+      `INSERT INTO primes_non_productifs (salarie_id, annee, mois, libelle, montant, montant_scelle)
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
-    .run(personne.id, Number(annee), Number(mois), String(libelle || '').trim().slice(0, 120), somme);
+    .run(
+      personne.id, Number(annee), Number(mois),
+      String(libelle || '').trim().slice(0, 120),
+      scelle ? 0 : somme,
+      scelle
+    );
 
+  /*
+   * Le journal dit qu'une prime a ete posee, et pour qui — jamais combien. Il
+   * est lisible par qui tient l'application, et une somme qui s'y inscrirait
+   * ferait sortir du coffre ce qu'on vient d'y ranger.
+   */
   journaliser(
     null,
     utilisateur ? utilisateur.id : null,
     'prime_non_productif',
-    `${personne.nom} ${personne.prenom} ${mois}/${annee} : ${somme} € — ${libelle || 'sans motif'}`
+    `${personne.nom} ${personne.prenom} ${mois}/${annee} — ${libelle || 'sans motif'}`
   );
   return { id: r.lastInsertRowid };
 }
@@ -261,7 +290,7 @@ function heuresSupDuMois(cases) {
  * titre-restaurant, qui se versent nets.
  */
 function valoriser(ligne, bareme = T.DEFAUTS) {
-  const taux = Number(ligne.taux_horaire) || 0;
+  const taux = Number(ligne.tauxHoraire) || 0;
   const h = (minutes) => (Number(minutes) || 0) / 60;
   const { minutes25, minutes50 } = heuresSupDuMois(ligne.jours);
 
@@ -310,10 +339,10 @@ function valoriser(ligne, bareme = T.DEFAUTS) {
  * Une seule construction pour les deux : un tableau affiche et un tableau
  * telecharge qui ne diraient pas la meme chose seraient pires qu'un seul.
  */
-function paieDuMois(annee, mois) {
-  const donnees = moisComplet(annee, mois);
+function paieDuMois(annee, mois, cleCoffre = null) {
+  const donnees = moisComplet(annee, mois, cleCoffre);
   // Les taux du mois demande : un mois passe se rejoue avec les siens.
-  const bareme = T.tauxDuMois(annee, mois);
+  const bareme = T.tauxDuMois(annee, mois, cleCoffre);
   return {
     annee,
     mois,

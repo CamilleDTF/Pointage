@@ -139,7 +139,8 @@ Le code saisi à la connexion détermine entièrement ce qui s'affiche :
 |---|---|
 | Un chef d'équipe | Ses fiches et sa seule équipe — ni les fiches, ni les salariés, ni les noms des autres chefs |
 | Un conducteur de travaux | Les fiches où un chef l'a désigné, et le calendrier des présences — aucun montant |
-| Le directeur | Les 8 chefs, toutes les fiches, les exports, la gestion des comptes |
+| Un administrateur | Les comptes, l'effectif, les véhicules, les réglages. Le pointage **en lecture seule**. Aucun montant, aucun taux horaire |
+| Le directeur | Les 8 chefs, toutes les fiches, les exports, la gestion des comptes, les salaires |
 
 Le cloisonnement est appliqué côté serveur, pas seulement à l'affichage : un chef
 qui ouvrirait directement l'adresse de la fiche d'un collègue reçoit un refus.
@@ -153,6 +154,68 @@ fonction de direction. Le bouton ne s'affiche pas pour un renfort venu d'une aut
 
 Une fiche transmise se reprend d'un clic tant qu'elle n'est pas validée ; le directeur
 peut la corriger, la valider, ou la renvoyer au chef avec un motif.
+
+## L'administrateur technique, et le coffre de la paie
+
+Deux métiers se cachaient dans le compte directeur : diriger l'entreprise, et tenir
+l'application. Le rôle **administrateur** prend le second — comptes, effectif,
+véhicules, réglages, diagnostics — et ne prend pas le premier.
+
+Il se crée en ligne de commande, parce que personne dans l'application ne peut s'en
+créer un :
+
+```bash
+node scripts/creer-compte.js --nom "NOM Prénom" --identifiant xxx --code 123456 --role admin
+```
+
+Un administrateur **ne peut ni créer, ni modifier, ni désactiver un compte de
+direction, ni lui remettre un code**. C'est la porte par laquelle tout le reste
+tomberait : poser un code sur le compte du directeur, se connecter avec, le ressaisir
+quand les montants le demandent. La direction change donc son code elle-même, et le
+retrouve seule par sa **question de reprise** (*Paramètres ▸ Mon compte*), dont la
+réponse est hachée comme un code.
+
+### Le coffre
+
+Le cloisonnement par les écrans ne protège que ceux qui passent par eux. Une lecture
+directe du fichier `data/pointage.db` — une sauvegarde, un instantané de la machine
+virtuelle, un accès au serveur — livrait tous les taux horaires **sans le moindre
+identifiant** :
+
+```
+$ sqlite3 data/pointage.db "SELECT nom, taux_horaire FROM salaries"
+BENALI Karim|17.42
+```
+
+Le coffre déplace le mur de l'écran vers la donnée. Trois colonnes seulement portent
+de l'argent — le taux horaire, le montant d'une prime, la valeur d'un paramètre de
+paie — et tout le reste s'en déduit. Chiffrées en AES-256-GCM, elles rendent les
+tableaux mensuels et les exports incalculables sans la clé.
+
+La clé est tirée au hasard et rangée dans **deux enveloppes**, chacune suffisant à
+l'ouvrir : la phrase de la direction, passée par scrypt, et une **clé de secours**
+affichée une seule fois à la création, à imprimer et ranger ailleurs que sur le
+serveur. Le tirage au sort de la clé n'est pas un détail : changer la phrase remplace
+une enveloppe, pas des milliers de valeurs, et la clé imprimée reste valable.
+
+Une phrase, et non le code à six chiffres : un million de combinaisons se testent hors
+ligne en quelques minutes, et les huit tentatives par quart d'heure ne valent que
+devant l'application.
+
+Le coffre se crée depuis *Paramètres ▸ Coffre de la paie*. L'écran affiche combien de
+montants restent lisibles dans le fichier — une promesse d'étanchéité se vérifie, elle
+ne se déclare pas.
+
+### Ce que le coffre ne protège pas
+
+**Rien n'arrête quelqu'un qui modifierait le code du serveur et attendrait que la
+direction tape sa phrase.** Aucun chiffrement côté serveur ne le peut : au moment où
+l'application affiche un montant, elle le détient en clair.
+
+C'est dit ici plutôt que passé sous silence, parce que la parade est humaine et non
+informatique : elle tient à qui a le droit de déployer une nouvelle version sur la
+machine. Si cette personne n'est pas la direction, le coffre protège contre la copie
+du fichier, la sauvegarde égarée et le disque emporté — pas contre elle.
 
 ## Deux chantiers dans la même semaine
 

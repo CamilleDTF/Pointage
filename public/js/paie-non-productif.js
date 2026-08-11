@@ -70,27 +70,22 @@ async function apercu() {
 }
 
 /**
- * Le code s'echange contre un billet a usage unique, valable deux minutes, que
- * le serveur consomme des la premiere requete : un ecran laisse ouvert ne
- * redonne jamais acces aux salaires.
+ * Ouvre les montants : la phrase du coffre, ou le code contre un billet selon
+ * l'installation. Rend `''` quand une seance porte deja l'autorisation, le
+ * billet quand il faut le glisser en parametre, `null` si l'on a renonce.
  */
 async function demanderBillet() {
-  const pin = prompt('Les montants demandent votre code directeur :');
-  if (!pin) return null;
-  try {
-    const { billet } = await API.post('/api/paie/billet', { pin });
-    return billet;
-  } catch (e) {
-    message(e.message, 'erreur');
-    return null;
-  }
+  const ouvert = await ouvrirLesMontants();
+  if (!ouvert) return null;
+  return ouvert === true ? '' : ouvert;
 }
 
 async function afficher() {
   const billet = await demanderBillet();
-  if (!billet) return;
+  if (billet === null) return;
 
-  const parametres = new URLSearchParams({ annee: $('annee').value, mois: $('mois').value, billet });
+  const parametres = new URLSearchParams({ annee: $('annee').value, mois: $('mois').value });
+  if (billet) parametres.set('billet', billet);
   try {
     paie = await API.get(`/api/non-productif/paie?${parametres}`);
   } catch (e) {
@@ -110,9 +105,14 @@ function masquer() {
 
 async function telecharger() {
   const billet = await demanderBillet();
-  if (!billet) return;
-  const parametres = new URLSearchParams({ annee: $('annee').value, mois: $('mois').value, billet });
-  window.location.href = `/api/export/non-productif.xlsx?${parametres}`;
+  if (billet === null) return;
+  const parametres = new URLSearchParams({ annee: $('annee').value, mois: $('mois').value });
+  if (billet) parametres.set('billet', billet);
+  try {
+    await telechargerFichier(`/api/export/non-productif.xlsx?${parametres}`);
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
 }
 
 const euros = (v) => `${(Number(v) || 0).toFixed(2).replace('.', ',')} €`;

@@ -98,11 +98,11 @@ async function afficherMois() {
   const parametres = parametresMois();
   if (versionDemandee() === 'direction') {
     const billet = await demanderBillet();
-    if (!billet) {
+    if (billet === null) {
       $('version-mois').value = 'public';
       return afficherMois();
     }
-    parametres.set('billet', billet);
+    if (billet) parametres.set('billet', billet);
   }
 
   try {
@@ -116,21 +116,15 @@ async function afficherMois() {
 }
 
 /**
- * Le code est redemande a chaque ouverture et a chaque telechargement de la
- * version direction : il s'echange contre un billet a usage unique, valable
- * deux minutes, que le serveur consomme des la premiere requete. Un ecran
- * laisse ouvert ne redonne jamais acces aux salaires.
+ * Ouvre les montants. `ouvrirLesMontants` sait laquelle des deux mecaniques
+ * s'applique — la phrase du coffre, ou le code contre un billet — et rend soit
+ * `true` (seance ouverte, l'en-tete part tout seul), soit le billet a glisser
+ * en parametre, soit `false` si l'on a renonce.
  */
 async function demanderBillet() {
-  const pin = prompt('Les montants demandent votre code directeur :');
-  if (!pin) return null;
-  try {
-    const { billet } = await API.post('/api/paie/billet', { pin });
-    return billet;
-  } catch (e) {
-    message(e.message, 'erreur');
-    return null;
-  }
+  const ouvert = await ouvrirLesMontants();
+  if (!ouvert) return null;
+  return ouvert === true ? '' : ouvert;
 }
 
 function masquerMontants() {
@@ -155,10 +149,14 @@ async function telechargerMois() {
 
   if (version === 'direction') {
     const billet = await demanderBillet();
-    if (!billet) return;
-    parametres.set('billet', billet);
+    if (billet === null) return;
+    if (billet) parametres.set('billet', billet);
   }
-  window.location.href = `/api/export/mois.xlsx?${parametres}`;
+  try {
+    await telechargerFichier(`/api/export/mois.xlsx?${parametres}`);
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
 }
 
 const euros = (v) => `${(Number(v) || 0).toFixed(2).replace('.', ',')} €`;

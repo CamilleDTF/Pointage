@@ -10,7 +10,7 @@
 
 const express = require('express');
 
-const { db } = require('../db');
+const { db, journaliser } = require('../db');
 const D = require('../domaine');
 const F = require('../fiches');
 const A = require('../auth');
@@ -18,7 +18,8 @@ const X = require('../export');
 const XM = require('../export-mensuel');
 const M = require('../mensuel');
 const T = require('../taux');
-const { asyncRoute } = require('./commun');
+const COFFRE = require('../coffre');
+const { asyncRoute, autoriserMontants } = require('./commun');
 
 const routes = express.Router();
 
@@ -86,12 +87,15 @@ routes.get(
     // La version direction porte les salaires : chaque telechargement consomme
     // son propre billet, donc redemande le code.
     const version = req.query.version === 'direction' ? 'direction' : 'public';
-    if (version === 'direction' && !A.consommerBilletPaie(req, req.query.billet)) {
-      return res.status(403).json({ erreur: 'Les montants demandent votre code directeur.', codeDemande: true });
+    let cleCoffre = null;
+    if (version === 'direction') {
+      const ouvert = autoriserMontants(req, res);
+      if (!ouvert) return undefined;
+      cleCoffre = ouvert.cle;
     }
 
-    const donnees = M.agregerMois(annee, mois, { statut: req.query.statut || 'validee' });
-    const buffer = await XM.exporterMois(donnees, { version, taux: T.tauxDuMois(annee, mois) });
+    const donnees = M.agregerMois(annee, mois, { statut: req.query.statut || 'validee', cleCoffre });
+    const buffer = await XM.exporterMois(donnees, { version, taux: T.tauxDuMois(annee, mois, cleCoffre) });
     const nom = nomFichier(
       `pointage_mensuel_${annee}_${String(mois).padStart(2, '0')}_${version}.xlsx`
     );
@@ -104,20 +108,99 @@ routes.get(
 /* ------------------------- Tableau mensuel a l'ecran ----------------------- */
 
 /*
- * Le meme tableau que le classeur, mais consultable directement. Deux versions :
+ * Ouvrir les montants : le code, ou la phrase du coffre.
  *
- *  - "public"    : heures, majorations, jours de zone, paniers, grands
- *                  deplacements. Aucun montant, aucun taux horaire.
- *  - "direction" : la meme chose plus la valorisation. Elle exige que le
- *                  directeur ait ressaisi son code, meme si sa session est
- *                  ouverte : une session dure trente jours, un salaire affiche
- *                  sur un ecran partage n'attend pas si longtemps.
+ * Tant que le coffre n'existe pas, rien ne change : le code est redemande, et
+ * il donne un billet a usage unique. Une fois le coffre cree, ce n'est plus une
+ * autorisation qu'on demande mais une CLE — sans elle, les montants ne sont pas
+ * refuses, ils sont illisibles, y compris pour le serveur.
+ *
+ * Elle ouvre alors une seance de quinze minutes plutot qu'un billet unique :
+ * une phrase longue retapee entre l'affichage et le telechargement du meme
+ * tableau serait un peage, pas une protection. La cle vit en memoire, disparait
+ * a l'echeance, et n'est jamais ecrite sur le disque.
  */
+/* ------------------------------- Le coffre -------------------------------- */
+
+/*
+ * L'etat du coffre, pour l'ecran qui propose de le creer.
+ *
+ * `resteDuClair` n'est pas decoratif : une promesse d'etancheite se verifie. Il
+ * compte ce qui traine encore en clair dans le fichier, et l'ecran l'affiche —
+ * zero, ou la liste de ce qui reste a basculer.
+ */
+routes.get('/api/coffre', A.exigerDirecteur, (req, res) => {
+  const c = COFFRE.etat();
+  res.json({
+    existe: Boolean(c),
+    creeLe: c ? c.cree_le : null,
+    montantsEnClair: COFFRE.resteDuClair(),
+    seanceOuverte: Boolean(COFFRE.cleDeSeance(req.get('X-Seance-Paie'), req.utilisateur.id)),
+    dureeSeanceMs: COFFRE.DUREE_SEANCE_MS,
+  });
+});
+
+/*
+ * Creer le coffre : le seul moment ou la cle de secours existe en clair.
+ *
+ * Elle est renvoyee ici, une fois, et n'est stockee nulle part — seule son
+ * enveloppe l'est. La rendre a nouveau serait impossible sans la garder, et la
+ * garder reviendrait a poser la cle sous le paillasson.
+ *
+ * Le chiffrement de l'existant suit immediatement, dans la foulee : un coffre
+ * cree sur des donnees restees en clair ne protegerait rien, il donnerait juste
+ * le sentiment du contraire.
+ */
+routes.post('/api/coffre', A.exigerDirecteur, (req, res) => {
+  const resultat = COFFRE.creer(req.body.phrase);
+  if (resultat.erreur) return res.status(resultat.code || 400).json({ erreur: resultat.erreur });
+
+  const bascule = COFFRE.chiffrerExistant(resultat.cle);
+  journaliser(null, req.utilisateur.id, 'coffre_cree', JSON.stringify(bascule));
+
+  return res.json({
+    secours: resultat.secours,
+    bascule,
+    montantsEnClair: COFFRE.resteDuClair(),
+    seance: COFFRE.ouvrirSeance(resultat.cle, req.utilisateur.id),
+    dureeMs: COFFRE.DUREE_SEANCE_MS,
+  });
+});
+
+/*
+ * Changer la phrase. La cle de donnees ne bouge pas : on remplace une
+ * enveloppe, pas des milliers de valeurs — et la cle de secours imprimee reste
+ * valable, ce qui evite d'avoir a la reimprimer a chaque changement.
+ */
+routes.post('/api/coffre/phrase', A.exigerDirecteur, (req, res) => {
+  const ouvert = autoriserMontants(req, res);
+  if (!ouvert) return undefined;
+  const resultat = COFFRE.changerPhrase(ouvert.cle, req.body.nouvelle);
+  if (resultat.erreur) return res.status(resultat.code || 400).json({ erreur: resultat.erreur });
+  journaliser(null, req.utilisateur.id, 'coffre_phrase_changee', '');
+  return res.json({ ok: true });
+});
+
 routes.post('/api/paie/billet', A.exigerDirecteur, (req, res) => {
   const cle = `${req.ip}|paie|${req.utilisateur.id}`;
   if (A.tropDeTentatives(cle)) {
     return res.status(429).json({ erreur: 'Trop de tentatives. Reessayez dans 15 minutes.' });
   }
+
+  if (COFFRE.existe()) {
+    const cleCoffre = COFFRE.deverrouiller({ phrase: req.body.phrase, secours: req.body.secours });
+    if (!cleCoffre) {
+      A.enregistrerEchec(cle);
+      return res.status(401).json({ erreur: 'Phrase incorrecte.' });
+    }
+    A.reinitialiserTentatives(cle);
+    journaliser(null, req.utilisateur.id, 'coffre_ouvert', 'seance de paie ouverte');
+    return res.json({
+      seance: COFFRE.ouvrirSeance(cleCoffre, req.utilisateur.id),
+      dureeMs: COFFRE.DUREE_SEANCE_MS,
+    });
+  }
+
   const u = db.prepare('SELECT pin_hash FROM utilisateurs WHERE id = ?').get(req.utilisateur.id);
   if (!A.verifierPin(String(req.body.pin || ''), u.pin_hash)) {
     A.enregistrerEchec(cle);
@@ -128,6 +211,16 @@ routes.post('/api/paie/billet', A.exigerDirecteur, (req, res) => {
   res.json({ billet: A.delivrerBilletPaie(req.utilisateur) });
 });
 
+/*
+ * Le meme tableau que le classeur, mais consultable directement. Deux versions :
+ *
+ *  - "public"    : heures, majorations, jours de zone, paniers, grands
+ *                  deplacements. Aucun montant, aucun taux horaire.
+ *  - "direction" : la meme chose plus la valorisation. Elle exige que le
+ *                  directeur ait ressaisi son code, meme si sa session est
+ *                  ouverte : une session dure trente jours, un salaire affiche
+ *                  sur un ecran partage n'attend pas si longtemps.
+ */
 routes.get('/api/mois', A.exigerDirecteur, (req, res) => {
   const annee = Number(req.query.annee);
   const mois = Number(req.query.mois);
@@ -139,14 +232,17 @@ routes.get('/api/mois', A.exigerDirecteur, (req, res) => {
   }
 
   const demandee = req.query.version === 'direction' ? 'direction' : 'public';
-  if (demandee === 'direction' && !A.consommerBilletPaie(req, req.query.billet)) {
-    return res.status(403).json({ erreur: 'Les montants demandent votre code directeur.', codeDemande: true });
+  let cleCoffre = null;
+  if (demandee === 'direction') {
+    const ouvert = autoriserMontants(req, res);
+    if (!ouvert) return undefined;
+    cleCoffre = ouvert.cle;
   }
 
-  const donnees = M.agregerMois(annee, mois, { statut: req.query.statut || 'validee' });
+  const donnees = M.agregerMois(annee, mois, { statut: req.query.statut || 'validee', cleCoffre });
   // Les taux du MOIS demande, pas ceux d'aujourd'hui : rejouer un mois passe
   // doit redonner ce qui avait ete paye.
-  const bareme = T.tauxDuMois(annee, mois);
+  const bareme = T.tauxDuMois(annee, mois, cleCoffre);
 
   const salaries = donnees.salaries.map((s) => {
     const commun = {

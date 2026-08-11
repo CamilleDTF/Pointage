@@ -1,10 +1,37 @@
 /* Fonctions partagees par l'espace chef d'equipe et le tableau de bord directeur. */
 
+/*
+ * La seance de paie : la cle du coffre, ouverte pour quinze minutes.
+ *
+ * Elle ne vit qu'en memoire de l'onglet — ni cookie, ni stockage local. Fermer
+ * l'onglet la perd, ce qui est exactement ce qu'on veut : un poste laisse
+ * allume au bureau ne doit pas rester une porte ouverte sur les salaires.
+ *
+ * Le jeton n'est pas la cle. La cle, elle, ne quitte jamais le serveur : ce
+ * jeton designe seulement une seance qui y est ouverte, et qui s'y ferme toute
+ * seule a l'echeance.
+ */
+const Paie = {
+  jeton: null,
+  expire: 0,
+  ouverte() { return Boolean(this.jeton) && Date.now() < this.expire; },
+  poser(jeton, dureeMs) {
+    this.jeton = jeton;
+    // Une marge de dix secondes : mieux vaut redemander la phrase un peu tot
+    // que d'essuyer un refus au milieu d'un telechargement.
+    this.expire = Date.now() + (Number(dureeMs) || 15 * 60 * 1000) - 10000;
+  },
+  fermer() { this.jeton = null; this.expire = 0; },
+};
+
 const API = {
   async appel(methode, url, corps) {
+    const entetes = corps ? { 'Content-Type': 'application/json' } : {};
+    if (Paie.ouverte()) entetes['X-Seance-Paie'] = Paie.jeton;
+
     const reponse = await fetch(url, {
       method: methode,
-      headers: corps ? { 'Content-Type': 'application/json' } : undefined,
+      headers: Object.keys(entetes).length ? entetes : undefined,
       body: corps ? JSON.stringify(corps) : undefined,
     });
     const donnees = await reponse.json().catch(() => ({}));
@@ -36,6 +63,81 @@ const API = {
   put: (url, corps) => API.appel('PUT', url, corps),
   supprimer: (url) => API.appel('DELETE', url),
 };
+
+/**
+ * Ouvre les montants, et rend `true` si c'est fait.
+ *
+ * Deux mecaniques, selon que le coffre existe ou non — et l'ecran n'a pas a
+ * savoir laquelle : il demande a ouvrir, on lui dit si c'est ouvert.
+ *
+ *  - coffre en place : la phrase deverrouille la cle, gardee quinze minutes.
+ *    Afficher puis telecharger le meme tableau ne la redemande donc pas.
+ *  - pas de coffre : le code, echange contre un billet a usage unique, comme
+ *    avant. Une installation qui n'a pas bascule continue de fonctionner.
+ */
+async function ouvrirLesMontants() {
+  if (Paie.ouverte()) return true;
+
+  let etat = { existe: false };
+  try {
+    etat = await API.get('/api/coffre');
+  } catch { /* route absente ou refusee : on retombe sur le code */ }
+
+  if (etat.existe) {
+    const phrase = prompt('Phrase du coffre de la paie :');
+    if (!phrase) return false;
+    try {
+      const r = await API.post('/api/paie/billet', { phrase });
+      Paie.poser(r.seance, r.dureeMs);
+      return true;
+    } catch (e) {
+      message(e.message, 'erreur');
+      return false;
+    }
+  }
+
+  const pin = prompt('Les montants demandent votre code directeur :');
+  if (!pin) return false;
+  try {
+    const { billet } = await API.post('/api/paie/billet', { pin });
+    // Le billet reste a usage unique : il voyage en parametre, pas en seance.
+    return billet;
+  } catch (e) {
+    message(e.message, 'erreur');
+    return false;
+  }
+}
+
+/**
+ * Telecharge un fichier en portant la seance de paie.
+ *
+ * `window.location.href` ne sait pas poser d'en-tete : le jeton aurait du
+ * voyager dans l'URL, ou il se serait inscrit dans l'historique du navigateur
+ * et dans les journaux de tout proxy traverse. On recupere donc le classeur par
+ * une requete ordinaire, en-tete comprise, et on le remet au navigateur comme
+ * un fichier deja en main.
+ */
+async function telechargerFichier(url, nomPropose) {
+  const entetes = {};
+  if (Paie.ouverte()) entetes['X-Seance-Paie'] = Paie.jeton;
+
+  const reponse = await fetch(url, { headers: entetes });
+  if (!reponse.ok) {
+    const donnees = await reponse.json().catch(() => ({}));
+    throw new Error(donnees.erreur || `Erreur ${reponse.status}`);
+  }
+
+  const nom = (reponse.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/);
+  const blob = await reponse.blob();
+  const lien = document.createElement('a');
+  lien.href = URL.createObjectURL(blob);
+  lien.download = nom ? nom[1] : nomPropose || 'export.xlsx';
+  document.body.appendChild(lien);
+  lien.click();
+  lien.remove();
+  // Le navigateur a besoin d'un instant pour lire l'objet avant qu'on le libere.
+  setTimeout(() => URL.revokeObjectURL(lien.href), 30000);
+}
 
 function message(texte, type = 'info', duree = 4000) {
   let zone = document.querySelector('.messages');
