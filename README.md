@@ -727,13 +727,41 @@ forme conditionnelle : l'alerte s'éteint d'elle-même, sans rien à effacer. El
 porte que sur les semaines effectivement pointées : un emplacement de semaine
 inutilisé ne réclame rien. La légende figure en haut de chaque feuille.
 
+### Les taux ont une date d'effet
+
+Le panier à 12,20 €, le grand déplacement à 72 et 80 €, la prime de zone à 5 et 10 €,
+l'abattement, les 151,67 h, les majorations : tout cela vivait **en dur dans le code**.
+Le problème n'était pas que ces chiffres soient faux — ils sont justes pour DTF — mais
+qu'un accord d'entreprise aurait demandé une nouvelle version du logiciel, et surtout
+que le jour où un taux changeait, **tous les mois passés changeaient avec lui**.
+
+Un taux est désormais une valeur **qui commence à un mois** (*Paramètres ▸ Taux de la
+paie*). Celui qui s'applique à un mois est le dernier dont la date d'effet est atteinte ;
+les précédents restent intacts. Reprendre décembre après un accord de janvier redonne
+donc, au centime, ce qui avait été payé.
+
+La date d'effet est un **mois**, jamais un jour : un taux qui change au 1er janvier
+s'applique à toute la paie de janvier, et un même mois ne mélange jamais deux taux —
+sans quoi le tableau deviendrait impossible à recontrôler à la main. Chaque changement
+est journalisé avec son auteur, son avant/après et son motif.
+
+Les valeurs d'origine sont enregistrées à une date volontairement ancienne : **aucun
+mois déjà calculé n'a bougé d'un centime** parce qu'on a rendu ses taux modifiables.
+Le classeur Excel lit les mêmes taux que l'écran — ses formules les portaient aussi.
+
+> **« Net estimé », et pas « net ».** Le passage du brut au net est ici un coefficient du
+> classeur (0,77 par défaut) appliqué au brut. C'est un ordre de grandeur pour se faire
+> une idée avant que la paie tranche, pas un calcul de paie : ni charges réelles, ni
+> tranches, ni situation individuelle. Les colonnes de l'application portent donc le nom
+> qui convient.
+
 ### Conventions retenues
 
-- **Panier repas** *(validé)* — **12,20 € par jour**, et rien à saisir : ni le montant,
-  qui ne change pas, ni le nombre de jours, qui se compte depuis le pointage. Tout jour
-  travaillé y donne droit **sauf** s'il est couvert par un grand déplacement, dont
-  l'indemnité comprend déjà le repas. Le montant est dans `public/js/regles.js`
-  (`MONTANT_PANIER_REPAS`), la règle dans `joursPanierRepas`.
+- **Panier repas** *(validé)* — **12,20 € par jour** (valeur d'origine, modifiable :
+  voir *Les taux ont une date d'effet*), et rien à saisir : ni le montant, ni le nombre
+  de jours, qui se compte depuis le pointage. Tout jour travaillé y donne droit **sauf**
+  s'il est couvert par un grand déplacement, dont l'indemnité comprend déjà le repas.
+  La règle est dans `joursPanierRepas` (`public/js/regles.js`).
 - **Grand déplacement** *(validé)* — le chef d'équipe compte lui-même, ligne par
   ligne, les **jours passés sous chacun des deux taux** (colonnes `GD 72` et
   `GD 80`). Le taux se déduisait auparavant de la ville du chantier : c'était faux
@@ -785,6 +813,7 @@ server/
   fiches.js     Cycle de vie d'une fiche : création, saisie, transmission, validation
   export.js     Génération des classeurs Excel et du CSV
   mensuel.js    Agrégation d'un mois et valorisation de la paie
+  taux.js       Les montants de la paie et leur date d'effet
   export-mensuel.js  Le classeur mensuel, versions publique et direction
   indicateurs.js Suivi des chefs : assiduité, retards, fiches renvoyées
   calendrier.js Vue mensuelle par personne, et registre des congés
@@ -827,6 +856,7 @@ test/
   identite.test.js      Le registre tranche : nom relu, numéro non honoré retiré
   export-csv.test.js    Le CSV n'ouvre pas une formule chez le comptable
   versions.test.js      Une fiche validée se rectifie, elle ne se réécrit pas
+  taux.test.js          Un mois se recalcule avec les taux qui s'appliquaient à lui
   paie-non-productif.test.js  Leur valorisation : mensualisation, majorations, indemnités
 scripts/
   tester-courriel.js    Essai d'envoi, et diagnostic des réglages SMTP

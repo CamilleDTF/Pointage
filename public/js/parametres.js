@@ -119,17 +119,18 @@ async function chargerTaux() {
   $('table-taux').querySelector('tbody').innerHTML = taux.catalogue
     .map((t) => {
       const histoire = t.valeurs
-        .map(
-          (v) => `<div>
-            <strong>${nombre(v.valeur)}</strong> à compter de ${echapper(moisDe(v.debut))}
-            ${v.note ? `<span class="aide">— ${echapper(v.note)}</span>` : ''}
-            ${
-              v.debut === '2000-01-01'
-                ? '<span class="aide">— valeur d’origine</span>'
-                : `<button class="petit" onclick="supprimerTaux(${v.id})">✕</button>`
-            }
-          </div>`
-        )
+        .map((v) => {
+          // La valeur d'origine porte deja son explication : on ne la redit pas
+          // une seconde fois derriere sa note.
+          const origine = v.debut === '2000-01-01';
+          const suite = origine
+            ? '<span class="aide">— valeur d’origine, reprise du code</span>'
+            : `${v.note ? `<span class="aide">— ${echapper(v.note)}</span>` : ''}
+               <button class="petit" onclick="supprimerTaux(${v.id})" title="Retirer cette date d’effet">✕</button>`;
+          return `<div>
+            <strong>${nombre(v.valeur)}</strong> à compter de ${echapper(moisDe(v.debut))} ${suite}
+          </div>`;
+        })
         .join('');
 
       return `<tr>
