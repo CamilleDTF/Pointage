@@ -27,6 +27,7 @@
         <button class="onglet" type="button" data-onglet="comptes">Comptes des chefs</button>
         <button class="onglet" type="button" data-onglet="conducteurs">Conducteurs de travaux</button>
         <button class="onglet" type="button" data-onglet="vehicules">Véhicules</button>
+        <button class="onglet" type="button" data-onglet="taux">Taux de la paie</button>
         <button class="onglet" type="button" data-onglet="indicateurs">Indicateurs de suivi</button>
       </div>
     </section>
@@ -160,6 +161,43 @@
         <input id="v-motorisation" placeholder="Motorisation" style="flex:1;min-width:110px">
         <button class="petit principal" id="btn-ajout-vehicule" type="button">Ajouter</button>
       </div>
+    </section>
+
+    <section class="carte panneau masque" id="panneau-taux">
+      <h2>Taux de la paie</h2>
+      <p class="aide">
+        Chaque taux vaut <strong>à compter d'un mois</strong>. Changer un taux ne touche
+        jamais aux mois déjà passés : un mois se recalcule toujours avec les taux qui
+        s'appliquaient à lui. C'est ce qui permet de reprendre décembre après un accord
+        de janvier et de retrouver, au centime, ce qui avait été payé.
+      </p>
+
+      <div class="rangee" style="margin-bottom:12px">
+        <div style="width:150px">
+          <label for="taux-mois">Voir les taux de</label>
+          <select id="taux-mois"></select>
+        </div>
+        <div style="width:110px">
+          <label for="taux-annee">Année</label>
+          <input id="taux-annee" type="number" min="2020" max="2100" step="1">
+        </div>
+      </div>
+
+      <div class="enveloppe-table"><table id="table-taux">
+        <thead><tr>
+          <th>Taux</th>
+          <th class="num">Applicable ce mois-là</th>
+          <th>Historique — date d'effet</th>
+          <th>Nouvelle valeur</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table></div>
+
+      <p class="aide" style="margin-top:10px">
+        La <strong>part nette estimée</strong> n'est pas un calcul de paie : c'est
+        l'ordre de grandeur du classeur, qui sert à se faire une idée avant que la paie
+        tranche. Les colonnes « net » de l'application en portent le nom.
+      </p>
     </section>
 
     <section class="carte panneau masque" id="panneau-indicateurs">

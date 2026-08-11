@@ -44,8 +44,8 @@ async function demarrer() {
 surClic('btn-retour', () => { location.href = '/directeur.html'; });
 surClic('btn-quitter', deconnexion);
 
-/* Les quatre volets de l'ecran Parametres. */
-const PANNEAUX = ['effectif', 'nonproductif', 'comptes', 'conducteurs', 'vehicules', 'indicateurs'];
+/* Les volets de l'ecran Parametres. */
+const PANNEAUX = ['effectif', 'nonproductif', 'comptes', 'conducteurs', 'vehicules', 'taux', 'indicateurs'];
 
 surEvenement('onglets-parametres', 'click', (e) => {
   const onglet = e.target.closest('.onglet');
@@ -64,8 +64,128 @@ function ouvrirPanneau(nom) {
   if (nom === 'nonproductif') chargerNonProductifs();
   if (nom === 'conducteurs') chargerConducteurs();
   if (nom === 'vehicules') chargerVehicules();
+  if (nom === 'taux') chargerTaux();
   if (nom === 'indicateurs') chargerIndicateurs();
 }
+
+/* ----------------------------- Taux de la paie ---------------------------- */
+
+/*
+ * Les montants qui vivaient en dur dans le code, avec leur date d'effet.
+ *
+ * L'ecran montre deux choses a la fois, et c'est voulu : ce qui s'applique au
+ * mois consulte, et l'histoire complete du taux. Sans la seconde, on ne saurait
+ * pas pourquoi un mois de l'an dernier ne donne pas le meme montant qu'un mois
+ * d'aujourd'hui — et c'est precisement la question qu'on se pose.
+ */
+let taux = null;
+
+function preparerMoisTaux() {
+  const courant = new Date();
+  const select = $('taux-mois');
+  const annee = $('taux-annee');
+  if (!select || !annee) return;
+
+  if (!select.options.length) {
+    select.innerHTML = Regles.MOIS
+      .map((nom, i) => `<option value="${i + 1}"${i === courant.getMonth() ? ' selected' : ''}>${nom}</option>`)
+      .join('');
+    select.addEventListener('change', chargerTaux);
+  }
+  if (!annee.value) annee.value = courant.getFullYear();
+  if (!annee.dataset.cable) {
+    annee.dataset.cable = '1';
+    annee.addEventListener('change', chargerTaux);
+  }
+}
+
+async function chargerTaux() {
+  preparerMoisTaux();
+  const annee = $('taux-annee').value;
+  const mois = $('taux-mois').value;
+  try {
+    taux = await API.get(`/api/admin/taux?annee=${annee}&mois=${mois}`);
+  } catch (e) {
+    message(e.message, 'erreur');
+    return;
+  }
+
+  const nombre = (v) => String(Math.round(Number(v) * 10000) / 10000).replace('.', ',');
+  const moisDe = (debut) => {
+    const [a, m] = String(debut).split('-');
+    return `${Regles.MOIS[Number(m) - 1]} ${a}`;
+  };
+
+  $('table-taux').querySelector('tbody').innerHTML = taux.catalogue
+    .map((t) => {
+      const histoire = t.valeurs
+        .map(
+          (v) => `<div>
+            <strong>${nombre(v.valeur)}</strong> à compter de ${echapper(moisDe(v.debut))}
+            ${v.note ? `<span class="aide">— ${echapper(v.note)}</span>` : ''}
+            ${
+              v.debut === '2000-01-01'
+                ? '<span class="aide">— valeur d’origine</span>'
+                : `<button class="petit" onclick="supprimerTaux(${v.id})">✕</button>`
+            }
+          </div>`
+        )
+        .join('');
+
+      return `<tr>
+        <td>
+          ${echapper(t.libelle)}
+          <div class="aide">${echapper(t.unite)}${t.estimation ? ' — estimation, pas un calcul de paie' : ''}</div>
+        </td>
+        <td class="num total">${nombre(taux.applicables[t.cle])}</td>
+        <td>${histoire}</td>
+        <td>
+          <button class="petit principal" onclick="nouveauTaux('${t.cle}')">Changer…</button>
+        </td>
+      </tr>`;
+    })
+    .join('');
+}
+
+/*
+ * Le mois d'effet est demande explicitement, et jamais devine : « a compter de
+ * quand ? » est la seule chose qui distingue une correction de saisie d'un
+ * changement d'accord, et se tromper la-dessus deplace des montants deja payes.
+ */
+window.nouveauTaux = async (cle) => {
+  const entree = taux.catalogue.find((t) => t.cle === cle);
+  const valeur = prompt(`${entree.libelle} — nouvelle valeur (${entree.unite}) :`, '');
+  if (valeur === null || !String(valeur).trim()) return;
+
+  const quand = prompt(
+    'À compter de quel mois ? Au format MM/AAAA.\n\n'
+      + 'Les mois antérieurs garderont leur valeur actuelle.',
+    `${String($('taux-mois').value).padStart(2, '0')}/${$('taux-annee').value}`
+  );
+  if (quand === null) return;
+  const [mois, annee] = String(quand).split('/').map((x) => Number(String(x).trim()));
+  if (!mois || !annee) return message('Mois attendu au format MM/AAAA.', 'erreur');
+
+  const note = prompt('Motif du changement (accord, avenant, décision interne…) :', '') || '';
+
+  try {
+    await API.post('/api/admin/taux', { cle, valeur, annee, mois, note });
+    await chargerTaux();
+    message(`${entree.libelle} : ${valeur} à compter de ${String(mois).padStart(2, '0')}/${annee}.`, 'succes', 6000);
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
+};
+
+window.supprimerTaux = async (id) => {
+  if (!confirm('Supprimer cette date d’effet ? Les mois concernés reprendront la valeur précédente.')) return;
+  try {
+    await API.supprimer(`/api/admin/taux/${id}`);
+    await chargerTaux();
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
+};
 
 /* ------------------------------- Vehicules -------------------------------- */
 

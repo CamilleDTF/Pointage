@@ -174,7 +174,7 @@ function gabaritTableauMois(mois) {
     'Salarié', ...mois.semaines.map((s) => `S${s.semaine}`),
     'Total', '25 %', '50 %', 'Route', 'Trajet', 'Amiante 1', 'Amiante 2',
     'Paniers', 'GD 72', 'GD 80', 'Fériés',
-    ...(direction ? ['Taux', 'S. brut', 'H. sup', 'Primes', 'Paniers €', 'GD €', 'Trajet €', 'Total brut', 'Total net'] : []),
+    ...(direction ? ['Taux', 'S. brut', 'H. sup', 'Primes', 'Paniers €', 'GD €', 'Trajet €', 'Total brut', 'Net estimé'] : []),
   ];
 
   const lignes = mois.salaries
@@ -217,7 +217,7 @@ function gabaritTableauMois(mois) {
 
   const cumul = (champ) => mois.salaries.reduce((t, s) => t + (Number(s[champ]) || 0), 0);
   const pied = direction
-    ? `<tr class="cumul"><th colspan="${entetes.length - 2}">Masse salariale</th>
+    ? `<tr class="cumul"><th colspan="${entetes.length - 2}">Masse salariale (net estimé)</th>
          <th class="num">${euros(cumul('totalBrut'))}</th>
          <th class="num">${euros(cumul('totalNet'))}</th></tr>`
     : `<tr class="cumul"><th>${mois.salaries.length} salarié(s)</th>
@@ -230,6 +230,13 @@ function gabaritTableauMois(mois) {
       ${direction
         ? 'Version direction — montants visibles. Ils se masquent seuls au bout de 20 minutes.'
         : 'Version publique — aucun montant, aucun taux horaire.'}
+    </p>
+    <p class="aide">
+      ${direction
+        ? 'Le « net estimé » est un ordre de grandeur — le taux du classeur appliqué au brut — '
+          + 'et non un calcul de paie. Les taux appliqués sont ceux de ce mois-là : '
+          + '<em>Paramètres ▸ Taux de la paie</em>.'
+        : ''}
     </p>
     <p class="aide">
       Horaire de référence du mois (case « Mois » du classeur de paie) :

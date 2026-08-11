@@ -1207,6 +1207,39 @@ app.put('/api/salaries/:id/nom', A.exigerConnexion, (req, res) => {
 
 /* ---------------------------- Parc de vehicules ---------------------------- */
 
+/* ------------------------------ Taux de la paie ---------------------------- */
+
+/*
+ * Les montants de la paie et leur date d'effet. Ils portent des salaires : ils
+ * se lisent et se changent depuis la direction, et chaque changement est trace.
+ */
+app.get('/api/admin/taux', A.exigerDirecteur, (req, res) => {
+  const maintenant = new Date();
+  const annee = Number(req.query.annee) || maintenant.getFullYear();
+  const mois = Number(req.query.mois) || maintenant.getMonth() + 1;
+  res.json({ catalogue: T.historique(), applicables: T.tauxDuMois(annee, mois), annee, mois });
+});
+
+app.post('/api/admin/taux', A.exigerDirecteur, (req, res) => {
+  repondre(
+    res,
+    T.definir(
+      {
+        cle: req.body.cle,
+        valeur: req.body.valeur,
+        annee: req.body.annee,
+        mois: req.body.mois,
+        note: req.body.note,
+      },
+      req.utilisateur
+    )
+  );
+});
+
+app.delete('/api/admin/taux/:id', A.exigerDirecteur, (req, res) => {
+  repondre(res, T.supprimer(req.params.id, req.utilisateur));
+});
+
 app.get('/api/admin/vehicules', A.exigerDirecteur, (req, res) => {
   res.json({ vehicules: db.prepare('SELECT * FROM vehicules ORDER BY immatriculation').all() });
 });

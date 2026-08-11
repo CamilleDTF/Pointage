@@ -127,7 +127,7 @@ function gabarit(mois) {
 
   const entetes = [
     'Salarié', 'Jours', 'Heures', 'Absences', '25 %', '50 %', 'GD 72', 'GD 80',
-    'Taux', 'S. brut', 'H. sup', 'Primes', 'GD €', 'Total brut', 'Total net',
+    'Taux', 'S. brut', 'H. sup', 'Primes', 'GD €', 'Total brut', 'Net estimé',
   ];
 
   const lignes = mois.salaries
@@ -170,7 +170,7 @@ function gabarit(mois) {
 
   const cumul = (champ) => mois.salaries.reduce((t, s) => t + (Number(s[champ]) || 0), 0);
   const pied = `<tr class="cumul">
-      <th colspan="${entetes.length - 2}">${mois.salaries.length} personne(s) — masse salariale</th>
+      <th colspan="${entetes.length - 2}">${mois.salaries.length} personne(s) — masse salariale (net estimé)</th>
       <th class="num">${euros(cumul('totalBrut'))}</th>
       <th class="num">${euros(cumul('totalNet'))}</th>
     </tr>`;
@@ -182,7 +182,9 @@ function gabarit(mois) {
     </p>
     <p class="aide">
       Le grand déplacement est une indemnité : il se verse net. Les primes suivent le salaire.
-      Ni prime amiante ni panier repas ici — ce personnel n'entre pas en zone.
+      Ni prime amiante ni panier repas ici — ce personnel n'entre pas en zone. Le
+      « net estimé » est un ordre de grandeur, pas un calcul de paie ; les taux appliqués
+      sont ceux de ce mois-là (<em>Paramètres ▸ Taux de la paie</em>).
     </p>
     <div class="enveloppe-table">
       <table class="grille-mois">

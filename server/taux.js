@@ -124,8 +124,17 @@ function historique() {
 function definir({ cle, valeur, annee, mois, note }, utilisateur) {
   if (!CLES.includes(cle)) return { erreur: `Taux inconnu : ${cle}.`, code: 400 };
 
-  const montant = Number(String(valeur).replace(',', '.'));
-  if (!Number.isFinite(montant) || montant < 0) return { erreur: 'Indiquez un montant positif.', code: 400 };
+  /*
+   * Une valeur vide n'est pas un zero. `Number('')` et `Number(null)` valent 0 :
+   * sans ce garde-fou, valider un champ laisse en blanc reglait le panier a
+   * zero euro, et personne ne l'aurait vu avant la paie. Un zero explicite,
+   * lui, reste permis — c'est ainsi qu'on supprime une prime.
+   */
+  const saisie = String(valeur ?? '').trim().replace(',', '.');
+  const montant = Number(saisie);
+  if (saisie === '' || !Number.isFinite(montant) || montant < 0) {
+    return { erreur: 'Indiquez un montant (zéro accepté, vide non).', code: 400 };
+  }
 
   const an = Number(annee);
   const m = Number(mois);
@@ -133,7 +142,10 @@ function definir({ cle, valeur, annee, mois, note }, utilisateur) {
   if (!Number.isInteger(m) || m < 1 || m > 12) return { erreur: 'Mois invalide (1 a 12).', code: 400 };
 
   const debut = premierDuMois(an, m);
-  const avant = db.prepare('SELECT valeur FROM taux WHERE cle = ? AND debut = ?').get(cle, debut);
+  // Ce que ce mois valait AVANT le changement — pas seulement ce qui portait
+  // deja cette date d'effet. C'est ce qu'on veut lire dans six mois : « le
+  // panier est passe de 12,20 a 12,50 a compter de janvier ».
+  const avant = tauxDuMois(an, m)[cle];
 
   db.prepare(
     `INSERT INTO taux (cle, valeur, debut, note, cree_par) VALUES (@cle, @valeur, @debut, @note, @par)
@@ -146,7 +158,7 @@ function definir({ cle, valeur, annee, mois, note }, utilisateur) {
     null,
     utilisateur ? utilisateur.id : null,
     'taux_modifie',
-    `${libelle} : ${avant ? `${avant.valeur} → ` : ''}${montant} à compter du ${debut}`
+    `${libelle} : ${avant === montant ? '' : `${avant} → `}${montant} à compter du ${debut}`
   );
   return { ok: true, cle, valeur: montant, debut };
 }
