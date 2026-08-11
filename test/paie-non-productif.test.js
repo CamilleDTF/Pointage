@@ -61,8 +61,12 @@ test('un mois sans rien declarer vaut le salaire mensualise, et rien d autre', (
   assert.equal(c.heuresSupBrut, 0);
   assert.equal(c.grandDeplacement, 0);
   assert.equal(c.primes, 0);
-  assert.equal(arrondi(c.totalBrut), arrondi(c.salaireBrut));
-  assert.equal(arrondi(c.totalNet), arrondi(c.salaireBrut * BAREME.part_net_estimee));
+
+  // Un titre-restaurant par jour travaille : c'est propre a ce personnel.
+  assert.equal(arrondi(c.edenred), arrondi(21 * BAREME.edenred));
+  assert.equal(arrondi(c.totalBrut), arrondi(c.salaireBrut + c.edenred));
+  // Le titre-restaurant se verse net, comme une indemnite.
+  assert.equal(arrondi(c.totalNet), arrondi(c.salaireBrut * BAREME.part_net_estimee + c.edenred));
 });
 
 /*
@@ -77,6 +81,8 @@ test('une absence se compte sans toucher au salaire de base', () => {
   assert.deepEqual(c.absences, { VM: 1 });
   assert.equal(c.joursTravailles, 20);
   assert.equal(arrondi(c.salaireBrut), arrondi(BAREME.heures_mensuelles * 20));
+  // Le titre-restaurant, lui, suit les jours travailles : un de moins.
+  assert.equal(arrondi(c.edenred), arrondi(20 * BAREME.edenred));
 });
 
 /*
@@ -93,7 +99,7 @@ test('des heures declarees majorent la semaine, pas le mois', () => {
   assert.equal(arrondi(c.heuresSupBrut), arrondi(20 * 1.25 * 3));
 
   // La semaine du 4 aout, elle, a perdu une journee : elle ne majore rien.
-  assert.equal(arrondi(c.totalBrut), arrondi(c.salaireBrut + c.heuresSupBrut));
+  assert.equal(arrondi(c.totalBrut), arrondi(c.salaireBrut + c.heuresSupBrut + c.edenred));
 });
 
 /*
@@ -112,8 +118,8 @@ test('le grand deplacement se verse net, la prime suit le salaire', () => {
   assert.equal(c.primes, 300);
 
   const soumis = c.salaireBrut + c.heuresSupBrut + 300;
-  assert.equal(arrondi(c.totalBrut), arrondi(soumis + 152));
-  assert.equal(arrondi(c.totalNet), arrondi(soumis * BAREME.part_net_estimee + 152));
+  assert.equal(arrondi(c.totalBrut), arrondi(soumis + 152 + c.edenred));
+  assert.equal(arrondi(c.totalNet), arrondi(soumis * BAREME.part_net_estimee + 152 + c.edenred));
 
   // Un jour de grand deplacement reste travaille : il garde ses heures.
   assert.equal(c.joursTravailles, 20);

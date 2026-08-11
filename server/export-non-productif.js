@@ -51,6 +51,7 @@ const COLONNES = [
   { entete: 'H. sup brut', largeur: 12, euros: true, lire: (s) => s.heuresSupBrut, format: '#,##0.00 €' },
   { entete: 'Primes', largeur: 11, euros: true, lire: (s) => s.primes, format: '#,##0.00 €' },
   { entete: 'GD €', largeur: 11, euros: true, lire: (s) => s.grandDeplacement, format: '#,##0.00 €' },
+  { entete: 'EDENRED', largeur: 11, euros: true, lire: (s) => s.edenred, format: '#,##0.00 €' },
   { entete: 'Total brut', largeur: 12, euros: true, lire: (s) => s.totalBrut, format: '#,##0.00 €' },
   { entete: 'Net estimé', largeur: 12, euros: true, lire: (s) => s.totalNet, format: '#,##0.00 €' },
 ];

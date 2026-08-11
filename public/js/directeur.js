@@ -471,11 +471,12 @@ function cablerFiche(bloc, fiche) {
       champ.addEventListener('blur', () => { champ.value = versSaisie(versMinutes(champ.value)); });
     });
   }
+  // « F » est le seul code qui garde ses heures : un ferie peut se travailler.
   bloc.querySelectorAll('select.code').forEach((select) => {
     select.addEventListener('change', () => {
       const rang = select.closest('tr');
       const saisie = rang.querySelector(`input.heures[data-jour="${select.dataset.jour}"]`);
-      if (select.value) saisie.value = '';
+      if (select.value && !Regles.CODES_AVEC_HEURES.includes(select.value)) saisie.value = '';
       recalculerTotal(rang);
     });
   });

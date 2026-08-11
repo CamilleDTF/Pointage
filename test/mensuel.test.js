@@ -285,7 +285,14 @@ test('un salarie sans fiche du mois n apparait pas dans le tableau', () => {
   assert.deepEqual(agregerMois(ANNEE, MOIS).salaries, []);
 });
 
-test('les jours feries sont deduits du code F et valorises en heures', () => {
+/*
+ * Un ferie CHOME se compte en jours, et ne vaut aucune heure.
+ *
+ * Il en valait sept auparavant — la journee de reference — et le classeur les
+ * multipliait par deux dans son bloc d'heures supplementaires : un jour ferie
+ * que personne n'avait travaille produisait donc quatorze heures de majoration.
+ */
+test('un ferie chome se compte en jours, sans aucune heure', () => {
   db.exec('DELETE FROM fiches');
   poserFiche({
     semaine: PLEINE,
@@ -299,10 +306,33 @@ test('les jours feries sont deduits du code F et valorises en heures', () => {
 
   const semaine = trouver(agregerMois(ANNEE, MOIS), 'ANDRE_Alain').semaines[IDX_PLEINE];
   assert.equal(semaine.joursFeries, 1);
-  assert.equal(semaine.minutesFeries, D.DUREE_JOURNEE_REFERENCE_MINUTES);
+  assert.equal(semaine.minutesFeries, 0, 'personne n a travaille ce jour-la');
   // Le ferie ne gonfle pas le total travaille de la semaine.
   assert.equal(semaine.minutesTotal, 32 * 60);
   assert.equal(semaine.minutes25, 0);
+});
+
+/*
+ * Un ferie TRAVAILLE porte les deux : le code dit que la journee etait feriee,
+ * les heures ce qu'on y a fait. Ce sont ces heures-la qui se paient double.
+ */
+test('un ferie travaille compte ses heures reelles, et elles comptent partout', () => {
+  db.exec('DELETE FROM fiches');
+  poserFiche({
+    semaine: PLEINE,
+    lignes: [{
+      salarie_id: salaries[0],
+      nom: 'ANDRE Alain',
+      heures: [8, 6, 8, 8, 8],
+      codes: ['', 'F', '', '', ''],
+    }],
+  });
+
+  const semaine = trouver(agregerMois(ANNEE, MOIS), 'ANDRE_Alain').semaines[IDX_PLEINE];
+  assert.equal(semaine.joursFeries, 1);
+  assert.equal(semaine.minutesFeries, 6 * 60, 'les six heures reellement faites');
+  assert.equal(semaine.minutesTotal, 38 * 60, 'elles comptent aussi dans la semaine');
+  assert.equal(semaine.minutes25, 3 * 60, 'et donc dans les heures supplementaires');
 });
 
 test('seul le code F alimente les feries, pas les autres absences', () => {

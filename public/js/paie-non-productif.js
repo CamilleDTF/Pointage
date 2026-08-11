@@ -127,7 +127,7 @@ function gabarit(mois) {
 
   const entetes = [
     'Salarié', 'Jours', 'Heures', 'Absences', '25 %', '50 %', 'GD 72', 'GD 80',
-    'Taux', 'S. brut', 'H. sup', 'Primes', 'GD €', 'Total brut', 'Net estimé',
+    'Taux', 'S. brut', 'H. sup', 'Primes', 'GD €', 'EDENRED', 'Total brut', 'Net estimé',
   ];
 
   const lignes = mois.salaries
@@ -150,7 +150,7 @@ function gabarit(mois) {
       // salaire faux, et le manque doit se voir.
       if (s.tauxManquant) {
         return `<tr>${base.join('')}
-          <td class="num manque" colspan="7">Taux horaire à renseigner dans Paramètres</td></tr>`;
+          <td class="num manque" colspan="8">Taux horaire à renseigner dans Paramètres</td></tr>`;
       }
 
       const primes = s.detailPrimes && s.detailPrimes.length
@@ -162,6 +162,7 @@ function gabarit(mois) {
         <td class="num">${euros(s.heuresSupBrut)}</td>
         <td class="num" title="${echapper(primes)}">${euros(s.primes)}</td>
         <td class="num">${euros(s.grandDeplacement)}</td>
+        <td class="num" title="${s.joursTravailles} jour(s) travaillé(s)">${euros(s.edenred)}</td>
         <td class="num total">${euros(s.totalBrut)}</td>
         <td class="num total">${euros(s.totalNet)}</td>
       </tr>`;
@@ -182,7 +183,8 @@ function gabarit(mois) {
     </p>
     <p class="aide">
       Le grand déplacement est une indemnité : il se verse net. Les primes suivent le salaire.
-      Ni prime amiante ni panier repas ici — ce personnel n'entre pas en zone. Le
+      Ni prime amiante ni panier repas ici — ce personnel n'entre pas en zone —
+      mais un <strong>titre-restaurant par jour travaillé</strong>. Le
       « net estimé » est un ordre de grandeur, pas un calcul de paie ; les taux appliqués
       sont ceux de ce mois-là (<em>Paramètres ▸ Taux de la paie</em>).
     </p>

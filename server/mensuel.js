@@ -196,10 +196,18 @@ function agregerMois(annee, mois, { statut = 'validee' } = {}) {
       semaine.joursTravailles = joursTravailles;
       semaine.joursPanier = D.joursPanierRepas(joursTravailles, semaine.joursGD72 + semaine.joursGD80);
 
-      // Les jours feries se deduisent du code "F" de la fiche. La fiche ne porte
-      // qu'un code, pas d'heures : on les valorise a la journee de reference.
-      semaine.joursFeries = semaine.jours.filter((j) => j.codes.includes('F')).length;
-      semaine.minutesFeries = semaine.joursFeries * D.DUREE_JOURNEE_REFERENCE_MINUTES;
+      /*
+       * Les jours feries se lisent au code « F » de la fiche.
+       *
+       * Un ferie peut se travailler, et ces heures-la se paient double : ce sont
+       * donc les heures REELLEMENT pointees ce jour-la qui comptent, pas une
+       * journee de reference. Un ferie chome porte le code sans heures : il
+       * figure au nombre de jours — la colonne « Fériés » du classeur — sans
+       * rien ajouter a la paie.
+       */
+      const joursFeries = semaine.jours.filter((j) => j.codes.includes('F'));
+      semaine.joursFeries = joursFeries.length;
+      semaine.minutesFeries = joursFeries.reduce((total, j) => total + j.minutes, 0);
     }
     salarie.minutesMois = salarie.semaines.reduce((s, x) => s + x.minutesTotal, 0);
     Object.assign(salarie, cumulerMois(salarie));
@@ -255,7 +263,8 @@ function valoriser(salarie, { montantPanier, taux: bareme = T.DEFAUTS } = {}) {
 
   if (!taux) {
     return { tauxManquant: true, tauxHoraire: 0, salaireBrut: 0, salaireNet: 0, heuresSupBrut: 0,
-      heuresSupNet: 0, primeAmiante: 0, paniers: 0, grandDeplacement: 0, trajet: 0, totalBrut: 0, totalNet: 0 };
+      heuresSupNet: 0, primeAmiante: 0, paniers: 0, grandDeplacement: 0, trajet: 0, feries: 0,
+      totalBrut: 0, totalNet: 0 };
   }
 
   const salaireBrut = bareme.heures_mensuelles * taux;
@@ -266,10 +275,18 @@ function valoriser(salarie, { montantPanier, taux: bareme = T.DEFAUTS } = {}) {
     * bareme.abattement_prime_zone;
   const paniers = salarie.joursPanier * (montantPanier === undefined ? bareme.panier_repas : montantPanier);
   const grandDeplacement = salarie.joursGD72 * bareme.gd_72 + salarie.joursGD80 * bareme.gd_80;
+
+  /*
+   * Un ferie travaille se paie double. Ces heures figurent deja dans le total de
+   * la semaine — donc dans le salaire mensualise : ce qui s'ajoute ici est le
+   * SUPPLEMENT, soit une fois le taux pour un paiement double. Un ferie chome ne
+   * porte pas d'heures et ne produit donc rien.
+   */
+  const feries = taux * (bareme.majoration_ferie - 1) * h(salarie.minutesFeries);
   // Trajet paye a 50 %, route a 100 % : la convention des deux colonnes de la fiche.
   const trajet = taux * (h(salarie.minutesTrajet) / 2) + taux * h(salarie.minutesRoute);
 
-  const totalBrut = salaireBrut + heuresSupBrut + primeAmiante + paniers + grandDeplacement + trajet;
+  const totalBrut = salaireBrut + heuresSupBrut + primeAmiante + paniers + grandDeplacement + trajet + feries;
   return {
     tauxManquant: false,
     tauxHoraire: taux,
@@ -281,8 +298,12 @@ function valoriser(salarie, { montantPanier, taux: bareme = T.DEFAUTS } = {}) {
     paniers,
     grandDeplacement,
     trajet,
+    feries,
     totalBrut,
-    totalNet: salaireBrut * partNet + heuresSupBrut * partNet + primeAmiante + paniers + grandDeplacement + trajet,
+    // Le supplement de ferie est du salaire : il suit les charges, comme les
+    // heures supplementaires.
+    totalNet:
+      (salaireBrut + heuresSupBrut + feries) * partNet + primeAmiante + paniers + grandDeplacement + trajet,
   };
 }
 

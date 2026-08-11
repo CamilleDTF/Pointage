@@ -13,7 +13,12 @@
   const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
   const JOURS_COURTS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 
-  // Codes absence repris a l'identique du bas de la fiche papier.
+  /*
+   * Codes du bas de la fiche papier. Ils disent pourquoi une journee n'a pas ete
+   * travaillee — sauf « F », qui dit ce qu'etait la journee, pas ce qu'on n'y a
+   * pas fait : un ferie peut se travailler, et ces heures-la se paient double.
+   */
+  const CODES_AVEC_HEURES = ['F'];
   const CODES_ABSENCE = [
     { code: 'ACH', libelle: 'Autre chantier' },
     { code: 'F', libelle: 'Jour ferie' },
@@ -501,7 +506,9 @@
             { ligne: index, jour: j }
           );
         }
-        if (minutes > 0 && code) {
+        // Un ferie travaille porte legitimement les deux : le code dit que la
+        // journee etait feriee, les heures ce qu'on y a fait.
+        if (minutes > 0 && code && !CODES_AVEC_HEURES.includes(code)) {
           alerte(`${nom} - ${JOURS[j]} : heures ET code absence "${code}" saisis simultanement.`, { ligne: index, jour: j });
         }
         if (minutes > 12 * 60) {
@@ -579,6 +586,7 @@
     JOURS,
     JOURS_COURTS,
     CODES_ABSENCE,
+    CODES_AVEC_HEURES,
     TYPES_MASQUE,
     NB_LIGNES_FICHE,
     versMinutes,

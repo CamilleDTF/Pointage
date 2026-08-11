@@ -317,7 +317,14 @@ function ecrireBlocPaie(ws, ligneDansTotal, ligneTotalGenerale) {
     AJ25: `V22*${bareme.panier_repas}`,
     AL25: `(X22*${bareme.gd_72})+(Y22*${bareme.gd_80})`,
     AN25: `(${taux}*Q22/2)+(${taux}*R22)`,
-    AD28: `(${taux}*${bareme.majoration_hs_25}*N22)+(${taux}*${bareme.majoration_hs_50}*O22)+(${taux}*2*P22)+(${taux}*M22*2)+(${taux}*L22*2)`,
+    /*
+     * M22 porte les heures TRAVAILLEES un jour ferie, et le supplement vaut une
+     * fois le taux pour un paiement double : ces heures figurent deja dans le
+     * salaire mensualise. La formule d'origine multipliait par deux des heures
+     * qui valaient sept par jour ferie meme chome — un jour que personne
+     * n'avait travaille produisait donc quatorze heures de majoration.
+     */
+    AD28: `(${taux}*${bareme.majoration_hs_25}*N22)+(${taux}*${bareme.majoration_hs_50}*O22)+(${taux}*2*P22)+(${taux}*M22*${bareme.majoration_ferie - 1})+(${taux}*L22*2)`,
     AF28: `AD28*${net}`,
     AD31: `((J25*${taux})/J24)*J27`,
     AF31: `AD31*${net}`,

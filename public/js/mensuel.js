@@ -174,7 +174,7 @@ function gabaritTableauMois(mois) {
     'Salarié', ...mois.semaines.map((s) => `S${s.semaine}`),
     'Total', '25 %', '50 %', 'Route', 'Trajet', 'Amiante 1', 'Amiante 2',
     'Paniers', 'GD 72', 'GD 80', 'Fériés',
-    ...(direction ? ['Taux', 'S. brut', 'H. sup', 'Primes', 'Paniers €', 'GD €', 'Trajet €', 'Total brut', 'Net estimé'] : []),
+    ...(direction ? ['Taux', 'S. brut', 'H. sup', 'Fériés €', 'Primes', 'Paniers €', 'GD €', 'Trajet €', 'Total brut', 'Net estimé'] : []),
   ];
 
   const lignes = mois.salaries
@@ -199,12 +199,13 @@ function gabaritTableauMois(mois) {
       // Sans taux horaire, rien n'est calcule : une case vide vaut mieux qu'un
       // salaire faux, et le manque doit se voir.
       if (s.tauxManquant) {
-        return `<tr>${base.join('')}<td class="num manque" colspan="9">Taux horaire à renseigner dans Paramètres</td></tr>`;
+        return `<tr>${base.join('')}<td class="num manque" colspan="10">Taux horaire à renseigner dans Paramètres</td></tr>`;
       }
       return `<tr>${base.join('')}
         <td class="num">${euros(s.tauxHoraire)}</td>
         <td class="num">${euros(s.salaireBrut)}</td>
         <td class="num">${euros(s.heuresSupBrut)}</td>
+        <td class="num" title="Heures travaillées un jour férié, payées double">${euros(s.feries)}</td>
         <td class="num">${euros(s.primeAmiante)}</td>
         <td class="num">${euros(s.paniers)}</td>
         <td class="num">${euros(s.grandDeplacement)}</td>

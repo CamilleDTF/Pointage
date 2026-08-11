@@ -781,12 +781,19 @@ function cablerLigne(conteneur, index) {
 
   cablerCorrectionNom(conteneur);
 
-  // Un code absence remet la journee a zero : les deux ne se cumulent pas.
+  /*
+   * Un code absence remet la journee a zero : les deux ne se cumulent pas.
+   *
+   * Sauf « F ». Un jour ferie peut se travailler, et ces heures-la se paient
+   * double : le code dit ce qu'etait la journee, les heures ce qu'on y a fait.
+   * Les effacer rendait le ferie travaille impossible a saisir.
+   */
   conteneur.querySelectorAll('select.code').forEach((select) => {
     select.addEventListener('change', () => {
       const saisie = conteneur.querySelector(`input.heures[data-jour="${select.dataset.jour}"]`);
-      saisie.classList.toggle('absent', Boolean(select.value));
-      if (select.value) saisie.value = '';
+      const avecHeures = Regles.CODES_AVEC_HEURES.includes(select.value);
+      saisie.classList.toggle('absent', Boolean(select.value) && !avecHeures);
+      if (select.value && !avecHeures) saisie.value = '';
       recalculerLigne(conteneur);
     });
   });

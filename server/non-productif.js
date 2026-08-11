@@ -253,11 +253,12 @@ function heuresSupDuMois(cases) {
  * Sans taux horaire renseigne, rien n'est calcule : une case vide vaut mieux
  * qu'un salaire faux. C'est `tauxManquant` qui le signale a l'ecran.
  *
- * Deux differences avec le chantier, et elles se voient : pas de prime amiante
- * — ils ne vont pas en zone — et pas de panier repas, qui n'a pas ete demande
- * pour eux. Les primes saisies sont traitees comme du BRUT, soumis a charges :
- * c'est le regime ordinaire d'une prime, a la difference d'une indemnite de
- * grand deplacement, qui se verse nette.
+ * Les differences avec le chantier se voient : pas de prime amiante — ils ne
+ * vont pas en zone — ni de panier repas, mais un TITRE-RESTAURANT (EDENRED) par
+ * jour travaille, qui est propre a ce personnel. Les primes saisies sont
+ * traitees comme du BRUT, soumis a charges : c'est le regime ordinaire d'une
+ * prime, a la difference d'une indemnite de grand deplacement ou d'un
+ * titre-restaurant, qui se versent nets.
  */
 function valoriser(ligne, bareme = T.DEFAUTS) {
   const taux = Number(ligne.taux_horaire) || 0;
@@ -268,7 +269,7 @@ function valoriser(ligne, bareme = T.DEFAUTS) {
     return {
       tauxManquant: true, tauxHoraire: 0, minutes25, minutes50,
       salaireBrut: 0, salaireNet: 0, heuresSupBrut: 0, heuresSupNet: 0,
-      grandDeplacement: 0, primes: ligne.montantPrimes || 0, totalBrut: 0, totalNet: 0,
+      grandDeplacement: 0, edenred: 0, primes: ligne.montantPrimes || 0, totalBrut: 0, totalNet: 0,
     };
   }
 
@@ -277,8 +278,12 @@ function valoriser(ligne, bareme = T.DEFAUTS) {
     taux * bareme.majoration_hs_25 * h(minutes25) + taux * bareme.majoration_hs_50 * h(minutes50);
   const grandDeplacement = ligne.joursGD72 * bareme.gd_72 + ligne.joursGD80 * bareme.gd_80;
   const primes = Number(ligne.montantPrimes) || 0;
+  // Un titre-restaurant par jour travaille. Contrairement au panier du chantier,
+  // il n'est pas retire les jours de grand deplacement : c'est un titre remis,
+  // pas une indemnite de repas.
+  const edenred = ligne.joursTravailles * bareme.edenred;
 
-  const totalBrut = salaireBrut + heuresSupBrut + primes + grandDeplacement;
+  const totalBrut = salaireBrut + heuresSupBrut + primes + grandDeplacement + edenred;
   return {
     tauxManquant: false,
     tauxHoraire: taux,
@@ -290,10 +295,12 @@ function valoriser(ligne, bareme = T.DEFAUTS) {
     heuresSupNet: heuresSupBrut * bareme.part_net_estimee,
     primes,
     grandDeplacement,
+    edenred,
     totalBrut,
-    // Le grand deplacement est une indemnite : il se verse net. La prime, elle,
-    // suit le salaire.
-    totalNet: (salaireBrut + heuresSupBrut + primes) * bareme.part_net_estimee + grandDeplacement,
+    // Le grand deplacement et le titre-restaurant se versent nets. La prime,
+    // elle, suit le salaire.
+    totalNet:
+      (salaireBrut + heuresSupBrut + primes) * bareme.part_net_estimee + grandDeplacement + edenred,
   };
 }
 

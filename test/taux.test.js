@@ -176,3 +176,47 @@ test('la part nette est declaree comme une estimation', () => {
   assert.equal(entree.estimation, true);
   assert.match(entree.libelle, /estimée/);
 });
+
+/*
+ * Un ferie travaille se paie double : ces heures figurent deja dans le salaire
+ * mensualise, donc ce qui s'ajoute est le SUPPLEMENT — une fois le taux.
+ */
+test('les heures travaillees un jour ferie valent un supplement d une fois le taux', () => {
+  const base = {
+    tauxHoraire: 20,
+    minutes25: 0, minutes50: 0, minutesRoute: 0, minutesTrajet: 0,
+    joursAmiante1: 0, joursAmiante2: 0, joursPanier: 0, joursGD72: 0, joursGD80: 0,
+  };
+  const bareme = T.tauxDuMois(2026, 8);
+
+  const chome = M.valoriser({ ...base, minutesFeries: 0 }, { taux: bareme });
+  const travaille = M.valoriser({ ...base, minutesFeries: 6 * 60 }, { taux: bareme });
+
+  assert.equal(chome.feries, 0, 'un ferie que personne n a travaille ne vaut rien de plus');
+  assert.equal(travaille.feries, 6 * 20, 'six heures a une fois le taux : le double, base comprise');
+  assert.equal(travaille.totalBrut - chome.totalBrut, 120);
+});
+
+test('la majoration de ferie se regle comme les autres taux', () => {
+  T.definir({ cle: 'majoration_ferie', valeur: 2.5, annee: 2031, mois: 1, note: 'Accord' }, LE_DIRECTEUR);
+  const salarie = {
+    tauxHoraire: 20, minutesFeries: 4 * 60,
+    minutes25: 0, minutes50: 0, minutesRoute: 0, minutesTrajet: 0,
+    joursAmiante1: 0, joursAmiante2: 0, joursPanier: 0, joursGD72: 0, joursGD80: 0,
+  };
+
+  assert.equal(M.valoriser(salarie, { taux: T.tauxDuMois(2030, 12) }).feries, 4 * 20);
+  assert.equal(M.valoriser(salarie, { taux: T.tauxDuMois(2031, 1) }).feries, 4 * 20 * 1.5);
+});
+
+/*
+ * Le titre-restaurant est propre au personnel non productif : le tableau des
+ * chantiers a son panier repas, et les deux ne se confondent pas.
+ */
+test('le titre-restaurant a sa propre valeur, et sa date d effet', () => {
+  assert.equal(T.tauxDuMois(2026, 8).edenred, 11.7);
+
+  T.definir({ cle: 'edenred', valeur: '12', annee: 2032, mois: 3 }, LE_DIRECTEUR);
+  assert.equal(T.tauxDuMois(2032, 2).edenred, 11.7);
+  assert.equal(T.tauxDuMois(2032, 3).edenred, 12);
+});

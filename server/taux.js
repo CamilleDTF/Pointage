@@ -43,6 +43,18 @@ const CATALOGUE = [
   { cle: 'majoration_hs_25', libelle: 'Majoration des heures sup. (1er palier)', unite: 'coefficient', defaut: 1.25 },
   { cle: 'majoration_hs_50', libelle: 'Majoration des heures sup. (2e palier)', unite: 'coefficient', defaut: 1.5 },
   {
+    cle: 'majoration_ferie',
+    libelle: 'Heures travaillées un jour férié',
+    unite: 'coefficient — 2 = payées double',
+    defaut: 2,
+  },
+  {
+    cle: 'edenred',
+    libelle: 'Titre-restaurant (EDENRED)',
+    unite: '€ / jour travaillé — personnel non productif',
+    defaut: 11.7,
+  },
+  {
     cle: 'part_net_estimee',
     libelle: 'Part nette estimée du brut',
     unite: 'coefficient',
