@@ -25,6 +25,7 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: '8mb' })); // les signatures manuscrites sont transmises en PNG base64.
 app.use(A.session);
 app.use(A.espaceConducteurFerme);
+app.use(A.adminEnLectureSeule);
 
 /*
  * Les routes, dans l'ordre ou elles etaient declarees.

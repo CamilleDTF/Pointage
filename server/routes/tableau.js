@@ -19,7 +19,7 @@ const routes = express.Router();
 
 /* ------------------------- Tableau de bord directeur ----------------------- */
 
-routes.get('/api/tableau', A.exigerDirecteur, (req, res) => {
+routes.get('/api/tableau', A.exigerAdministration, (req, res) => {
   const annee = Number(req.query.annee) || D.semaineISO(new Date()).annee;
   const semaine = Number(req.query.semaine) || D.semaineISO(new Date()).semaine;
 

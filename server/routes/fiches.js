@@ -205,7 +205,7 @@ routes.get('/api/fiches/:id/historique', A.exigerConnexion, (req, res) => {
   const id = Number(req.params.id);
   const fiche = db.prepare('SELECT id, chef_id, version FROM fiches WHERE id = ?').get(id);
   if (!fiche) return res.status(404).json({ erreur: 'Fiche introuvable.' });
-  if (req.utilisateur.role !== 'directeur' && fiche.chef_id !== req.utilisateur.id) {
+  if (!A.voitToutLePointage(req.utilisateur) && fiche.chef_id !== req.utilisateur.id) {
     return res.status(403).json({ erreur: 'Cette fiche appartient a un autre chef d equipe.' });
   }
 
@@ -231,7 +231,7 @@ routes.get('/api/fiches/:id/versions/:version', A.exigerConnexion, (req, res) =>
   const id = Number(req.params.id);
   const fiche = db.prepare('SELECT id, chef_id FROM fiches WHERE id = ?').get(id);
   if (!fiche) return res.status(404).json({ erreur: 'Fiche introuvable.' });
-  if (req.utilisateur.role !== 'directeur' && fiche.chef_id !== req.utilisateur.id) {
+  if (!A.voitToutLePointage(req.utilisateur) && fiche.chef_id !== req.utilisateur.id) {
     return res.status(403).json({ erreur: 'Cette fiche appartient a un autre chef d equipe.' });
   }
 

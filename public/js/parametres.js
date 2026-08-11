@@ -27,25 +27,95 @@ function surClic(id, action) {
   surEvenement(id, 'click', action);
 }
 
+/*
+ * Deux metiers pour un seul ecran.
+ *
+ * L'administrateur technique tient les comptes, l'effectif, les vehicules ; il
+ * ne voit ni les taux, ni rien qui porte un montant. Le serveur le lui refuse
+ * de toute facon — c'est lui qui fait autorite — mais afficher un onglet qui
+ * repondrait 403 serait une promesse en trompe-l'oeil. On le retire donc.
+ */
+const RESERVE_A_LA_DIRECTION = ['taux'];
+let estAdministrateur = false;
+
 async function demarrer() {
   const { utilisateur } = await API.get('/api/moi');
-  if (utilisateur.role !== 'directeur') {
+  if (!['directeur', 'admin'].includes(utilisateur.role)) {
     location.href = '/chef.html';
     return;
   }
-  definirRole('directeur');
+  estAdministrateur = utilisateur.role === 'admin';
+  definirRole(utilisateur.role);
 
   reference = await API.get('/api/reference');
   $('entete-nom').textContent = `${utilisateur.nom} · version ${reference.version}`;
+
+  if (estAdministrateur) {
+    for (const nom of RESERVE_A_LA_DIRECTION) {
+      const onglet = document.querySelector(`#onglets-parametres .onglet[data-onglet="${nom}"]`);
+      if (onglet) onglet.remove();
+    }
+    retirerColonneTaux();
+
+    // L'ecran s'annonce pour ce qu'il est : ni le titre ni le panneau ne doivent
+    // promettre une direction qu'on n'exerce pas.
+    const titre = document.querySelector('header.appbar .titre');
+    if (titre) titre.childNodes[0].nodeValue = 'Paramètres — Administration ';
+    const enTete = document.querySelector('#panneau-effectif h2');
+    if (enTete) enTete.textContent = 'Personnel et équipes';
+    const rappelTaux = document.querySelector('#panneau-effectif .aide');
+    if (rappelTaux) rappelTaux.remove();
+
+    // Le retour au tableau de bord vaut toujours : il le lit, sans y decider.
+    poserMention(
+      "Votre compte tient l'application. Les montants, les taux horaires et la "
+      + 'validation des fiches restent à la direction.'
+    );
+  }
+
   await chargerAdmin();
   ouvrirPanneau('effectif');
+}
+
+/*
+ * La colonne des taux, ou rien du tout.
+ *
+ * Le serveur retire deja le taux des donnees envoyees a un administrateur. Mais
+ * laisser la colonne afficher « — » pour tout le monde serait pire que de la
+ * retirer : elle ne dirait pas « vous n'y avez pas acces », elle dirait « aucun
+ * taux n'est renseigne » — une information fausse, sur laquelle quelqu'un
+ * finirait par agir.
+ */
+const celluleTaux = (s) =>
+  estAdministrateur
+    ? ''
+    : `<td class="num"><input type="number" min="0" step="0.01" class="cellule-calme champ-court"
+                 value="${s.taux_horaire || ''}" placeholder="—"
+                 onchange="fixerTaux(${s.id}, this.value)"></td>`;
+
+/** Retire l'en-tete correspondant, pour que le tableau reste d'aplomb. */
+function retirerColonneTaux() {
+  if (!estAdministrateur) return;
+  document.querySelectorAll('#panneau-effectif th, #panneau-nonproductif th').forEach((th) => {
+    if (th.textContent.trim() === 'Taux horaire') th.remove();
+  });
+}
+
+/** Une phrase sous l'en-tete, pour dire de quel siege on regarde l'ecran. */
+function poserMention(texte) {
+  const onglets = $('onglets-parametres');
+  if (!onglets || !onglets.parentElement) return;
+  const p = document.createElement('p');
+  p.className = 'aide detache serree';
+  p.textContent = texte;
+  onglets.parentElement.appendChild(p);
 }
 
 surClic('btn-retour', () => { location.href = '/directeur.html'; });
 surClic('btn-quitter', deconnexion);
 
 /* Les volets de l'ecran Parametres. */
-const PANNEAUX = ['effectif', 'nonproductif', 'comptes', 'conducteurs', 'vehicules', 'taux', 'conservation', 'indicateurs'];
+const PANNEAUX = ['effectif', 'nonproductif', 'comptes', 'conducteurs', 'vehicules', 'taux', 'conservation', 'indicateurs', 'compte'];
 
 surEvenement('onglets-parametres', 'click', (e) => {
   const onglet = e.target.closest('.onglet');
@@ -67,7 +137,71 @@ function ouvrirPanneau(nom) {
   if (nom === 'taux') chargerTaux();
   if (nom === 'conservation') chargerConservation();
   if (nom === 'indicateurs') chargerIndicateurs();
+  if (nom === 'compte') chargerMonCompte();
 }
+
+/* ------------------------------- Mon compte ------------------------------- */
+
+async function chargerMonCompte() {
+  const etat = await API.get('/api/ma-reprise');
+  const zone = $('etat-reprise');
+
+  if (etat.definie) {
+    zone.textContent = `Question enregistrée : « ${etat.question} ». La remplacer efface la précédente.`;
+    zone.style.color = 'var(--vert)';
+    $('reprise-q').value = etat.question;
+  } else if (etat.recommandee) {
+    /*
+     * L'insistance est justifiee : la direction est le seul role que personne
+     * ne peut depanner. Sans question posee, un code oublie ferme l'application
+     * a la seule personne qui decide des salaires.
+     */
+    zone.textContent =
+      "Aucune question enregistrée. Personne — pas même un administrateur — ne peut vous "
+      + 'remettre un code : sans cette question, un code oublié vous ferme la porte.';
+    zone.style.color = 'var(--orange)';
+  } else {
+    zone.textContent =
+      "Vous n'en avez pas besoin : la direction peut vous remettre un code à tout moment.";
+    zone.style.color = '';
+  }
+}
+
+surClic('btn-changer-code', async () => {
+  const aide = $('aide-code');
+  try {
+    await API.post('/api/mon-code', {
+      actuel: $('code-actuel').value,
+      nouveau: $('code-nouveau').value,
+    });
+    $('code-actuel').value = '';
+    $('code-nouveau').value = '';
+    aide.textContent = 'Code changé. Les autres sessions ouvertes ont été fermées.';
+    aide.style.color = 'var(--vert)';
+  } catch (e) {
+    aide.textContent = e.message;
+    aide.style.color = 'var(--rouge)';
+  }
+});
+
+surClic('btn-reprise-poser', async () => {
+  const aide = $('aide-reprise-poser');
+  try {
+    await API.post('/api/ma-reprise', {
+      question: $('reprise-q').value,
+      reponse: $('reprise-r').value,
+      actuel: $('reprise-actuel').value,
+    });
+    $('reprise-r').value = '';
+    $('reprise-actuel').value = '';
+    aide.textContent = 'Question enregistrée. Notez la réponse : elle ne se relit nulle part.';
+    aide.style.color = 'var(--vert)';
+    await chargerMonCompte();
+  } catch (e) {
+    aide.textContent = e.message;
+    aide.style.color = 'var(--rouge)';
+  }
+});
 
 /* -------------------------- Conservation des donnees ----------------------- */
 
@@ -338,16 +472,14 @@ async function chargerNonProductifs() {
                        onchange="corrigerSalarie(${s.id}, 'nom', this.value, this)"></td>
             <td><input value="${echapper(s.prenom)}" class="cellule-calme champ-court"
                        onchange="corrigerSalarie(${s.id}, 'prenom', this.value, this)"></td>
-            <td class="num"><input type="number" min="0" step="0.01" class="cellule-calme champ-court"
-                       value="${s.taux_horaire || ''}" placeholder="—"
-                       onchange="fixerTaux(${s.id}, this.value)"></td>
+            ${celluleTaux(s)}
             <td><button class="petit" onclick="basculerSalarie(${s.id}, ${s.actif ? 0 : 1})">${
               s.actif ? 'Désactiver' : 'Réactiver'
             }</button></td>
           </tr>`
         )
         .join('')
-    : '<tr><td colspan="5" class="vide">Aucune personne enregistrée.</td></tr>';
+    : `<tr><td colspan="${estAdministrateur ? 4 : 5}" class="vide">Aucune personne enregistrée.</td></tr>`;
 }
 
 surClic('btn-ajout-nonproductif', async () => {
@@ -633,9 +765,7 @@ async function chargerAdmin() {
         <td><input value="${echapper(s.prenom)}" class="cellule-calme champ-moyen"
                    onchange="corrigerSalarie(${s.id}, 'prenom', this.value, this)"></td>
         <td><select class="cellule-calme" onchange="affecter(${s.id}, this.value)">${options(s.chef_id)}</select></td>
-        <td class="num"><input class="cellule-calme taux" type="number" min="0" step="0.01" style="width:92px;text-align:right"
-               value="${s.taux_horaire || ''}" placeholder="—"
-               onchange="fixerTaux(${s.id}, this.value)"></td>
+        ${celluleTaux(s)}
         <td><button class="petit" onclick="basculerSalarie(${s.id}, ${s.actif ? 0 : 1})">${s.actif ? 'Sortie' : 'Réactiver'}</button></td>
       </tr>`
     )

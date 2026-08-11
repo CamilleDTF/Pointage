@@ -30,7 +30,61 @@
         <button class="onglet" type="button" data-onglet="taux">Taux de la paie</button>
         <button class="onglet" type="button" data-onglet="conservation">Conservation des données</button>
         <button class="onglet" type="button" data-onglet="indicateurs">Indicateurs de suivi</button>
+        <button class="onglet" type="button" data-onglet="compte">Mon compte</button>
       </div>
+    </section>
+
+    <!--
+      Mon compte.
+
+      Changer son code existait depuis toujours — mais seulement pour les chefs
+      d'equipe, qui avaient un bouton sur leur ecran. La direction, elle, n'avait
+      aucun moyen de le faire depuis l'application : elle devait passer par la
+      route directement, ou ne pas le changer. C'est repare ici.
+    -->
+    <section class="carte panneau masque" id="panneau-compte">
+      <h2>Mon compte</h2>
+
+      <h3 class="titre-bloc">Changer mon code</h3>
+      <p class="aide detache-apres">
+        Le changement <strong>ferme toutes les sessions ouvertes ailleurs</strong> — c'est
+        tout l'intérêt du geste quand on craint que le code ait été vu. Celle-ci reste ouverte.
+      </p>
+      <div class="rangee">
+        <div class="champ-moyen">
+          <label for="code-actuel">Code actuel</label>
+          <input id="code-actuel" type="password" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="champ-moyen">
+          <label for="code-nouveau">Nouveau code</label>
+          <input id="code-nouveau" type="password" inputmode="numeric" autocomplete="off">
+        </div>
+        <button class="principal" id="btn-changer-code" type="button">Changer mon code</button>
+      </div>
+      <p class="aide suite" id="aide-code"></p>
+
+      <h3 class="titre-bloc detache plus">Ma question de reprise</h3>
+      <div id="bloc-reprise"></div>
+      <p class="aide detache-apres" id="etat-reprise"></p>
+      <div class="rangee">
+        <div class="champ-libre">
+          <label for="reprise-q">Question</label>
+          <input id="reprise-q" placeholder="Le prénom de mon premier chef de chantier ?">
+        </div>
+        <div class="champ-moyen">
+          <label for="reprise-r">Réponse</label>
+          <input id="reprise-r" autocapitalize="none">
+        </div>
+        <div class="champ-court">
+          <label for="reprise-actuel">Code actuel</label>
+          <input id="reprise-actuel" type="password" inputmode="numeric" autocomplete="off">
+        </div>
+        <button class="principal" id="btn-reprise-poser" type="button">Enregistrer</button>
+      </div>
+      <p class="aide suite" id="aide-reprise-poser">
+        La réponse n'est conservée que sous forme chiffrée : ni le journal, ni une sauvegarde
+        ne la laissent lire. Les accents et les majuscules ne comptent pas.
+      </p>
     </section>
 
     <section class="carte panneau" id="panneau-effectif">

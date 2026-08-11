@@ -126,12 +126,19 @@ routes.get(
 /*
  * Le personnel non productif se gere comme l'effectif de chantier, dans son
  * propre onglet : meme table, meme matricule, meme taux horaire.
+ *
+ * Tenir ce registre — inscrire quelqu'un, corriger un matricule — releve de
+ * l'administration. Lire son taux horaire releve du salaire : c'est la meme
+ * requete, ce ne sont pas les memes yeux, et la colonne tombe avant de partir.
  */
-routes.get('/api/admin/non-productifs', A.exigerDirecteur, (req, res) => {
+routes.get('/api/admin/non-productifs', A.exigerAdministration, (req, res) => {
+  const salaries = db
+    .prepare('SELECT * FROM salaries WHERE productif = 0 ORDER BY nom, prenom')
+    .all();
   res.json({
-    salaries: db
-      .prepare('SELECT * FROM salaries WHERE productif = 0 ORDER BY nom, prenom')
-      .all(),
+    salaries: A.estAdmin(req)
+      ? salaries.map(({ taux_horaire, ...reste }) => reste)
+      : salaries,
   });
 });
 

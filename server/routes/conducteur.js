@@ -119,7 +119,7 @@ function decider(res, acces, corps, utilisateur = null) {
  * `/api/admin/utilisateurs`. Il ne reste ici que ce qui leur est propre — la
  * liste de leur ecran, et le lien personnel qui precede les comptes.
  */
-routes.get('/api/admin/conducteurs', A.exigerDirecteur, (req, res) => {
+routes.get('/api/admin/conducteurs', A.exigerAdministration, (req, res) => {
   res.json({
     // Le lien personnel est monte ici : c'est au directeur de le transmettre,
     // jamais au chef d'equipe, qui pourrait sinon viser ses propres fiches.
@@ -145,7 +145,7 @@ routes.get('/api/admin/conducteurs', A.exigerDirecteur, (req, res) => {
   });
 });
 
-routes.put('/api/admin/chefs/:id/conducteur', A.exigerDirecteur, (req, res) => {
+routes.put('/api/admin/chefs/:id/conducteur', A.exigerAdministration, (req, res) => {
   const conducteurId = req.body.conducteur_id ? Number(req.body.conducteur_id) : null;
   db.prepare("UPDATE utilisateurs SET conducteur_id = ? WHERE id = ? AND role = 'chef'")
     .run(conducteurId, Number(req.params.id));

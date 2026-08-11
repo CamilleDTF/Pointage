@@ -188,7 +188,7 @@ function espaceConducteurFerme(req, res, next) {
  */
 function exigerDirecteurOuConducteur(req, res, next) {
   if (!req.utilisateur) return res.status(401).json({ erreur: 'Session expiree, reconnectez-vous.', sessionExpiree: true });
-  if (!['directeur', 'conducteur'].includes(req.utilisateur.role)) {
+  if (!['directeur', 'conducteur', 'admin'].includes(req.utilisateur.role)) {
     return res.status(403).json({ erreur: 'Action reservee a la direction.' });
   }
   next();
@@ -200,6 +200,99 @@ function exigerDirecteur(req, res, next) {
     return res.status(403).json({ erreur: 'Action reservee au directeur.' });
   }
   next();
+}
+
+/* ------------------------ L'administrateur technique ---------------------- */
+
+/*
+ * Deux metiers cohabitaient dans un seul compte : diriger l'entreprise, et
+ * tenir l'application. Ce sont pourtant deux personnes — celle qui decide des
+ * salaires, et celle qui cree les comptes et repare ce qui coince.
+ *
+ * Le role `admin` prend le second : comptes, effectif, vehicules, reglages,
+ * diagnostics. Il ne prend pas le premier, et surtout pas les montants.
+ *
+ * Ce qui l'en empeche n'est pas une liste d'interdits mais une mecanique : les
+ * salaires ne s'ouvrent que contre un billet, et `consommerBilletPaie` exige le
+ * role `directeur`. Un admin ne peut donc pas obtenir de billet, quel que soit
+ * l'ecran qu'il atteint. Les gardes ci-dessous ferment les portes laterales —
+ * le registre des taux, le taux horaire d'un salarie — et, surtout, celle par
+ * laquelle il se donnerait l'identite de la direction.
+ */
+const ADMINISTRATION = ['directeur', 'admin'];
+
+/**
+ * Qui voit le pointage de toute l'entreprise, et non seulement le sien.
+ *
+ * La direction, parce qu'elle en decide ; l'administrateur, parce qu'il repare.
+ * La difference entre les deux ne se joue pas ici mais a l'ecriture, ou
+ * `adminEnLectureSeule` s'interpose.
+ */
+const voitToutLePointage = (utilisateur) =>
+  Boolean(utilisateur) && ADMINISTRATION.includes(utilisateur.role);
+
+/** Ce qui tient l'application : comptes, effectif, vehicules, reglages. */
+function exigerAdministration(req, res, next) {
+  if (!req.utilisateur) return res.status(401).json({ erreur: 'Session expiree, reconnectez-vous.', sessionExpiree: true });
+  if (!ADMINISTRATION.includes(req.utilisateur.role)) {
+    return res.status(403).json({ erreur: 'Action reservee a la direction.' });
+  }
+  next();
+}
+
+const estAdmin = (req) => Boolean(req.utilisateur && req.utilisateur.role === 'admin');
+
+/*
+ * L'administrateur regarde le pointage, il ne le decide pas.
+ *
+ * Il voit les fiches et le tableau de bord — sans quoi il ne pourrait pas
+ * repondre a « la fiche de X n'arrive pas ». Mais valider, corriger des heures
+ * ou rouvrir une fiche, c'est arbitrer ce qui partira en paie : cela reste a la
+ * direction et aux chefs.
+ *
+ * La regle est posee ici, en un seul endroit, plutot que route par route. Et
+ * elle est ecrite a l'envers de l'habitude : on n'enumere pas ce qui est
+ * interdit — la liste serait a completer a chaque nouvelle route, et l'oubli
+ * passerait inapercu — mais ce qui est permis. Une route ajoutee demain sera
+ * fermee par defaut, ce qui est le bon sens du cote ou l'on se trompe.
+ */
+const ECRITURES_ADMIN = [
+  '/api/connexion', '/api/deconnexion', '/api/mon-code', '/api/ma-reprise',
+];
+
+function adminEnLectureSeule(req, res, next) {
+  if (!estAdmin(req) || req.method === 'GET' || !req.path.startsWith('/api/')) return next();
+  const permis =
+    req.path.startsWith('/api/admin/') || ECRITURES_ADMIN.includes(req.path);
+  if (permis) return next();
+  return res.status(403).json({
+    erreur:
+      "Votre compte tient l'application, il ne decide pas du pointage. "
+      + 'Valider, corriger ou rouvrir une fiche revient a la direction.',
+  });
+}
+
+/*
+ * La porte a ne jamais laisser ouverte.
+ *
+ * Reinitialiser le code d'un directeur, ou creer un compte de direction, revient
+ * a s'en donner l'identite : on se connecte sous ce compte, on resaisit le code
+ * qu'on vient de poser, et le billet de paie tombe. Tout le mur s'effondre par
+ * cette seule route. Un admin ne touche donc aucun compte de direction — ni
+ * pour le creer, ni pour le modifier, ni pour lui remettre un code.
+ *
+ * C'est aussi pourquoi la direction dispose d'une question de reprise : elle
+ * n'a plus besoin de personne pour retrouver son code.
+ */
+function refuserSurDirecteur(req, res, roleVise) {
+  if (!estAdmin(req)) return false;
+  if (roleVise !== 'directeur') return false;
+  res.status(403).json({
+    erreur:
+      "Un administrateur ne peut pas creer ni modifier un compte de direction. "
+      + "La direction change son code elle-meme, ou le retrouve par sa question de reprise.",
+  });
+  return true;
 }
 
 /* --------------------- Acces aux montants de la paie ---------------------- */
@@ -275,6 +368,36 @@ function reinitialiserTentatives(cle) {
   tentatives.delete(cle);
 }
 
+/* ----------------------- La reponse a la question de reprise --------------- */
+
+/*
+ * Une reponse se tape de memoire, des mois plus tard, souvent sur un telephone.
+ * « Marseille », « marseille » et « Marseille  » sont la meme reponse pour
+ * l'humain qui l'a choisie ; les distinguer ne protegerait personne et
+ * enfermerait dehors celui qu'on veut faire entrer.
+ *
+ * On ramene donc a une forme unique — sans accents, sans casse, sans espaces
+ * superflus — avant de hacher comme de comparer. C'est un peu d'entropie en
+ * moins, largement compensee par le fait que la reponse ne sert qu'apres huit
+ * essais comptes et une fenetre de quinze minutes.
+ */
+const normaliserReponse = (reponse) =>
+  String(reponse || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+
+/* Hachee comme un code : ni le journal, ni une sauvegarde, ni un coup d'oeil a
+   la base ne doivent laisser lire la reponse en clair. */
+const hacherReponse = (reponse) => bcrypt.hashSync(normaliserReponse(reponse), 10);
+
+const verifierReponse = (reponse, hash) => {
+  const nette = normaliserReponse(reponse);
+  return Boolean(hash) && nette.length > 0 && bcrypt.compareSync(nette, hash);
+};
+
 const hacherPin = (pin) => bcrypt.hashSync(String(pin), 10);
 
 /*
@@ -299,11 +422,20 @@ module.exports = {
   exigerConnexion,
   exigerDirecteur,
   exigerDirecteurOuConducteur,
+  exigerAdministration,
+  estAdmin,
+  refuserSurDirecteur,
+  voitToutLePointage,
+  adminEnLectureSeule,
+  ADMINISTRATION,
   espaceConducteurFerme,
   delivrerBilletPaie,
   consommerBilletPaie,
   hacherPin,
   verifierPin,
+  normaliserReponse,
+  hacherReponse,
+  verifierReponse,
   codeUtilisable,
   SANS_CODE,
   tropDeTentatives,

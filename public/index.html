@@ -27,6 +27,40 @@
 
       <button class="principal" type="submit" style="width:100%">Se connecter</button>
       <p class="aide" id="aide">Votre identifiant et votre code vous sont remis par la direction.</p>
+      <p class="aide suite"><button class="lien" id="btn-oubli" type="button">Code oublié ?</button></p>
+    </form>
+
+    <!--
+      La reprise par question.
+
+      Elle ne s'adresse qu'a la direction, et pour une raison precise : depuis
+      qu'un administrateur technique existe, plus personne dans l'application ne
+      peut remettre le code d'un directeur — c'est ce qui empeche cet
+      administrateur d'en prendre l'identite et d'atteindre les salaires. Un chef
+      qui perd son code, lui, se le fait remettre en trente secondes.
+    -->
+    <form class="carte connexion masque" id="formulaire-reprise" autocomplete="off">
+      <h1>Retrouver son code</h1>
+      <p class="sous">Réservé aux comptes de direction</p>
+
+      <div class="detache-apres" id="etape-identifiant">
+        <label for="reprise-identifiant">Identifiant</label>
+        <input id="reprise-identifiant" autocapitalize="none" autocorrect="off">
+      </div>
+
+      <div class="detache-apres masque" id="etape-reponse">
+        <p class="aide serree detache-apres" id="reprise-question"></p>
+        <label for="reprise-reponse">Votre réponse</label>
+        <input id="reprise-reponse" autocapitalize="none">
+        <div class="detache">
+          <label for="reprise-nouveau">Nouveau code (4 à 8 chiffres)</label>
+          <input id="reprise-nouveau" type="password" inputmode="numeric" pattern="[0-9]*">
+        </div>
+      </div>
+
+      <button class="principal" type="submit" style="width:100%" id="btn-reprise">Continuer</button>
+      <p class="aide" id="aide-reprise">La réponse ne s'affiche jamais et n'est conservée que sous forme chiffrée.</p>
+      <p class="aide suite"><button class="lien" id="btn-retour-connexion" type="button">◀ Revenir à la connexion</button></p>
     </form>
   </main>
 
@@ -41,6 +75,8 @@
       directeur: '/directeur.html',
       conducteur: '/conducteur.html',
       chef: '/chef.html',
+      // L'administrateur entre par les Parametres : c'est tout son metier.
+      admin: '/parametres.html',
     };
 
     function orienter(utilisateur) {
@@ -66,6 +102,84 @@
         aide.textContent = erreur.message;
         aide.style.color = 'var(--rouge)';
         document.getElementById('pin').value = '';
+      } finally {
+        bouton.disabled = false;
+      }
+    });
+
+    /* ------------------------- Retrouver son code ------------------------- */
+
+    const formulaireReprise = document.getElementById('formulaire-reprise');
+    const aideReprise = document.getElementById('aide-reprise');
+    const etapeReponse = document.getElementById('etape-reponse');
+    const champIdentifiant = document.getElementById('reprise-identifiant');
+
+    function direReprise(texte, couleur) {
+      aideReprise.textContent = texte;
+      aideReprise.style.color = couleur || '';
+    }
+
+    function basculer(versReprise) {
+      formulaire.classList.toggle('masque', versReprise);
+      formulaireReprise.classList.toggle('masque', !versReprise);
+      if (versReprise) champIdentifiant.focus();
+    }
+
+    document.getElementById('btn-oubli').addEventListener('click', () => {
+      champIdentifiant.value = document.getElementById('identifiant').value.trim();
+      basculer(true);
+    });
+    document.getElementById('btn-retour-connexion').addEventListener('click', () => basculer(false));
+
+    /*
+     * Deux etapes dans un seul formulaire : d'abord l'identifiant, qui rapporte
+     * la question ; puis la reponse et le nouveau code. Les separer en deux
+     * ecrans ferait perdre l'identifiant deja saisi, et repondre a une question
+     * qu'on ne voit plus n'aide personne.
+     */
+    formulaireReprise.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const bouton = document.getElementById('btn-reprise');
+      const identifiant = champIdentifiant.value.trim();
+      if (!identifiant) return direReprise('Indiquez votre identifiant.', 'var(--rouge)');
+
+      bouton.disabled = true;
+      try {
+        if (etapeReponse.classList.contains('masque')) {
+          const r = await API.post('/api/reprise/question', { identifiant });
+          if (!r.definie) {
+            direReprise(
+              "Aucune question de reprise n'est enregistrée pour cet identifiant. "
+              + 'Demandez à la direction de vous remettre un code.',
+              'var(--orange)'
+            );
+            return;
+          }
+          document.getElementById('reprise-question').textContent = r.question;
+          etapeReponse.classList.remove('masque');
+          champIdentifiant.readOnly = true;
+          bouton.textContent = 'Poser ce nouveau code';
+          direReprise("La réponse ne tient pas compte des accents ni des majuscules.");
+          document.getElementById('reprise-reponse').focus();
+          return;
+        }
+
+        await API.post('/api/reprise/code', {
+          identifiant,
+          reponse: document.getElementById('reprise-reponse').value,
+          nouveau: document.getElementById('reprise-nouveau').value,
+        });
+        // Aucune session n'est rendue : se reconnecter prouve que le nouveau
+        // code a bien ete note, ce qui est le seul moment ou on peut encore
+        // s'en apercevoir sans consequence.
+        basculer(false);
+        document.getElementById('identifiant').value = identifiant;
+        document.getElementById('pin').value = '';
+        aide.textContent = 'Nouveau code enregistré. Connectez-vous avec.';
+        aide.style.color = 'var(--vert)';
+      } catch (erreur) {
+        direReprise(erreur.message, 'var(--rouge)');
+        document.getElementById('reprise-reponse').value = '';
       } finally {
         bouton.disabled = false;
       }

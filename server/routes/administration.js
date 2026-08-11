@@ -23,35 +23,49 @@ const routes = express.Router();
 
 /* ----------------------- Administration (directeur) ------------------------ */
 
-routes.get('/api/admin/utilisateurs', A.exigerDirecteur, (req, res) => {
+/*
+ * Le taux horaire voyage avec la fiche du salarie, parce que c'est la meme
+ * ligne en base. Il ne doit pas voyager jusqu'a l'administrateur : c'est un
+ * salaire, meme quand il se presente comme une colonne d'effectif.
+ */
+const sansTaux = (req, salaries) =>
+  A.estAdmin(req) ? salaries.map(({ taux_horaire, ...reste }) => reste) : salaries;
+
+routes.get('/api/admin/utilisateurs', A.exigerAdministration, (req, res) => {
   res.json({
     // Les conducteurs ont leur propre onglet : les melanger ici brouillerait
     // deux circuits qui n'ont pas les memes pouvoirs.
     utilisateurs: db
       .prepare(
         `SELECT id, nom, identifiant, role, actif FROM utilisateurs
-          WHERE role IN ('chef', 'directeur') ORDER BY role DESC, nom`
+          WHERE role IN ('chef', 'directeur', 'admin') ORDER BY role DESC, nom`
       )
       .all(),
     // L'onglet « Personnel et equipes » ne montre que l'effectif de chantier ;
     // le personnel non productif a le sien, avec ses propres ecrans.
-    salaries: db
-      .prepare(
-        `SELECT s.*, u.nom AS chef_nom FROM salaries s
-           LEFT JOIN utilisateurs u ON u.id = s.chef_id
-          WHERE s.productif = 1 ORDER BY s.nom, s.prenom`
-      )
-      .all(),
+    salaries: sansTaux(
+      req,
+      db
+        .prepare(
+          `SELECT s.*, u.nom AS chef_nom FROM salaries s
+             LEFT JOIN utilisateurs u ON u.id = s.chef_id
+            WHERE s.productif = 1 ORDER BY s.nom, s.prenom`
+        )
+        .all()
+    ),
   });
 });
 
-const ROLES = ['chef', 'directeur', 'conducteur'];
+const ROLES = ['chef', 'directeur', 'conducteur', 'admin'];
 
-routes.post('/api/admin/utilisateurs', A.exigerDirecteur, (req, res) => {
+routes.post('/api/admin/utilisateurs', A.exigerAdministration, (req, res) => {
   const nom = `${String(req.body.nom || '').trim()} ${String(req.body.prenom || '').trim()}`.trim();
   const identifiant = String(req.body.identifiant || '').trim().toLowerCase();
   const pin = String(req.body.pin || '');
   const role = ROLES.includes(req.body.role) ? req.body.role : 'chef';
+  /* Creer un compte de direction, c'est se donner le moyen d'en prendre
+     l'identite : reserve au directeur, qui seul y a interet. */
+  if (A.refuserSurDirecteur(req, res, role)) return undefined;
   const courriel = String(req.body.courriel || '').trim();
   if (!nom || !identifiant) return res.status(400).json({ erreur: 'Nom et identifiant obligatoires.' });
   if (!/^\d{4,8}$/.test(pin)) return res.status(400).json({ erreur: 'Le code doit comporter 4 a 8 chiffres.' });
@@ -81,10 +95,13 @@ routes.post('/api/admin/utilisateurs', A.exigerDirecteur, (req, res) => {
  * rapprocher de sa fiche salarie : le corriger ici corrige donc l'affichage
  * partout.
  */
-routes.put('/api/admin/utilisateurs/:id', A.exigerDirecteur, (req, res) => {
+routes.put('/api/admin/utilisateurs/:id', A.exigerAdministration, (req, res) => {
   const id = Number(req.params.id);
   const compte = db.prepare('SELECT * FROM utilisateurs WHERE id = ?').get(id);
   if (!compte) return res.status(404).json({ erreur: 'Compte introuvable.' });
+  /* Renommer un compte de direction, ou lui changer son identifiant, c'est deja
+     agir sur la serrure. L'admin n'y touche pas. */
+  if (A.refuserSurDirecteur(req, res, compte.role)) return undefined;
 
   /*
    * Le compte ne porte qu'un champ de nom, « NOM Prenom », comme la fiche
@@ -147,10 +164,22 @@ routes.put('/api/admin/utilisateurs/:id', A.exigerDirecteur, (req, res) => {
   res.json({ ok: true, utilisateur: db.prepare('SELECT id, nom, identifiant, role, actif FROM utilisateurs WHERE id = ?').get(id) });
 });
 
-routes.post('/api/admin/utilisateurs/:id/code', A.exigerDirecteur, (req, res) => {
+/*
+ * Remettre un code.
+ *
+ * C'est la route la plus sensible de l'application : celle par laquelle un
+ * administrateur se donnerait l'identite de la direction. Il pose un code sur le
+ * compte du directeur, se connecte avec, le resaisit quand les montants le
+ * demandent, et tout le cloisonnement tombe. Elle lui est donc fermee des lors
+ * qu'elle vise un compte de direction.
+ */
+routes.post('/api/admin/utilisateurs/:id/code', A.exigerAdministration, (req, res) => {
   const pin = String(req.body.pin || '');
   if (!/^\d{4,8}$/.test(pin)) return res.status(400).json({ erreur: 'Le code doit comporter 4 a 8 chiffres.' });
   const id = Number(req.params.id);
+  const compte = db.prepare('SELECT role FROM utilisateurs WHERE id = ?').get(id);
+  if (!compte) return res.status(404).json({ erreur: 'Compte introuvable.' });
+  if (A.refuserSurDirecteur(req, res, compte.role)) return undefined;
   db.prepare('UPDATE utilisateurs SET pin_hash = ? WHERE id = ?').run(A.hacherPin(pin), id);
 
   // Le directeur attribue un code neuf souvent parce que l'ancien a fuite, ou
@@ -166,12 +195,18 @@ routes.post('/api/admin/utilisateurs/:id/code', A.exigerDirecteur, (req, res) =>
   res.json({ ok: true, sessionsFermees: true });
 });
 
-routes.post('/api/admin/utilisateurs/:id/actif', A.exigerDirecteur, (req, res) => {
-  db.prepare('UPDATE utilisateurs SET actif = ? WHERE id = ?').run(req.body.actif ? 1 : 0, Number(req.params.id));
+routes.post('/api/admin/utilisateurs/:id/actif', A.exigerAdministration, (req, res) => {
+  const id = Number(req.params.id);
+  const compte = db.prepare('SELECT role FROM utilisateurs WHERE id = ?').get(id);
+  if (!compte) return res.status(404).json({ erreur: 'Compte introuvable.' });
+  // Desactiver la direction ne donne acces a rien, mais prive l'entreprise du
+  // seul role qui decide. Ce n'est pas a l'administrateur technique d'en juger.
+  if (A.refuserSurDirecteur(req, res, compte.role)) return undefined;
+  db.prepare('UPDATE utilisateurs SET actif = ? WHERE id = ?').run(req.body.actif ? 1 : 0, id);
   res.json({ ok: true });
 });
 
-routes.post('/api/admin/salaries', A.exigerDirecteur, (req, res) => {
+routes.post('/api/admin/salaries', A.exigerAdministration, (req, res) => {
   const nom = String(req.body.nom || '').trim();
   const prenom = String(req.body.prenom || '').trim();
   if (!nom || !prenom) return res.status(400).json({ erreur: 'Nom et prenom obligatoires.' });
@@ -189,8 +224,16 @@ routes.post('/api/admin/salaries', A.exigerDirecteur, (req, res) => {
   res.json({ id: r.lastInsertRowid });
 });
 
-routes.put('/api/admin/salaries/:id', A.exigerDirecteur, (req, res) => {
-  const champs = ['matricule', 'nom', 'prenom', 'chef_id', 'actif', 'taux_horaire'];
+routes.put('/api/admin/salaries/:id', A.exigerAdministration, (req, res) => {
+  /*
+   * Le taux horaire est un salaire, pas une donnee d'effectif : il se range avec
+   * les montants, hors de portee de l'administrateur. Il est retire de la liste
+   * plutot que refuse, pour qu'un ecran qui renverrait le formulaire entier ne
+   * se solde pas par une erreur incomprehensible — le reste de la correction
+   * passe, le taux est simplement ignore.
+   */
+  const champs = ['matricule', 'nom', 'prenom', 'chef_id', 'actif', 'taux_horaire']
+    .filter((c) => c !== 'taux_horaire' || !A.estAdmin(req));
   const maj = {};
   for (const champ of champs) if (req.body[champ] !== undefined) maj[champ] = req.body[champ];
   if (!Object.keys(maj).length) return res.json({ ok: true });
@@ -255,11 +298,11 @@ routes.put('/api/salaries/:id/nom', A.exigerConnexion, (req, res) => {
  * decide. Un effacement automatique, un jour de mauvais reglage, effacerait ce
  * que personne n'a decide d'effacer.
  */
-routes.get('/api/admin/conservation', A.exigerDirecteur, (req, res) => {
+routes.get('/api/admin/conservation', A.exigerAdministration, (req, res) => {
   res.json({ dureeMois: CONS.DUREE_CONSERVATION_MOIS, candidats: CONS.candidats() });
 });
 
-routes.post('/api/admin/conservation/:id/anonymiser', A.exigerDirecteur, (req, res) => {
+routes.post('/api/admin/conservation/:id/anonymiser', A.exigerAdministration, (req, res) => {
   repondre(res, CONS.anonymiser(req.params.id, req.utilisateur));
 });
 
@@ -301,11 +344,11 @@ routes.delete('/api/admin/taux/:id', A.exigerDirecteur, (req, res) => {
   repondre(res, T.supprimer(req.params.id, req.utilisateur));
 });
 
-routes.get('/api/admin/vehicules', A.exigerDirecteur, (req, res) => {
+routes.get('/api/admin/vehicules', A.exigerAdministration, (req, res) => {
   res.json({ vehicules: db.prepare('SELECT * FROM vehicules ORDER BY immatriculation').all() });
 });
 
-routes.post('/api/admin/vehicules', A.exigerDirecteur, (req, res) => {
+routes.post('/api/admin/vehicules', A.exigerAdministration, (req, res) => {
   const immatriculation = String(req.body.immatriculation || '').trim().toUpperCase();
   if (!immatriculation) return res.status(400).json({ erreur: "L'immatriculation est obligatoire." });
   try {
@@ -323,7 +366,7 @@ routes.post('/api/admin/vehicules', A.exigerDirecteur, (req, res) => {
   }
 });
 
-routes.put('/api/admin/vehicules/:id', A.exigerDirecteur, (req, res) => {
+routes.put('/api/admin/vehicules/:id', A.exigerAdministration, (req, res) => {
   const champs = ['immatriculation', 'marque', 'modele', 'motorisation', 'actif'];
   const maj = {};
   for (const champ of champs) if (req.body[champ] !== undefined) maj[champ] = req.body[champ];
@@ -343,7 +386,7 @@ routes.put('/api/admin/vehicules/:id', A.exigerDirecteur, (req, res) => {
 
 /* ------------------------------- Indicateurs ------------------------------- */
 
-routes.get('/api/admin/indicateurs', A.exigerDirecteur, (req, res) => {
+routes.get('/api/admin/indicateurs', A.exigerAdministration, (req, res) => {
   res.json({
     debutService: DEBUT_SERVICE,
     delaiJours: I.DELAI_ATTENDU_JOURS,

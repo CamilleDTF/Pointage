@@ -231,6 +231,36 @@ button.danger:hover { filter: brightness(1.1); }
 button.petit { padding: 6px 10px; font-size: 0.82rem; }
 
 /*
+ * Un sous-titre a l'interieur d'une carte, sous le h2 qui la nomme. Il en
+ * reprend la couleur sans en reprendre la casse : deux titres tout en capitales
+ * l'un sous l'autre ne se hierarchisent plus.
+ */
+h3.titre-bloc {
+  font-size: var(--t-grand);
+  color: var(--bleu);
+  margin: 0 0 var(--e2);
+}
+
+/*
+ * Un bouton qui a l'air d'un lien.
+ *
+ * « Code oublié ? » n'est pas une action de meme poids que « Se connecter » :
+ * lui donner la meme boite les mettrait sur un pied d'egalite, alors qu'on ne
+ * s'en sert qu'une fois tous les deux ans. Cela reste un bouton — rien n'est
+ * navigue, c'est un geste — mais habille comme le lien qu'il parait etre.
+ */
+button.lien {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-weight: 500;
+  font-size: inherit;
+  color: var(--bleu-clair);
+  text-decoration: underline;
+}
+button.lien:hover { background: none; color: var(--bleu); }
+
+/*
  * Un champ dans un tableau se tait tant qu'on ne s'en occupe pas.
  *
  * L'ecran Parametres alignait trente-neuf lignes de cinq boites blanches

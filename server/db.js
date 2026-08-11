@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS utilisateurs (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   nom           TEXT    NOT NULL,
   identifiant   TEXT    NOT NULL UNIQUE,
-  role          TEXT    NOT NULL CHECK (role IN ('chef', 'directeur', 'conducteur')),
+  role          TEXT    NOT NULL CHECK (role IN ('chef', 'directeur', 'conducteur', 'admin')),
   pin_hash      TEXT    NOT NULL,
   actif         INTEGER NOT NULL DEFAULT 1,
   cree_le       TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -246,8 +246,21 @@ function reconstruireTable(nom, transformer) {
     .map((c) => `"${c.name}"`)
     .join(', ');
 
-  const neuf = transformer(ancien.sql).replace(`CREATE TABLE ${nom}`, `CREATE TABLE ${nom}_migration`);
-  if (neuf === ancien.sql) throw new Error(`Reconstruction de ${nom} : le schema n'a pas change.`);
+  /*
+   * Le nom de la table peut arriver entre guillemets.
+   *
+   * SQLite reecrit le schema qu'il conserve apres un `ALTER TABLE ... RENAME
+   * TO` — c'est-a-dire apres chaque passage ici — et il en profite pour citer
+   * l'identifiant : `CREATE TABLE "utilisateurs"`. Une reconstruction suivante
+   * ne reconnaissait donc plus la forme nue, laissait le `CREATE TABLE` pointer
+   * sur la table d'origine, et echouait sur un « table already exists » qui ne
+   * disait rien de sa cause. Les deux ecritures sont desormais acceptees.
+   */
+  const enTete = new RegExp(`CREATE TABLE\\s+(?:"${nom}"|${nom}\\b)`);
+  const transforme = transformer(ancien.sql);
+  if (transforme === ancien.sql) throw new Error(`Reconstruction de ${nom} : le schema n'a pas change.`);
+  if (!enTete.test(transforme)) throw new Error(`Reconstruction de ${nom} : en-tete CREATE TABLE introuvable.`);
+  const neuf = transforme.replace(enTete, `CREATE TABLE ${nom}_migration`);
 
   db.exec(neuf);
   db.exec(`INSERT INTO ${nom}_migration (${colonnes}) SELECT ${colonnes} FROM ${nom}`);
@@ -535,6 +548,53 @@ ajouterColonne('utilisateurs', 'telephone', "TEXT NOT NULL DEFAULT ''");
  * de sessions.
  */
 ajouterColonne('utilisateurs', 'session_generation', 'INTEGER NOT NULL DEFAULT 0');
+
+/*
+ * La question de reprise : comment la direction retrouve son code, seule.
+ *
+ * Depuis qu'un administrateur technique existe, plus personne dans l'application
+ * ne peut remettre le code d'un directeur — c'est justement ce qui empeche cet
+ * administrateur de prendre l'identite de la direction et d'atteindre les
+ * salaires. Restait a repondre a la question evidente : et si la direction
+ * oublie son code ?
+ *
+ * Elle depose donc une question qu'elle choisit elle-meme, et sa reponse. La
+ * reponse est hachee comme un code, avec le meme bcrypt : le journal, une
+ * sauvegarde ou un coup d'oeil a la base ne la revelent pas. Repondre juste ne
+ * redonne pas l'ancien code — cela ouvre le droit d'en choisir un nouveau.
+ *
+ * `reprise_le` n'est pas decoratif : il dit depuis quand la reprise est en
+ * place, et permet a l'ecran de reclamer une question a un directeur qui n'en a
+ * pas encore — sans quoi la porte de secours n'existerait que sur le papier.
+ */
+/*
+ * Le role `admin` sur une base deja en service.
+ *
+ * `ajouterColonne` ne suffit pas ici : ce n'est pas une colonne qui manque mais
+ * une valeur permise par la contrainte CHECK, et SQLite ne sait pas la modifier
+ * en place. On reconstruit donc la table, comme on l'avait fait pour ouvrir le
+ * role `conducteur` — meme outil, meme prudence : le schema neuf est obtenu en
+ * transformant l'ancien, pour n'oublier aucune colonne posee entre-temps.
+ */
+if (!/CHECK \(role IN \([^)]*'admin'/.test(schemaDe('utilisateurs').sql)) {
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.transaction(() => {
+      reconstruireTable('utilisateurs', (sql) =>
+        sql.replace(
+          "CHECK (role IN ('chef', 'directeur', 'conducteur'))",
+          "CHECK (role IN ('chef', 'directeur', 'conducteur', 'admin'))"
+        )
+      );
+    })();
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
+}
+
+ajouterColonne('utilisateurs', 'question_reprise', "TEXT NOT NULL DEFAULT ''");
+ajouterColonne('utilisateurs', 'reponse_reprise_hash', "TEXT NOT NULL DEFAULT ''");
+ajouterColonne('utilisateurs', 'reprise_le', 'TEXT');
 
 /*
  * Les secrets d'acces du conducteur de travaux ont disparu avec les comptes.
