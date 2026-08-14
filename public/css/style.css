@@ -1205,3 +1205,27 @@ table.np-totaux th {
   color: var(--gris-texte); background: #f7f9fb;
 }
 table.np-totaux td.num, table.np-totaux th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/*
+ * « A votre attention » : un encadre par fiche, ses points dedans.
+ *
+ * Chaque evenement avait son encadre, et la meme fiche revenait trois fois en
+ * repetant son chantier a chaque ligne. L'en-tete nomme la fiche une fois ; les
+ * points s'alignent en dessous, ce qui demande une action d'abord.
+ */
+.notification .point {
+  display: flex;
+  gap: var(--e3);
+  align-items: baseline;
+  padding: var(--e2) 0 var(--e2) var(--e3);
+  border-left: 3px solid var(--gris-bord);
+  margin-top: var(--e2);
+}
+.notification .point.agir { border-left-color: var(--orange); }
+.notification .point.informer { border-left-color: var(--bleu-clair); }
+.notification .point .quoi { font-weight: 600; white-space: nowrap; }
+.notification .point .detail {
+  color: var(--gris-texte);
+  font-size: var(--t-petit);
+  white-space: pre-line;
+}

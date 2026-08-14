@@ -110,29 +110,58 @@ async function chargerNotifications() {
   }
 
   const semaine = (n) => `semaine ${n.semaine} — ${n.chantier || 'chantier non renseigné'}`;
-  const entrees = [
-    ...donnees.renvoyees.map((f) => ({
-      objet: `Fiche à corriger : ${semaine(f)}`,
-      detail: f.motif_rejet || 'Renvoyée pour correction.',
-      fiche: f.id,
-    })),
-    ...donnees.corrections.map((c) => ({
-      objet: `${c.auteur || 'Le conducteur de travaux'} a corrigé votre fiche : ${semaine(c)}`,
-      detail: c.detail.split(' ; ').join('\n'),
-      fiche: c.fiche_id,
-    })),
-  ];
 
-  bloc.classList.toggle('masque', entrees.length === 0);
-  if (!entrees.length) return;
+  /*
+   * Un encadre par fiche, et non un par evenement.
+   *
+   * La meme fiche revenait sur trois encadres — renvoyee, puis corrigee deux
+   * fois — en repetant a chaque ligne « semaine 33 — 26-107-A PASCALIN LE
+   * ROVE ». On lisait le chantier trois fois pour trois nouvelles qui le
+   * concernaient une seule. Ce qui compte est : quelles fiches me demandent
+   * quelque chose, et quoi.
+   */
+  const parFiche = new Map();
+  const ajouter = (id, entete, point) => {
+    if (!parFiche.has(id)) parFiche.set(id, { id, entete, points: [] });
+    parFiche.get(id).points.push(point);
+  };
+
+  for (const f of donnees.renvoyees) {
+    ajouter(f.id, semaine(f), {
+      quoi: 'À corriger',
+      ton: 'agir',
+      detail: f.motif_rejet || 'Renvoyée pour correction.',
+    });
+  }
+  for (const c of donnees.corrections) {
+    ajouter(c.fiche_id, semaine(c), {
+      quoi: `${c.auteur || 'Le conducteur de travaux'} a corrigé vos heures`,
+      ton: 'informer',
+      detail: c.detail.split(' ; ').join('\n'),
+    });
+  }
+
+  const fiches = [...parFiche.values()];
+  const nbPoints = fiches.reduce((n, f) => n + f.points.length, 0);
+
+  bloc.classList.toggle('masque', nbPoints === 0);
+  if (!nbPoints) return;
 
   $('titre-notifications').textContent =
-    entrees.length === 1 ? 'À votre attention' : `À votre attention — ${entrees.length} points`;
-  $('liste-notifications').innerHTML = entrees
+    fiches.length === 1 ? 'À votre attention' : `À votre attention — ${fiches.length} fiches`;
+
+  $('liste-notifications').innerHTML = fiches
     .map(
-      (e) => `<div class="notification">
-        <div class="objet">${echapper(e.objet)}</div>
-        <div class="detail">${echapper(e.detail)}</div>
+      (f) => `<div class="notification">
+        <div class="objet">${echapper(f.entete)}</div>
+        ${f.points
+          .map(
+            (p) => `<div class="point ${p.ton}">
+              <span class="quoi">${echapper(p.quoi)}</span>
+              <span class="detail">${echapper(p.detail)}</span>
+            </div>`
+          )
+          .join('')}
       </div>`
     )
     .join('');
