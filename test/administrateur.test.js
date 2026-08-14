@@ -293,3 +293,58 @@ test('les essais de reprise sont comptes', async () => {
   // Le vrai code n'a pas bouge pendant ces essais.
   await connexion('dir', '8642');
 });
+
+/* ------------- Le code initial, que l'administrateur connait -------------- */
+
+/*
+ * Le dernier endroit ou le cloisonnement reposait sur la bonne volonte.
+ *
+ * C'est l'administrateur qui cree les comptes : il connait donc leur code de
+ * depart, forcement. Rien n'obligeait a le changer, si bien qu'il pouvait se
+ * connecter sous l'identite d'un autre aussi longtemps que celui-ci ne s'en
+ * souciait pas. Un compte au code provisoire ne peut desormais rien faire
+ * d'autre que choisir le sien.
+ */
+test('un code pose par un tiers n ouvre que la porte pour en changer', async () => {
+  const admin = await connexion('admin', '7777');
+  const cree = await admin('POST', '/api/admin/utilisateurs', {
+    nom: 'PROVISOIRE', prenom: 'Test', identifiant: 'provisoire', pin: '3333', role: 'chef',
+  });
+  assert.equal(cree.statut, 200);
+
+  const neuf = await connexion('provisoire', '3333');
+  assert.equal((await neuf('GET', '/api/moi')).statut, 200, 'savoir qui l on est reste permis');
+
+  // Mais rien d'autre, pas meme une lecture.
+  for (const chemin of ['/api/fiches', '/api/reference']) {
+    const r = await neuf('GET', chemin);
+    assert.equal(r.statut, 403, `${chemin} doit etre ferme`);
+    assert.equal(r.donnees.codeProvisoire, true, "l'ecran doit savoir pourquoi");
+  }
+
+  // Choisir son code leve le blocage — et ferme les sessions ouvertes ailleurs.
+  const ancienne = await connexion('provisoire', '3333');
+  const adoption = await neuf('POST', '/api/mon-code', { actuel: '3333', nouveau: '4444' });
+  assert.equal(adoption.statut, 200);
+  assert.equal((await ancienne('GET', '/api/fiches')).statut, 401, 'les autres sessions tombent');
+
+  const sien = await connexion('provisoire', '4444');
+  assert.equal((await sien('GET', '/api/fiches')).statut, 200, 'le compte est desormais ouvert');
+});
+
+test('le compte de direction ne demarre pas ouvert a qui l a cree', () => {
+  /*
+   * Le compte est cree en ligne de commande par l'administrateur technique :
+   * c'est le seul chemin possible, personne dans l'application ne peut creer un
+   * directeur. Son code de depart est donc connu de lui, et doit etre marque.
+   */
+  const { execFileSync } = require('node:child_process');
+  execFileSync(process.execPath, [
+    'scripts/creer-compte.js',
+    '--nom', 'DIRECTION Deux', '--identifiant', 'dir2', '--code', '112233', '--role', 'directeur',
+  ], { env: { ...process.env, DATA_DIR: process.env.DATA_DIR }, cwd: path.join(__dirname, '..') });
+
+  const compte = db.prepare("SELECT role, code_provisoire FROM utilisateurs WHERE identifiant = 'dir2'").get();
+  assert.equal(compte.role, 'directeur');
+  assert.equal(compte.code_provisoire, 1, 'un code pose en ligne de commande est provisoire');
+});

@@ -51,11 +51,11 @@ if (!/^\d{4,8}$/.test(code)) {
 const existant = db.prepare('SELECT id FROM utilisateurs WHERE identifiant = ?').get(identifiant);
 
 if (existant) {
-  db.prepare('UPDATE utilisateurs SET nom = ?, role = ?, pin_hash = ?, actif = 1 WHERE id = ?')
+  db.prepare('UPDATE utilisateurs SET nom = ?, role = ?, pin_hash = ?, actif = 1, code_provisoire = 1 WHERE id = ?')
     .run(nom, role, hacherPin(code), existant.id);
   console.log(`Compte mis à jour : ${nom} (${identifiant}), rôle ${role}.`);
 } else {
-  db.prepare('INSERT INTO utilisateurs (nom, identifiant, role, pin_hash) VALUES (?, ?, ?, ?)')
+  db.prepare('INSERT INTO utilisateurs (nom, identifiant, role, pin_hash, code_provisoire) VALUES (?, ?, ?, ?, 1)')
     .run(nom, identifiant, role, hacherPin(code));
   console.log(`Compte créé : ${nom} (${identifiant}), rôle ${role}.`);
 }

@@ -30,6 +30,37 @@
       <p class="aide suite"><button class="lien" id="btn-oubli" type="button">Code oublié ?</button></p>
     </form>
 
+
+    <!--
+      Choisir son code, quand celui qu'on a recu vient de quelqu'un d'autre.
+
+      C'est le seul moment ou le compte ne peut rien faire d'autre. La raison
+      tient en une phrase : celui qui a cree le compte connait ce code, et pour
+      un compte de direction cela suffirait a ouvrir la paie.
+    -->
+    <form class="carte connexion masque" id="formulaire-premier-code" autocomplete="off">
+      <h1>Choisissez votre code</h1>
+      <p class="sous">Le code reçu a été posé par quelqu'un d'autre</p>
+
+      <p class="aide detache-apres" id="pourquoi-premier-code">
+        Tant que vous ne l'avez pas changé, la personne qui a créé votre compte peut
+        s'y connecter. Choisissez le vôtre : il ne sera connu que de vous, et le
+        changement ferme toutes les autres sessions ouvertes.
+      </p>
+
+      <div class="detache-apres">
+        <label for="premier-actuel">Code reçu</label>
+        <input id="premier-actuel" type="password" inputmode="numeric" pattern="[0-9]*">
+      </div>
+      <div class="detache-apres">
+        <label for="premier-nouveau">Votre nouveau code (4 à 8 chiffres)</label>
+        <input id="premier-nouveau" type="password" inputmode="numeric" pattern="[0-9]*">
+      </div>
+
+      <button class="principal" type="submit" style="width:100%">Enregistrer mon code</button>
+      <p class="aide" id="aide-premier"></p>
+    </form>
+
     <!--
       La reprise par question.
 
@@ -79,7 +110,16 @@
       admin: '/parametres.html',
     };
 
+    /*
+     * Un code pose par quelqu'un d'autre ne mene nulle part tant qu'il n'a pas
+     * ete change. Le serveur refuse deja tout le reste ; l'ecran conduit au
+     * geste, plutot que de laisser buter sur un refus sans issue.
+     */
     function orienter(utilisateur) {
+      if (utilisateur.codeProvisoire) {
+        basculerChangement(utilisateur);
+        return;
+      }
       location.href = ESPACES[utilisateur.role] || '/chef.html';
     }
 
@@ -180,6 +220,39 @@
       } catch (erreur) {
         direReprise(erreur.message, 'var(--rouge)');
         document.getElementById('reprise-reponse').value = '';
+      } finally {
+        bouton.disabled = false;
+      }
+    });
+
+    /* ---------------------- Choisir son premier code ---------------------- */
+
+    const formulairePremier = document.getElementById('formulaire-premier-code');
+    let utilisateurEnAttente = null;
+
+    function basculerChangement(utilisateur) {
+      utilisateurEnAttente = utilisateur;
+      formulaire.classList.add('masque');
+      formulaireReprise.classList.add('masque');
+      formulairePremier.classList.remove('masque');
+      document.getElementById('premier-actuel').value = document.getElementById('pin').value;
+      document.getElementById('premier-nouveau').focus();
+    }
+
+    formulairePremier.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const bouton = formulairePremier.querySelector('button');
+      const aidePremier = document.getElementById('aide-premier');
+      bouton.disabled = true;
+      try {
+        await API.post('/api/mon-code', {
+          actuel: document.getElementById('premier-actuel').value,
+          nouveau: document.getElementById('premier-nouveau').value,
+        });
+        location.href = ESPACES[utilisateurEnAttente.role] || '/chef.html';
+      } catch (erreur) {
+        aidePremier.textContent = erreur.message;
+        aidePremier.style.color = 'var(--rouge)';
       } finally {
         bouton.disabled = false;
       }

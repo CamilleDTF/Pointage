@@ -59,6 +59,21 @@ async function cookieDe(identifiant, pin) {
   return reponse.headers.getSetCookie()[0].split(';')[0];
 }
 
+/**
+ * Se connecte avec un code qu'un tiers vient de poser, puis adopte le sien.
+ *
+ * Un code remis par la direction est provisoire : le compte ne peut rien faire
+ * d'autre que le changer, precisement pour que celui qui l'a pose cesse de le
+ * connaitre. C'est une etape de plus dans ces tests, et c'en est une aussi dans
+ * la vraie vie — d'ou ce raccourci, plutot que de la repeter cinq fois.
+ */
+async function connexionEtAdoption(identifiant, codeRecu, codeChoisi) {
+  const provisoire = await connexion(identifiant, codeRecu);
+  const r = await provisoire('POST', '/api/mon-code', { actuel: codeRecu, nouveau: codeChoisi });
+  assert.equal(r.statut, 200, `adoption du code par ${identifiant} refusee`);
+  return connexion(identifiant, codeChoisi);
+}
+
 async function connexion(identifiant, pin) {
   const reponse = await fetch(`${base}/api/connexion`, {
     method: 'POST',
@@ -959,7 +974,7 @@ test('un chef reprend sa fiche transmise, et le visa en cours tombe', async () =
   // Elle a quitte la liste du conducteur : il n'a plus rien a viser.
   await d('POST', `/api/admin/utilisateurs/${paul.id}/code`, { pin: '5555' });
   const identifiant = db.prepare('SELECT identifiant FROM utilisateurs WHERE id = ?').get(paul.id).identifiant;
-  const sien = await connexion(identifiant, '5555');
+  const sien = await connexionEtAdoption(identifiant, '5555', '5556');
   const vue = (await sien('GET', '/api/conducteur/moi')).corps;
   assert.equal(vue.enAttente.length, 0);
 
@@ -1255,7 +1270,7 @@ async function conducteurConnecte(directeur, champs) {
   const compte = await creerConducteur(directeur, champs);
   await directeur('POST', `/api/admin/utilisateurs/${compte.id}/code`, { pin: '5555' });
   const identifiant = db.prepare('SELECT identifiant FROM utilisateurs WHERE id = ?').get(compte.id).identifiant;
-  return { ...compte, appeler: await connexion(identifiant, '5555') };
+  return { ...compte, appeler: await connexionEtAdoption(identifiant, '5555', '5556') };
 }
 
 /*

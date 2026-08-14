@@ -37,7 +37,17 @@ routes.post('/api/connexion', (req, res) => {
 
   A.reinitialiserTentatives(cle);
   A.ouvrirSession(req, res, utilisateur);
-  res.json({ utilisateur: { id: utilisateur.id, nom: utilisateur.nom, role: utilisateur.role } });
+  res.json({
+    utilisateur: {
+      id: utilisateur.id,
+      nom: utilisateur.nom,
+      role: utilisateur.role,
+      // L'ecran doit conduire au changement, pas seulement le permettre : c'est
+      // le serveur qui refuse tout le reste, mais un refus sans explication est
+      // une impasse.
+      codeProvisoire: Boolean(utilisateur.code_provisoire),
+    },
+  });
 });
 
 routes.post('/api/deconnexion', (req, res) => {
@@ -47,7 +57,7 @@ routes.post('/api/deconnexion', (req, res) => {
 
 routes.get('/api/moi', (req, res) => {
   if (!req.utilisateur) return res.status(401).json({ erreur: 'Non connecte.', sessionExpiree: true });
-  res.json({ utilisateur: req.utilisateur });
+  res.json({ utilisateur: { ...req.utilisateur, codeProvisoire: Boolean(req.utilisateur.code_provisoire) } });
 });
 
 routes.post('/api/mon-code', A.exigerConnexion, (req, res) => {
@@ -58,7 +68,8 @@ routes.post('/api/mon-code', A.exigerConnexion, (req, res) => {
   }
   const u = db.prepare('SELECT pin_hash FROM utilisateurs WHERE id = ?').get(req.utilisateur.id);
   if (!A.verifierPin(actuel, u.pin_hash)) return res.status(401).json({ erreur: 'Code actuel incorrect.' });
-  db.prepare('UPDATE utilisateurs SET pin_hash = ? WHERE id = ?').run(A.hacherPin(nouveau), req.utilisateur.id);
+  db.prepare('UPDATE utilisateurs SET pin_hash = ?, code_provisoire = 0 WHERE id = ?')
+    .run(A.hacherPin(nouveau), req.utilisateur.id);
 
   /*
    * Changer son code ferme les sessions ouvertes avec l'ancien — c'est tout
@@ -206,7 +217,8 @@ routes.post('/api/reprise/code', (req, res) => {
     return res.status(401).json({ erreur: 'Reponse incorrecte.' });
   }
 
-  db.prepare('UPDATE utilisateurs SET pin_hash = ? WHERE id = ?').run(A.hacherPin(nouveau), compte.id);
+  db.prepare('UPDATE utilisateurs SET pin_hash = ?, code_provisoire = 0 WHERE id = ?')
+    .run(A.hacherPin(nouveau), compte.id);
   /*
    * Toutes les sessions tombent, y compris celle d'ou partirait un intrus : on
    * passe par ici justement parce qu'on soupconne d'avoir perdu la main sur le

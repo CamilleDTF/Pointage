@@ -63,7 +63,7 @@ function session(req, res, next) {
   if (donnees) {
     const u = db
       .prepare(
-        `SELECT id, nom, identifiant, role, actif, conducteur_id, session_generation
+        `SELECT id, nom, identifiant, role, actif, conducteur_id, session_generation, code_provisoire
            FROM utilisateurs WHERE id = ?`
       )
       .get(donnees.uid);
@@ -260,6 +260,30 @@ const ECRITURES_ADMIN = [
   '/api/connexion', '/api/deconnexion', '/api/mon-code', '/api/ma-reprise',
 ];
 
+/*
+ * Un code provisoire n'ouvre que la porte pour en changer.
+ *
+ * Sans cela, le cloisonnement tenait a une consigne : « changez votre code a la
+ * premiere connexion ». Celui qui cree un compte connait forcement le code de
+ * depart, et pour un compte de direction cela suffisait a tout ouvrir — s'y
+ * connecter, et choisir soi-meme la phrase du coffre avant son titulaire.
+ *
+ * Le refus est pose ici, avant toute route, plutot que dans chacune. Et il
+ * laisse passer le strict necessaire : savoir qui l'on est, changer son code,
+ * se deconnecter. Rien d'autre — pas meme une lecture.
+ */
+const OUVERT_AU_CODE_PROVISOIRE = ['/api/moi', '/api/mon-code', '/api/deconnexion', '/api/connexion'];
+
+function codeProvisoireFerme(req, res, next) {
+  if (!req.utilisateur || !req.utilisateur.code_provisoire) return next();
+  if (!req.path.startsWith('/api/') || OUVERT_AU_CODE_PROVISOIRE.includes(req.path)) return next();
+  return res.status(403).json({
+    erreur:
+      "Votre code a ete pose par quelqu'un d'autre : choisissez le votre avant d'aller plus loin.",
+    codeProvisoire: true,
+  });
+}
+
 function adminEnLectureSeule(req, res, next) {
   if (!estAdmin(req) || req.method === 'GET' || !req.path.startsWith('/api/')) return next();
   const permis =
@@ -427,6 +451,7 @@ module.exports = {
   refuserSurDirecteur,
   voitToutLePointage,
   adminEnLectureSeule,
+  codeProvisoireFerme,
   ADMINISTRATION,
   espaceConducteurFerme,
   delivrerBilletPaie,

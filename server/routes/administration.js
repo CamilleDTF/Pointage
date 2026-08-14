@@ -96,8 +96,8 @@ routes.post('/api/admin/utilisateurs', A.exigerAdministration, (req, res) => {
   try {
     const r = db
       .prepare(
-        `INSERT INTO utilisateurs (nom, identifiant, role, pin_hash, courriel, telephone)
-         VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT INTO utilisateurs (nom, identifiant, role, pin_hash, courriel, telephone, code_provisoire)
+         VALUES (?, ?, ?, ?, ?, ?, 1)`
       )
       .run(nom, identifiant, role, A.hacherPin(pin), courriel, String(req.body.telephone || '').trim().slice(0, 30));
     res.json({ id: r.lastInsertRowid });
@@ -200,7 +200,10 @@ routes.post('/api/admin/utilisateurs/:id/code', A.exigerAdministration, (req, re
   const compte = db.prepare('SELECT role FROM utilisateurs WHERE id = ?').get(id);
   if (!compte) return res.status(404).json({ erreur: 'Compte introuvable.' });
   if (A.refuserSurDirecteur(req, res, compte.role)) return undefined;
-  db.prepare('UPDATE utilisateurs SET pin_hash = ? WHERE id = ?').run(A.hacherPin(pin), id);
+  /* Le sien reste definitif ; celui d'un autre est provisoire par construction,
+     puisqu'on vient de le lui apprendre. */
+  db.prepare('UPDATE utilisateurs SET pin_hash = ?, code_provisoire = ? WHERE id = ?')
+    .run(A.hacherPin(pin), id === req.utilisateur.id ? 0 : 1, id);
 
   // Le directeur attribue un code neuf souvent parce que l'ancien a fuite, ou
   // que le telephone a ete perdu : les sessions ouvertes avec doivent tomber.

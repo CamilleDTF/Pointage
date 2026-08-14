@@ -168,6 +168,18 @@ créer un :
 node scripts/creer-compte.js --nom "NOM Prénom" --identifiant xxx --code 123456 --role admin
 ```
 
+### Le code initial
+
+C'est l'administrateur qui crée les comptes : il connaît donc leur code de départ,
+forcément. **Un code posé par quelqu'un d'autre est provisoire** — le compte ne peut
+rien faire d'autre que choisir le sien, pas même une lecture. Le marqueur tombe au
+premier changement, qui ferme au passage les sessions ouvertes ailleurs, y compris
+celle de qui avait posé le code.
+
+Sans cela, tout le cloisonnement aurait reposé sur une consigne : « changez votre code
+à la première connexion ». Pour un compte de direction, l'oublier suffisait à laisser
+ouverte la porte de la paie.
+
 Un administrateur **ne peut ni créer, ni modifier, ni désactiver un compte de
 direction, ni lui remettre un code**. C'est la porte par laquelle tout le reste
 tomberait : poser un code sur le compte du directeur, se connecter avec, le ressaisir

@@ -623,6 +623,27 @@ ajouterColonne('salaries', 'taux_horaire_scelle', "TEXT NOT NULL DEFAULT ''");
 ajouterColonne('primes_non_productifs', 'montant_scelle', "TEXT NOT NULL DEFAULT ''");
 ajouterColonne('taux', 'valeur_scellee', "TEXT NOT NULL DEFAULT ''");
 
+/*
+ * Un code pose par quelqu'un d'autre est provisoire.
+ *
+ * C'etait le dernier endroit ou le cloisonnement reposait sur la bonne volonte.
+ * L'administrateur cree le compte de direction en ligne de commande, avec un
+ * code de depart : il le connait donc, forcement, pendant un instant. Et rien
+ * n'obligeait la direction a le changer — il restait valable indefiniment.
+ * Pendant tout ce temps, l'administrateur pouvait se connecter sous son
+ * identite et, tant que le coffre n'existait pas, choisir lui-meme la phrase.
+ *
+ * Un compte marque `code_provisoire` ne peut donc rien faire d'autre que
+ * changer son code. Pas consulter, pas exporter, pas creer de coffre. Le
+ * marqueur tombe au premier changement, qui ferme au passage les sessions
+ * ouvertes ailleurs — y compris celle de qui avait pose le code.
+ *
+ * Les comptes deja en service ne sont pas marques : leur code a pu etre change
+ * depuis longtemps, et les enfermer dehors au nom d'un soupcon retrospectif
+ * ferait plus de degats que le trou qu'on bouche.
+ */
+ajouterColonne('utilisateurs', 'code_provisoire', 'INTEGER NOT NULL DEFAULT 0');
+
 ajouterColonne('utilisateurs', 'question_reprise', "TEXT NOT NULL DEFAULT ''");
 ajouterColonne('utilisateurs', 'reponse_reprise_hash', "TEXT NOT NULL DEFAULT ''");
 ajouterColonne('utilisateurs', 'reprise_le', 'TEXT');
