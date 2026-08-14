@@ -230,6 +230,53 @@ routes.post('/api/admin/utilisateurs/:id/actif', A.exigerAdministration, (req, r
   res.json({ ok: true });
 });
 
+/*
+ * Supprimer un compte.
+ *
+ * On pouvait desactiver, jamais effacer : un conducteur parti restait dans la
+ * liste, grise, indefiniment. Mais un compte qui a touche a des fiches ne peut
+ * pas disparaitre sans emporter la trace de qui a valide quoi — et cette trace
+ * est precisement ce qu'on cherchera dans six mois. La regle est donc simple :
+ * un compte qui n'a rien signe s'efface, un compte qui a signe se desactive.
+ * Le refus dit lequel des deux, et pourquoi.
+ */
+routes.delete('/api/admin/utilisateurs/:id', A.exigerAdministration, (req, res) => {
+  const id = Number(req.params.id);
+  const compte = db.prepare('SELECT id, nom, role FROM utilisateurs WHERE id = ?').get(id);
+  if (!compte) return res.status(404).json({ erreur: 'Compte introuvable.' });
+  if (A.refuserSurDirecteur(req, res, compte.role)) return undefined;
+
+  // Se supprimer soi-meme ferme la porte de l'interieur.
+  if (req.utilisateur && Number(req.utilisateur.id) === id) {
+    return res.status(400).json({ erreur: 'Vous ne pouvez pas supprimer votre propre compte.' });
+  }
+
+  const attaches = [
+    ['fiches', db.prepare('SELECT COUNT(*) AS n FROM fiches WHERE chef_id = ?').get(id).n, 'fiche(s) de pointage'],
+    [
+      'visas',
+      db.prepare('SELECT COUNT(*) AS n FROM fiches WHERE conducteur_id = ?').get(id).n,
+      'fiche(s) qui lui ont été transmises',
+    ],
+  ].filter(([, n]) => n > 0);
+
+  if (attaches.length) {
+    const detail = attaches.map(([, n, quoi]) => `${n} ${quoi}`).join(' et ');
+    return res.status(409).json({
+      erreur:
+        `${compte.nom} est rattaché à ${detail} : le supprimer effacerait la trace de qui a saisi `
+        + 'ou visé ces fiches. Désactivez-le plutôt — il disparaît des listes et ne peut plus se connecter.',
+    });
+  }
+
+  // Un chef sans fiche peut encore avoir des salaries rattaches : ils
+  // redeviennent sans chef plutot que de disparaitre avec lui.
+  db.prepare('UPDATE salaries SET chef_id = NULL WHERE chef_id = ?').run(id);
+  db.prepare('UPDATE utilisateurs SET conducteur_id = NULL WHERE conducteur_id = ?').run(id);
+  db.prepare('DELETE FROM utilisateurs WHERE id = ?').run(id);
+  res.json({ ok: true, supprime: compte.nom });
+});
+
 routes.post('/api/admin/salaries', A.exigerAdministration, (req, res) => {
   const nom = String(req.body.nom || '').trim();
   const prenom = String(req.body.prenom || '').trim();

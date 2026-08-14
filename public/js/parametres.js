@@ -710,9 +710,12 @@ async function chargerConducteurs() {
               }</button>
               ${c.codeADefinir ? '<div class="jauge moyen" style="margin-top:4px">Sans code</div>' : ''}
             </td>
-            <td><button class="petit" onclick="basculerConducteur(${c.id}, ${c.actif ? 0 : 1})">${
-              c.actif ? 'Désactiver' : 'Réactiver'
-            }</button></td>
+            <td>
+              <button class="petit" onclick="basculerConducteur(${c.id}, ${c.actif ? 0 : 1})">${
+                c.actif ? 'Désactiver' : 'Réactiver'
+              }</button>
+              <button class="petit danger" onclick="supprimerCompte(${c.id}, '${echapper(c.nom).replace(/'/g, "\\'")}')">Supprimer</button>
+            </td>
           </tr>`;
         })
         .join('')
@@ -900,7 +903,16 @@ async function chargerIndicateurs() {
 async function chargerAdmin() {
   const { utilisateurs, salaries } = await API.get('/api/admin/utilisateurs');
 
-  $('table-utilisateurs').querySelector('tbody').innerHTML = utilisateurs
+  /*
+   * Cette table s'appelle « Comptes des chefs d'equipe » : elle listait
+   * pourtant la direction, avec son bouton « Desactiver ». Desactiver la
+   * direction depuis l'ecran des chefs est un geste qu'on ne fait jamais
+   * volontairement — et son compte se regle dans « Mon compte ».
+   */
+  const comptesChefs = utilisateurs.filter((u) => u.role === 'chef');
+
+  $('table-utilisateurs').querySelector('tbody').innerHTML = comptesChefs.length
+    ? comptesChefs
     .map(
       (u) => {
         // Le compte ne porte qu'un champ « NOM Prenom » : on le presente en deux
@@ -917,11 +929,13 @@ async function chargerAdmin() {
         <td>
           <button class="petit" onclick="reinitialiserCode(${u.id})">Nouveau code</button>
           <button class="petit" onclick="basculerActif(${u.id}, ${u.actif ? 0 : 1})">${u.actif ? 'Désactiver' : 'Réactiver'}</button>
+          <button class="petit danger" onclick="supprimerCompte(${u.id}, '${echapper(u.nom).replace(/'/g, "\\'")}')">Supprimer</button>
         </td>
       </tr>`;
       }
     )
-    .join('');
+        .join('')
+    : '<tr><td colspan="5" class="vide">Aucun compte de chef d’équipe.</td></tr>';
 
   const chefs = utilisateurs.filter((u) => u.role === 'chef' && u.actif);
   const options = (selectionne) =>
@@ -955,6 +969,26 @@ window.reinitialiserCode = async (id) => {
     message('Code réinitialisé.', 'succes');
   } catch (e) {
     message(e.message, 'erreur');
+  }
+};
+
+/*
+ * Supprimer un compte, chef d'equipe comme conducteur de travaux.
+ *
+ * On ne pouvait que desactiver : un conducteur parti restait dans la liste,
+ * grise, indefiniment. Le serveur refuse la suppression d'un compte rattache a
+ * des fiches — la trace de qui a saisi ou vise doit survivre a son auteur — et
+ * son refus explique quoi faire a la place. On le montre tel quel.
+ */
+window.supprimerCompte = async (id, nom) => {
+  if (!confirm(`Supprimer définitivement le compte de ${nom} ?\n\nCette action est irréversible.`)) return;
+  try {
+    await API.supprimer(`/api/admin/utilisateurs/${id}`);
+    message(`Compte de ${nom} supprimé.`, 'succes');
+    await chargerAdmin();
+    await chargerConducteurs();
+  } catch (e) {
+    message(e.message, 'erreur', 9000);
   }
 };
 

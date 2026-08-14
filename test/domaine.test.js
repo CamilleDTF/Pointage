@@ -162,12 +162,25 @@ test('un code absence inconnu est refuse', () => {
   assert.match(anomalies[0].message, /inconnu/);
 });
 
-test('heures et code absence le meme jour declenchent une alerte, pas un blocage', () => {
+/*
+ * Une demi-journee d'absence s'ecrit : les heures travaillees, plus le motif
+ * qui couvre le reste. C'etait signale comme une anomalie, et le motif effacait
+ * la duree — un conge paye d'une demi-journee n'avait aucune facon de s'ecrire.
+ */
+test('heures et code absence le meme jour sont une combinaison legitime', () => {
   const ligne = ligneType();
-  ligne.jours[2].code_absence = 'ACH';
+  ligne.jours[2].code_absence = 'CP';
   const anomalies = D.controlerFiche(ficheType(), [ligne]);
-  assert.equal(anomalies.length, 1);
-  assert.equal(anomalies[0].niveau, 'alerte');
+  assert.equal(anomalies.length, 0, `anomalies inattendues : ${anomalies.map((a) => a.message).join(' | ')}`);
+});
+
+test('les conges payes et la RTT sont proposables sur une fiche', () => {
+  const codes = D.CODES_ABSENCE.map((c) => c.code);
+  assert.ok(codes.includes('CP'), 'CP absent');
+  assert.ok(codes.includes('RTT'), 'RTT absent');
+  // Et ils gardent leurs heures, faute de quoi la demi-journee est perdue.
+  assert.ok(D.CODES_AVEC_HEURES.includes('CP'));
+  assert.ok(D.CODES_AVEC_HEURES.includes('RTT'));
 });
 
 test('les jours en zone imposent un type de masque et ne depassent pas 7', () => {

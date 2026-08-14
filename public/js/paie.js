@@ -77,7 +77,20 @@ surEvenement('onglets-paie', 'click', (e) => {
   });
   $('panneau-chantier').classList.toggle('masque', onglet !== 'chantier');
   $('panneau-nonproductif').classList.toggle('masque', onglet !== 'nonproductif');
+  majEtatDuMois();
 });
+
+/*
+ * L'avertissement sur les fiches ne vaut que pour le personnel de chantier.
+ *
+ * Le personnel non productif ne remplit aucune fiche : ses heures sont posees
+ * ici, a 7 h par jour ouvre. Lui annoncer que « 4 fiches ne sont pas validees »
+ * revenait a le rendre responsable d'un retard qui ne le regarde pas, et a
+ * faire douter d'un tableau qui, lui, etait complet.
+ */
+function majEtatDuMois() {
+  $('etat-mois').classList.toggle('masque', onglet !== 'chantier');
+}
 
 /*
  * Un seul interrupteur pour les deux onglets.
@@ -140,6 +153,7 @@ async function charger() {
   }
 
   afficherEtatDuMois();
+  majEtatDuMois();
   afficherChantier();
   afficherNonProductif();
 }

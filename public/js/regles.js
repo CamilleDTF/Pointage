@@ -18,8 +18,31 @@
    * travaillee — sauf « F », qui dit ce qu'etait la journee, pas ce qu'on n'y a
    * pas fait : un ferie peut se travailler, et ces heures-la se paient double.
    */
-  const CODES_AVEC_HEURES = ['F'];
+/*
+   * Les motifs qui laissent des heures sur la journee.
+   *
+   * Il n'y avait que le ferie : choisir n'importe quel autre motif effacait la
+   * duree saisie, et un controle signalait la combinaison comme une erreur. Une
+   * demi-journee de conge paye n'avait donc aucune facon de s'ecrire — le chef
+   * devait choisir entre les 3h30 travaillees et le motif de l'absence.
+   *
+   * Les heures disent ce qui a ete travaille ce jour-la ; le motif couvre le
+   * reste. Les deux se completent au lieu de s'exclure.
+   */
+  const CODES_AVEC_HEURES = ['F', 'CP', 'RTT', 'ACH', 'VM', 'AT', 'EV', 'FOR', 'CSS', 'AA', 'NJ'];
+  /*
+   * Les motifs qu'un chef d'equipe peut poser sur une journee.
+   *
+   * Il manquait les deux plus frequents : le conge paye et la RTT. Un chef qui
+   * avait un salarie en CP n'avait aucun code pour le dire — il laissait la
+   * case vide, ou choisissait « autre absence », et la paie comptait une
+   * absence non justifiee a la place d'un conge du. Les intitules reprennent
+   * ceux du calendrier des conges, pour que le meme mot designe la meme chose
+   * des deux cotes.
+   */
   const CODES_ABSENCE = [
+    { code: 'CP', libelle: 'Conges payes' },
+    { code: 'RTT', libelle: 'RTT' },
     { code: 'ACH', libelle: 'Autre chantier' },
     { code: 'F', libelle: 'Jour ferie' },
     { code: 'NJ', libelle: 'Absence NON justifiee' },
@@ -508,9 +531,8 @@
         }
         // Un ferie travaille porte legitimement les deux : le code dit que la
         // journee etait feriee, les heures ce qu'on y a fait.
-        if (minutes > 0 && code && !CODES_AVEC_HEURES.includes(code)) {
-          alerte(`${nom} - ${JOURS[j]} : heures ET code absence "${code}" saisis simultanement.`, { ligne: index, jour: j });
-        }
+        // Heures et motif se completent : les heures sont ce qui a ete
+        // travaille, le motif couvre le reste de la journee.
         if (minutes > 12 * 60) {
           alerte(`${nom} - ${JOURS[j]} : ${versTexte(minutes)} sur la journee, a confirmer.`, { ligne: index, jour: j });
         }
