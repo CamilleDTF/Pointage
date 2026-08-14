@@ -15,6 +15,32 @@
 let ficheCourante = null;
 let reference = null;
 
+/*
+ * Recharge la fiche affichee.
+ *
+ * Le code venait du tableau de bord, ou `charger()` relisait la semaine
+ * entiere. Ici il n'y a qu'une fiche : la relire suffit, et c'est meme la
+ * seule chose juste — recharger sept fiches pour en rafraichir une etait deja
+ * du gaspillage la-bas.
+ */
+async function charger() {
+  const { fiche } = await API.get(`/api/fiches/${ficheCourante.id}`);
+  ficheCourante = fiche;
+  fichesChargees.set(fiche.id, fiche);
+  const bloc = construireFiche(fiche);
+  $('fiche').innerHTML = '';
+  $('fiche').appendChild(bloc);
+}
+
+/*
+ * La fiche telle qu'elle a ete lue, pour savoir quoi renvoyer au serveur.
+ *
+ * Le tableau de bord en tenait une par fiche depliee ; il n'y en a qu'une ici,
+ * mais la table est conservee : `enregistrerFiche` s'en sert, et la changer
+ * n'apporterait rien.
+ */
+const fichesChargees = new Map();
+
 const $ = (id) => document.getElementById(id);
 
 async function demarrer() {
@@ -34,16 +60,10 @@ async function demarrer() {
     return;
   }
 
-  const { fiche } = await API.get(`/api/fiches/${id}`);
-  ficheCourante = fiche;
-  $('entete-fiche').textContent = `${fiche.chef_nom} — semaine ${fiche.semaine}/${fiche.annee}`;
-
-  const bloc = construireFiche(fiche);
-  $('fiche').innerHTML = '';
-  $('fiche').appendChild(bloc);
-  // Sur sa propre page, la fiche est deja ce qu'on est venu voir : elle s'ouvre.
-  const repli = bloc.querySelector('details');
-  if (repli) repli.open = true;
+  ficheCourante = { id };
+  await charger();
+  $('entete-fiche').textContent =
+    `${ficheCourante.chef_nom} — semaine ${ficheCourante.semaine}/${ficheCourante.annee}`;
 }
 
 /* Les deux boutons de l'en-tete, qui ne dependent pas de la fiche. */
@@ -179,7 +199,16 @@ function construireFiche(fiche) {
   const bloc = document.createElement('details');
   bloc.className = 'carte';
   bloc.id = `fiche-${fiche.id}`;
-  bloc.open = fiche.statut === 'soumise';
+  /*
+   * Toujours ouverte.
+   *
+   * Le repli datait du tableau de bord, ou quatre fiches s'empilaient : seule
+   * celle qui attendait une decision s'ouvrait. Sur son propre ecran, la fiche
+   * est ce qu'on est venu voir. Repliee, elle cachait ses boutons — « Ouvrir un
+   * rectificatif » etait dans le DOM, mais invisible, et cliquer dessus ne
+   * faisait rien parce qu'on ne pouvait pas cliquer dessus.
+   */
+  bloc.open = true;
 
   const lignes = fiche.lignes.filter((l) => l.nom_affiche.trim());
   /*
