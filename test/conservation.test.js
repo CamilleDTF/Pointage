@@ -92,7 +92,13 @@ test('un salarie sorti depuis plus de cinq ans est propose', () => {
   assert.equal(trouve.nom, 'MARTIN');
 });
 
-test('un salarie parti recemment n est pas encore concerne', () => {
+/*
+ * Un sorti recent figure dans la liste — on doit pouvoir verifier que sa sortie
+ * a bien ete enregistree — mais il n'est pas encore effacable. La liste ne
+ * montrait que les effacables : quelqu'un parti le mois dernier n'apparaissait
+ * nulle part, et rien ne disait quand son tour viendrait.
+ */
+test('un salarie parti recemment figure dans la liste sans etre effacable', () => {
   const recent = inserer.run('A3', 'NOEL', 'Sophie', chef).lastInsertRowid;
   const fiche = F.obtenirOuCreerFicheSemaine(chef, new Date().getFullYear(), 20);
   F.enregistrerFiche(
@@ -102,7 +108,10 @@ test('un salarie parti recemment n est pas encore concerne', () => {
   );
   faireSortir(recent);
 
-  assert.equal(C.candidats().some((s) => s.id === recent), false, 'ses heures sont trop fraiches');
+  const entree = C.candidats().find((s) => s.id === recent);
+  assert.ok(entree, 'un sorti recent doit rester visible');
+  assert.equal(entree.effacable, false, 'ses heures sont trop fraiches');
+  assert.ok(entree.effacableLe, 'son echeance doit etre annoncee');
 });
 
 /*

@@ -438,6 +438,39 @@ window.changerChantier = async (id) => {
  * Le selecteur de chantiers. Il ne s'affiche qu'a partir de deux : une semaine
  * ordinaire n'a rien a choisir, et un onglet unique ne ferait qu'encombrer.
  */
+/*
+ * Ce que le conducteur de travaux a change, sur la fiche elle-meme.
+ *
+ * Le chef le lisait en haut de son ecran, dans « a votre attention », puis
+ * ouvrait la fiche : plus rien. Il fallait retenir « ALIZAI Rafiullah mardi :
+ * 0h00 -> 5h00 » en descendant, et le retrouver de tete dans une grille de
+ * onze lignes sur sept jours. Ce sont ses operateurs qui ont signe, et c'est
+ * lui qu'on interrogera si un montant surprend : la correction doit etre la ou
+ * il travaille.
+ */
+const INTITULES_RELEVE = {
+  correction_conducteur: 'a corrigé vos heures',
+  correction_rectificatif: 'a corrigé vos heures',
+};
+
+function afficherCorrectionsRecues() {
+  const zone = $('corrections-recues');
+  if (!zone) return;
+
+  const releves = (fiche.journal || []).filter((e) => INTITULES_RELEVE[e.action]);
+  zone.innerHTML = releves
+    .slice()
+    .reverse() // le journal arrive du plus recent : on le remet dans l'ordre vecu
+    .map(
+      (e) => `<div class="corrections-conducteur">
+        <strong>${echapper(e.auteur || 'Le conducteur de travaux')} ${INTITULES_RELEVE[e.action]}</strong>
+        le ${echapper(dateFrancaise(e.horodatage))} :
+        ${echapper(e.detail.split(' ; ').join('\n'))}
+      </div>`
+    )
+    .join('');
+}
+
 function afficherChantiers() {
   const bloc = $('bloc-chantiers');
   if (!bloc) return;
@@ -486,6 +519,8 @@ function afficher() {
   const motif = $('motif-rejet');
   motif.classList.toggle('masque', fiche.statut !== 'rejetee' || !fiche.motif_rejet);
   motif.textContent = fiche.motif_rejet ? `Renvoyée par le directeur : ${fiche.motif_rejet}` : '';
+
+  afficherCorrectionsRecues();
 
   for (const champ of document.querySelectorAll('[data-entete]')) {
     champ.value = fiche[champ.dataset.entete] || '';

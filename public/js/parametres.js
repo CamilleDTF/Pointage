@@ -397,33 +397,54 @@ async function chargerConservation() {
   const ans = Math.round(donnees.dureeMois / 12);
   $('aide-conservation').innerHTML =
     `Durée de conservation retenue : <strong>${ans} ans</strong> après le dernier pointage `
-    + `(${donnees.dureeMois} mois). Seuls les salariés <strong>sortis de l'effectif</strong> `
-    + 'et sans activité depuis cette durée apparaissent ici.';
+    + `(${donnees.dureeMois} mois). Tous les salariés <strong>sortis de l'effectif</strong> `
+    + 'figurent ici ; chacun devient effaçable à l’échéance indiquée.';
 
   const corps = $('table-conservation').querySelector('tbody');
   if (!donnees.candidats.length) {
-    corps.innerHTML = '<tr><td colspan="4" class="vide">Personne n\'est concerné pour l\'instant.</td></tr>';
+    corps.innerHTML = '<tr><td colspan="5" class="vide">Personne n\'est sorti de l\'effectif.</td></tr>';
   } else {
     corps.innerHTML = donnees.candidats
       .map((s) => {
         const derniere = s.derniere.periode
           ? `semaine ${String(s.derniere.periode).slice(4)} / ${String(s.derniere.periode).slice(0, 4)}`
           : s.derniere.date || 'aucun pointage';
-        return `<tr>
-          <td>${echapper(`${s.nom} ${s.prenom}`.trim())}</td>
+        const nom = echapper(`${s.nom} ${s.prenom}`.trim());
+        return `<tr${s.effacable ? '' : ' style="opacity:.72"'}>
+          <td>${nom}</td>
           <td>${echapper(s.matricule || '—')}</td>
+          <td>${echapper(s.productif === 0 ? 'Non productif' : 'Chantier')}</td>
           <td>${echapper(derniere)}</td>
-          <td><button class="petit danger" onclick="anonymiser(${s.id}, '${echapper(`${s.nom} ${s.prenom}`.trim())}')">Anonymiser</button></td>
+          <td>${
+            s.effacable
+              ? `<button class="petit danger" onclick="anonymiser(${s.id}, '${nom}')">Anonymiser</button>`
+              : `<span class="aide">à conserver jusqu’au ${
+                  s.effacableLe ? echapper(dateFrancaise(s.effacableLe)) : '—'
+                }</span>`
+          }</td>
         </tr>`;
       })
       .join('');
   }
 
-  // La liste du dossier : tout le monde, y compris les personnes deja sorties.
-  const { salaries } = await API.get('/api/admin/utilisateurs');
-  $('dossier-salarie').innerHTML = salaries
-    .map((s) => `<option value="${s.id}">${echapper(`${s.nom} ${s.prenom}`.trim())}${s.actif ? '' : ' (sorti)'}</option>`)
-    .join('');
+  /*
+   * La liste du dossier : tout le monde, y compris les sortis, mais range.
+   *
+   * Les deux populations etaient melangees dans une seule liste alphabetique :
+   * un chef qui cherchait un operateur tombait sur la comptable, et rien ne
+   * disait laquelle des deux on tenait. Ce sont deux effectifs distincts —
+   * l'un pointe sur des fiches, l'autre est a 7 h par jour ouvre — et le
+   * dossier qu'on remet n'a pas le meme contenu.
+   */
+  const { salariesTous } = await API.get('/api/admin/utilisateurs');
+  const option = (s) =>
+    `<option value="${s.id}">${echapper(`${s.nom} ${s.prenom}`.trim())}${s.actif ? '' : ' (sorti)'}</option>`;
+  const groupe = (intitule, gens) =>
+    gens.length ? `<optgroup label="${intitule} (${gens.length})">${gens.map(option).join('')}</optgroup>` : '';
+
+  $('dossier-salarie').innerHTML =
+    groupe('Personnel de chantier', salariesTous.filter((s) => s.productif !== 0))
+    + groupe('Personnel non productif', salariesTous.filter((s) => s.productif === 0));
 }
 
 window.anonymiser = async (id, nom) => {

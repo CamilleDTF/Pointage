@@ -60,6 +60,15 @@ function derniereActivite(salarieId) {
  * meme s'il n'a pas ete pointe depuis longtemps — c'est une sortie d'effectif
  * qu'on traite, pas une absence.
  */
+/*
+ * Les salaries sortis de l'effectif, tous, et non les seuls effacables.
+ *
+ * L'ecran ne listait que ceux dont le delai etait echu : quelqu'un parti le
+ * mois dernier n'apparaissait nulle part, et rien ne disait quand il
+ * deviendrait effacable. On ne pouvait donc ni verifier qu'une sortie avait
+ * bien ete enregistree, ni prevoir la purge. Chacun porte desormais son
+ * echeance, et le bouton n'apparait que le jour ou il a un sens.
+ */
 function candidats(maintenant = new Date()) {
   const limite = new Date(maintenant);
   limite.setMonth(limite.getMonth() - DUREE_CONSERVATION_MOIS);
@@ -69,6 +78,22 @@ function candidats(maintenant = new Date()) {
   // du mois, ce qui reste du bon cote de la borne a quelques jours pres.
   const periodeLimite = anneeLimite * 100 + (moisLimite === 1 ? 1 : Math.floor((moisLimite - 1) * 4.34));
 
+  /* La date a laquelle une derniere activite cesse d'etre conservee. */
+  const echeance = (derniere) => {
+    let depart = derniere.date || null;
+    if (!depart && derniere.periode) {
+      // Une periode « AAAASS » : on retient le premier du mois approchant.
+      const annee = Math.floor(derniere.periode / 100);
+      const semaine = derniere.periode % 100;
+      const mois = Math.min(12, Math.max(1, Math.ceil(semaine / 4.34)));
+      depart = `${annee}-${String(mois).padStart(2, '0')}-01`;
+    }
+    if (!depart) return null;
+    const d = new Date(`${depart}T00:00:00Z`);
+    d.setMonth(d.getMonth() + DUREE_CONSERVATION_MOIS);
+    return d.toISOString().slice(0, 10);
+  };
+
   return db
     .prepare(
       'SELECT id, matricule, nom, prenom, actif, productif FROM salaries WHERE actif = 0 AND anonymise_le IS NULL ORDER BY nom, prenom'
@@ -76,12 +101,14 @@ function candidats(maintenant = new Date()) {
     .all()
     .map((s) => {
       const derniere = derniereActivite(s.id);
-      return { ...s, derniere };
-    })
-    .filter((s) => {
-      const parFiche = s.derniere.periode === null || s.derniere.periode < periodeLimite;
-      const parJour = !s.derniere.date || s.derniere.date < limiteIso;
-      return parFiche && parJour;
+      const parFiche = derniere.periode === null || derniere.periode < periodeLimite;
+      const parJour = !derniere.date || derniere.date < limiteIso;
+      return {
+        ...s,
+        derniere,
+        effacable: parFiche && parJour,
+        effacableLe: echeance(derniere),
+      };
     });
 }
 

@@ -74,6 +74,25 @@ routes.get('/api/admin/utilisateurs', A.exigerAdministration, (req, res) => {
         )
         .all()
     ),
+
+    /*
+     * Tout le monde, pour le dossier qu'on remet a une personne qui le demande.
+     *
+     * `salaries` ci-dessus s'arrete au personnel de chantier, parce que le
+     * tableau de l'effectif ne montre que lui. Mais le droit d'acces ne
+     * distingue pas les deux populations : une comptable a le meme droit a son
+     * dossier qu'un operateur, et elle n'apparaissait dans aucune liste.
+     */
+    salariesTous: sansTaux(
+      req,
+      db
+        .prepare(
+          `SELECT s.*, u.nom AS chef_nom FROM salaries s
+             LEFT JOIN utilisateurs u ON u.id = s.chef_id
+            ORDER BY s.nom, s.prenom`
+        )
+        .all()
+    ),
   });
 });
 
