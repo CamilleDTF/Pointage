@@ -69,6 +69,30 @@ routes.put('/api/non-productif/jour', A.exigerDirecteur, (req, res) => {
   );
 });
 
+/*
+ * Le meme ecart, sur toute une periode.
+ *
+ * Un accident du travail dure trois semaines. Il fallait ouvrir quinze fois la
+ * meme fenetre, case par case — et tout recommencer si l'on s'etait trompe de
+ * motif. Une absence se pense « du 5 au 23 ».
+ */
+routes.put('/api/non-productif/periode', A.exigerDirecteur, (req, res) => {
+  repondre(
+    res,
+    NP.declarerPeriode(
+      {
+        salarieId: req.body.salarie_id,
+        debut: req.body.debut,
+        fin: req.body.fin,
+        code: req.body.code,
+        gd: req.body.gd,
+        minutes: req.body.minutes,
+      },
+      req.utilisateur
+    )
+  );
+});
+
 routes.post('/api/non-productif/primes', A.exigerDirecteur, (req, res) => {
   // Poser une prime, c'est ecrire un montant : coffre ouvert, il faut la cle,
   // sinon la somme resterait en clair a cote de celles qu'on vient de sceller.

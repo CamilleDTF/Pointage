@@ -259,11 +259,19 @@ function ecrireFeuilleSalarie(ws, salarie, ligneDansTotal, ligneTotalGenerale, f
 
   // Version publique : la grille des heures et des primes s'arrete ici. Le bloc
   // de paie, seul endroit ou apparaissent des montants, n'est pas ecrit.
-  if (financier) ecrireBlocPaie(ws, ligneDansTotal, ligneTotalGenerale);
+  if (financier) ecrireBlocPaie(ws, ligneDansTotal, ligneTotalGenerale, bareme);
 }
 
-/** Bloc de calcul de la paie, sous la grille : formules du classeur d'origine. */
-function ecrireBlocPaie(ws, ligneDansTotal, ligneTotalGenerale) {
+/*
+ * Bloc de calcul de la paie, sous la grille : formules du classeur d'origine.
+ *
+ * `bareme` doit etre passe. Il ne l'etait pas : la fonction le lisait comme une
+ * variable libre, et l'export de la version direction tombait sur
+ * « bareme is not defined » — une erreur 500 sans autre explication. Rien ne
+ * l'avait vu parce qu'aucun test ne descendait jusqu'aux formules du classeur :
+ * on verifiait que le fichier partait, pas ce qu'il contenait.
+ */
+function ecrireBlocPaie(ws, ligneDansTotal, ligneTotalGenerale, bareme = T.DEFAUTS) {
   const taux = `Total!$AA$${ligneDansTotal}`;
 
   const libelles = [

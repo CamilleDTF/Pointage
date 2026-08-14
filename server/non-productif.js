@@ -364,10 +364,70 @@ function paieDuMois(annee, mois, cleCoffre = null) {
   };
 }
 
+/*
+ * Declarer un ecart sur toute une periode, et non jour par jour.
+ *
+ * Un accident du travail dure trois semaines ; un conge, deux. Il fallait
+ * cliquer quinze cases l'une apres l'autre, en ouvrant quinze fois la meme
+ * fenetre — et recommencer si l'on s'etait trompe de motif. Une absence se
+ * pense « du 5 au 23 », pas « le 5, puis le 6, puis le 7 ».
+ *
+ * Les samedis et dimanches sont sautes : ils ne sont pas travailles, et poser
+ * une absence dessus ferait apparaitre des journees d'arret la ou personne
+ * n'etait attendu. Les jours deja renseignes sont ecrases — declarer une
+ * periode, c'est dire ce qui vaut pour elle.
+ */
+function declarerPeriode({ salarieId, debut, fin, code, gd, minutes }, utilisateur) {
+  const jour = /^\d{4}-\d{2}-\d{2}$/;
+  if (!jour.test(String(debut || '')) || !jour.test(String(fin || ''))) {
+    return { erreur: 'Periode invalide : indiquez une date de debut et une date de fin.', code: 400 };
+  }
+  if (fin < debut) {
+    return { erreur: 'La date de fin precede la date de debut.', code: 400 };
+  }
+
+  // Une periode d'un an couvre deja tous les cas reels ; au-dela, c'est une
+  // faute de frappe qu'il vaut mieux refuser que d'ecrire trois cent soixante
+  // -cinq lignes.
+  const depart = new Date(`${debut}T00:00:00Z`);
+  const arrivee = new Date(`${fin}T00:00:00Z`);
+  if ((arrivee - depart) / 86400000 > 366) {
+    return { erreur: 'Periode trop longue : un an au maximum.', code: 400 };
+  }
+
+  const journees = [];
+  for (let d = new Date(depart); d <= arrivee; d.setUTCDate(d.getUTCDate() + 1)) {
+    const jourSemaine = d.getUTCDay();
+    if (jourSemaine === 0 || jourSemaine === 6) continue; // samedi, dimanche
+    journees.push(d.toISOString().slice(0, 10));
+  }
+
+  if (!journees.length) {
+    return { erreur: 'Cette periode ne contient aucun jour ouvre.', code: 400 };
+  }
+
+  let dernier = null;
+  const poser = db.transaction(() => {
+    for (const date of journees) {
+      dernier = declarerJour({ salarieId, date, code, gd, minutes }, utilisateur);
+      if (dernier && dernier.erreur) throw Object.assign(new Error(dernier.erreur), { reponse: dernier });
+    }
+  });
+
+  try {
+    poser();
+  } catch (e) {
+    return e.reponse || { erreur: e.message, code: 400 };
+  }
+
+  return { ok: true, jours: journees.length, debut: journees[0], fin: journees[journees.length - 1] };
+}
+
 module.exports = {
   moisComplet,
   joursDuMois,
   declarerJour,
+  declarerPeriode,
   ajouterPrime,
   supprimerPrime,
   valoriser,

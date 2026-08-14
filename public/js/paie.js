@@ -530,7 +530,22 @@ function ouvrirJour(salarieId, date) {
         seulement ce qui s'en écarte.
       </p>
 
+      <!--
+        Du … au …, plutot que case par case.
+
+        Un accident du travail dure trois semaines : il fallait ouvrir quinze
+        fois cette fenetre. Les deux dates valent par defaut le jour clique,
+        donc declarer une seule journee ne demande rien de plus qu'avant.
+      -->
       <div class="grille deux">
+        <div>
+          <label for="j-debut">Du</label>
+          <input id="j-debut" type="date" value="${date}">
+        </div>
+        <div>
+          <label for="j-fin">Au</label>
+          <input id="j-fin" type="date" value="${date}">
+        </div>
         <div>
           <label for="j-code">Absence</label>
           <select id="j-code"><option value="">— aucune —</option>${codes}</select>
@@ -576,27 +591,71 @@ function ouvrirJour(salarieId, date) {
    * c'est ce que la paie additionne. La conversion se fait ici, une fois.
    */
   const REFERENCE = Regles.DUREE_JOURNEE_REFERENCE_MINUTES;
+  const champDebut = fenetre.querySelector('#j-debut');
+  const champFin = fenetre.querySelector('#j-fin');
   const champCode = fenetre.querySelector('#j-code');
   const champHeures = fenetre.querySelector('#j-heures');
   const libelle = fenetre.querySelector('#j-libelle');
   const explication = fenetre.querySelector('#j-explication');
 
+  /* Combien de jours ouvres la periode couvre-t-elle ? */
+  const joursOuvres = () => {
+    const debut = champDebut.value;
+    const fin = champFin.value;
+    if (!debut || !fin || fin < debut) return 0;
+    let n = 0;
+    const d = new Date(`${debut}T00:00:00Z`);
+    const arrivee = new Date(`${fin}T00:00:00Z`);
+    while (d <= arrivee) {
+      const j = d.getUTCDay();
+      if (j !== 0 && j !== 6) n += 1;
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+    return n;
+  };
+
   const majFormulaire = () => {
     const absent = Boolean(champCode.value);
+    const nb = joursOuvres();
+    const surUnJour = nb <= 1;
+
     libelle.textContent = absent ? 'Durée de l’absence' : 'Heures travaillées';
     champHeures.placeholder = absent ? 'journée entière par défaut' : '7h00 par défaut';
 
-    const saisie = champHeures.value.trim();
-    if (!absent) {
-      explication.textContent = '';
+    /*
+     * Une duree partielle ne se comprend que sur une seule journee. « Du 5 au
+     * 23, trois heures et demie » ne veut rien dire : ce serait trois heures et
+     * demie chaque jour, ce que personne ne saisit ainsi. Sur plusieurs jours,
+     * la periode est donc pleine, et le champ se ferme en le disant.
+     */
+    champHeures.disabled = !surUnJour;
+    if (!surUnJour) champHeures.value = '';
+
+    if (champDebut.value && champFin.value && champFin.value < champDebut.value) {
+      explication.textContent = 'La date de fin précède la date de début.';
       return;
     }
+    if (!nb) {
+      explication.textContent = 'Cette période ne contient aucun jour ouvré.';
+      return;
+    }
+    if (!absent) {
+      explication.textContent = surUnJour ? '' : `${nb} jours ouvrés — samedis et dimanches exclus.`;
+      return;
+    }
+    if (!surUnJour) {
+      explication.textContent = `${nb} journées entières d’absence — samedis et dimanches exclus.`;
+      return;
+    }
+    const saisie = champHeures.value.trim();
     const duree = saisie === '' ? REFERENCE : versMinutes(saisie);
     const restant = Math.max(0, REFERENCE - duree);
     explication.textContent = restant
       ? `${versTexte(duree)} d’absence, ${versTexte(restant)} travaillées ce jour-là.`
       : 'Journée entière d’absence.';
   };
+
+  for (const champ of [champDebut, champFin]) champ.addEventListener('change', majFormulaire);
 
   // A l'ouverture, un motif deja pose signifie que la valeur stockee est en
   // heures travaillees : on la retourne pour l'afficher en duree d'absence.
@@ -608,13 +667,21 @@ function ouvrirJour(salarieId, date) {
   champHeures.addEventListener('input', majFormulaire);
   majFormulaire();
 
-  const envoyer = async (corps) => {
+  const envoyer = async (corps, periode) => {
+    const debut = periode ? champDebut.value : date;
+    const fin = periode ? champFin.value : date;
     try {
-      await API.put('/api/non-productif/jour', { salarie_id: ligne.id, date, ...corps });
+      const r = await API.put('/api/non-productif/periode', {
+        salarie_id: ligne.id,
+        debut,
+        fin,
+        ...corps,
+      });
       fermer();
+      if (r && r.jours > 1) message(`${r.jours} journées déclarées.`, 'succes', 3500);
       await charger();
     } catch (e) {
-      message(e.message, 'erreur');
+      message(e.message, 'erreur', 7000);
     }
   };
 
@@ -625,18 +692,20 @@ function ouvrirJour(salarieId, date) {
   fenetre.querySelector('[data-valider]').addEventListener('click', () => {
     const code = champCode.value;
     const saisie = champHeures.value.trim();
+    const surUnJour = joursOuvres() <= 1;
 
     // Ce qui part au serveur reste des heures TRAVAILLEES : c'est ce que la
     // paie additionne. La duree d'absence n'existe qu'a l'ecran.
     let minutes;
     if (code) {
-      const duree = saisie === '' ? REFERENCE : versMinutes(saisie);
+      // Sur plusieurs jours, chaque journee est pleine : rien de travaille.
+      const duree = !surUnJour || saisie === '' ? REFERENCE : versMinutes(saisie);
       minutes = Math.max(0, REFERENCE - duree);
     } else {
       minutes = saisie === '' ? undefined : versMinutes(saisie);
     }
 
-    envoyer({ code, gd: fenetre.querySelector('#j-gd').value, minutes });
+    envoyer({ code, gd: fenetre.querySelector('#j-gd').value, minutes }, true);
   });
 }
 
