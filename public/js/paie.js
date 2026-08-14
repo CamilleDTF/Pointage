@@ -544,9 +544,10 @@ function ouvrirJour(salarieId, date) {
           </select>
         </div>
         <div>
-          <label for="j-heures">Heures travaillées</label>
+          <label for="j-heures"><span id="j-libelle">Heures travaillées</span></label>
           <input id="j-heures" value="${jour.etat === 'travaille' ? '' : echapper(versSaisie(jour.minutes))}"
                  placeholder="7h00 par défaut" inputmode="decimal">
+          <p class="aide suite" id="j-explication"></p>
         </div>
       </div>
 
@@ -561,6 +562,51 @@ function ouvrirJour(salarieId, date) {
 
   const fermer = () => fenetre.remove();
   fenetre.querySelector('[data-fermer]').addEventListener('click', fermer);
+
+  /*
+   * Le champ demande la duree de l'ABSENCE, et non les heures travaillees.
+   *
+   * On y lisait « Heures travaillees » meme apres avoir choisi « CP — Conges
+   * payes » : pour poser une demi-journee de conge, il fallait calculer le
+   * complement de tete — 7 h moins 3 h 30 — et saisir le reste. Personne ne
+   * pense « j'ai travaille 3 h 30 » quand il pose un demi-jour de conge : on
+   * pense « une demi-journee ».
+   *
+   * La journee de reference reste stockee en heures travaillees, parce que
+   * c'est ce que la paie additionne. La conversion se fait ici, une fois.
+   */
+  const REFERENCE = Regles.DUREE_JOURNEE_REFERENCE_MINUTES;
+  const champCode = fenetre.querySelector('#j-code');
+  const champHeures = fenetre.querySelector('#j-heures');
+  const libelle = fenetre.querySelector('#j-libelle');
+  const explication = fenetre.querySelector('#j-explication');
+
+  const majFormulaire = () => {
+    const absent = Boolean(champCode.value);
+    libelle.textContent = absent ? 'Durée de l’absence' : 'Heures travaillées';
+    champHeures.placeholder = absent ? 'journée entière par défaut' : '7h00 par défaut';
+
+    const saisie = champHeures.value.trim();
+    if (!absent) {
+      explication.textContent = '';
+      return;
+    }
+    const duree = saisie === '' ? REFERENCE : versMinutes(saisie);
+    const restant = Math.max(0, REFERENCE - duree);
+    explication.textContent = restant
+      ? `${versTexte(duree)} d’absence, ${versTexte(restant)} travaillées ce jour-là.`
+      : 'Journée entière d’absence.';
+  };
+
+  // A l'ouverture, un motif deja pose signifie que la valeur stockee est en
+  // heures travaillees : on la retourne pour l'afficher en duree d'absence.
+  if (jour.code) {
+    const travaillees = Number(jour.minutes) || 0;
+    champHeures.value = travaillees ? versSaisie(Math.max(0, REFERENCE - travaillees)) : '';
+  }
+  champCode.addEventListener('change', majFormulaire);
+  champHeures.addEventListener('input', majFormulaire);
+  majFormulaire();
 
   const envoyer = async (corps) => {
     try {
@@ -577,12 +623,20 @@ function ouvrirJour(salarieId, date) {
   fenetre.querySelector('[data-effacer]').addEventListener('click', () => envoyer({ code: '', gd: '', minutes: null }));
 
   fenetre.querySelector('[data-valider]').addEventListener('click', () => {
-    const saisie = fenetre.querySelector('#j-heures').value.trim();
-    envoyer({
-      code: fenetre.querySelector('#j-code').value,
-      gd: fenetre.querySelector('#j-gd').value,
-      minutes: saisie === '' ? undefined : versMinutes(saisie),
-    });
+    const code = champCode.value;
+    const saisie = champHeures.value.trim();
+
+    // Ce qui part au serveur reste des heures TRAVAILLEES : c'est ce que la
+    // paie additionne. La duree d'absence n'existe qu'a l'ecran.
+    let minutes;
+    if (code) {
+      const duree = saisie === '' ? REFERENCE : versMinutes(saisie);
+      minutes = Math.max(0, REFERENCE - duree);
+    } else {
+      minutes = saisie === '' ? undefined : versMinutes(saisie);
+    }
+
+    envoyer({ code, gd: fenetre.querySelector('#j-gd').value, minutes });
   });
 }
 

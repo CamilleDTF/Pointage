@@ -81,9 +81,39 @@ app.use((req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
+/*
+ * Une panne interne, rendue racontable.
+ *
+ * « Erreur interne du serveur. » ne dit rien a la personne devant l'ecran, et
+ * rien non plus a celle qui devra la corriger : la trace partait dans une
+ * fenetre noire que l'on ferme, ou nulle part quand l'application tourne en
+ * service. Chaque panne recoit donc une reference courte, ecrite avec sa trace
+ * complete dans data/erreurs.log, et affichee a l'ecran. « Erreur interne
+ * (ref. A7F3) » se recopie dans un message ; « erreur interne » ne se recopie
+ * pas.
+ */
 app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ erreur: 'Erreur interne du serveur.' });
+  const reference = require('crypto').randomBytes(2).toString('hex').toUpperCase();
+  const quand = new Date().toISOString();
+  const entree =
+    `\n[${quand}] reference ${reference}\n`
+    + `  ${req.method} ${req.originalUrl}\n`
+    + `  utilisateur : ${req.utilisateur ? `${req.utilisateur.identifiant} (${req.utilisateur.role})` : 'non connecte'}\n`
+    + `  ${err && err.stack ? err.stack : String(err)}\n`;
+
+  console.error(entree);
+  try {
+    require('fs').appendFileSync(path.join(require('./db').DATA_DIR, 'erreurs.log'), entree);
+  } catch {
+    // Journal indisponible : la console reste, et la reponse part quand meme.
+  }
+
+  res.status(500).json({
+    erreur:
+      `Erreur interne (réf. ${reference}). Le détail est dans le fichier erreurs.log `
+      + 'du dossier des données — transmettez-le pour que la cause soit identifiée.',
+    reference,
+  });
 });
 
 if (require.main === module) {
