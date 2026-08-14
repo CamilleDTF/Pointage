@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10416b">
+  <title>Pointage — Fiche</title>
+  <link rel="icon" href="/icone.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="appbar">
+    <div class="titre">
+      <span id="entete-fiche">Fiche de pointage</span>
+      <small id="entete-nom">…</small>
+    </div>
+    <nav>
+      <button class="petit" id="btn-retour" type="button">◀ Tableau de bord</button>
+      <span class="separateur-nav"></span>
+      <button class="petit discret" id="btn-quitter" type="button">Quitter</button>
+    </nav>
+  </header>
+
+  <!--
+    Une fiche, une adresse.
+
+    Elles se depliaient toutes sur le tableau de bord, les unes sous les autres :
+    quatre grilles de onze lignes sur sept jours qu'il fallait traverser pour
+    atteindre le suivi. Ouvrir une fiche est une decision — elle a donc son
+    ecran, et le tableau de bord retrouve sa hauteur.
+  -->
+  <main>
+    <div id="fiche"></div>
+  </main>
+
+  <script src="/js/regles.js"></script>
+  <script src="/js/commun.js"></script>
+  <script src="/js/fiche.js"></script>
+</body>
+</html>

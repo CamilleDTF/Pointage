@@ -16,60 +16,64 @@
       <small id="entete-nom">…</small>
     </div>
     <nav>
-      <button class="petit" id="btn-mensuel-haut" type="button">Tableau mensuel</button>
-      <button class="petit" id="btn-calendrier" type="button">Calendrier</button>
-      <button class="petit" id="btn-non-productif" type="button">Non productif</button>
-      <span class="separateur-nav"></span>
       <button class="petit discret" id="btn-admin" type="button">Paramètres</button>
       <button class="petit discret" id="btn-quitter" type="button">Quitter</button>
     </nav>
   </header>
 
   <!--
-    L'ordre de cet ecran repond a une question, dans cet ordre : de quelle
-    semaine parle-t-on, qu'est-ce qui m'attend, et les fiches. Le suivi et la
-    paie du mois viennent apres, en retrait : on les consulte, on n'y agit pas
-    chaque matin.
+    L'accueil repond a trois questions, dans cet ordre : de quelle semaine
+    parle-t-on, qu'est-ce qui m'attend, et ou en est chacun.
+
+    Les fiches n'y sont plus depliees. Elles occupaient quatre grilles de saisie
+    de onze lignes sur sept jours — sept mille pixels a traverser pour atteindre
+    le suivi, qu'on venait justement consulter. Une fiche s'ouvre desormais sur
+    son propre ecran, quand on a decide de s'en occuper.
+
+    La barre de navigation a fondu de cinq boutons a deux : le mois a une seule
+    porte, en bas, au lieu de quatre destinations aux noms voisins.
   -->
   <main>
     <section class="carte">
-      <div class="barre-outils">
-        <div class="rangee">
-          <div class="champ-court">
-            <label for="annee">Année</label>
-            <input id="annee" type="number" min="2020" max="2100" step="1">
-          </div>
-          <div class="champ-court">
-            <label for="semaine">Semaine n°</label>
-            <input id="semaine" type="number" min="1" max="53" step="1">
-          </div>
-          <button class="principal" id="btn-charger" type="button">Afficher</button>
-        </div>
-        <div class="actions">
+      <div class="bandeau-semaine">
+        <span class="quand" id="quand">Semaine —</span>
+        <span class="dates" id="periode"></span>
+        <span class="actions">
           <button class="petit" id="btn-precedente" type="button">◀ Précédente</button>
           <button class="petit" id="btn-suivante" type="button">Suivante ▶</button>
-        </div>
+          <button class="petit" id="btn-autre" type="button">Une autre semaine…</button>
+        </span>
       </div>
-      <p class="aide" id="periode"></p>
+
+      <div class="rangee detache masque" id="choix-semaine">
+        <div class="champ-court">
+          <label for="annee">Année</label>
+          <input id="annee" type="number" min="2020" max="2100" step="1">
+        </div>
+        <div class="champ-court">
+          <label for="semaine">Semaine n°</label>
+          <input id="semaine" type="number" min="1" max="53" step="1">
+        </div>
+        <button class="principal" id="btn-charger" type="button">Afficher</button>
+      </div>
+
+      <div class="jauge-semaine">
+        <div class="piste">
+          <div class="part validee" id="part-validee"></div>
+          <div class="part rendue" id="part-rendue"></div>
+        </div>
+        <p class="legende" id="contexte-semaine"></p>
+      </div>
     </section>
 
     <section class="carte" id="bloc-appels">
       <h2>Ce qui vous attend</h2>
       <div id="appels"></div>
-      <p class="aide detache serree" id="contexte-semaine"></p>
     </section>
 
-    <div id="fiches"></div>
-
-    <!--
-      Le suivi et l'export regardent la meme semaine sous deux angles : ce que
-      chaque chef a rendu, et ce qu'on en sort. Ils tenaient dans deux cartes
-      eloignees l'une de l'autre ; les voici ensemble, et l'export n'occupe plus
-      le haut de l'ecran alors qu'on ne s'en sert qu'une fois la semaine close.
-    -->
-    <section class="carte discrete">
+    <section class="carte">
       <div class="barre-outils detache-apres">
-        <h2 class="serree">Suivi des chefs d'équipe</h2>
+        <h2 class="serree" id="titre-chefs">Les chefs cette semaine</h2>
         <div class="actions">
           <div class="champ-moyen">
             <label for="portee-export">Contenu de l'export</label>
@@ -83,35 +87,28 @@
           <button class="petit" id="btn-export-csv" type="button">Export CSV</button>
         </div>
       </div>
-      <div class="enveloppe-table">
-        <table id="suivi">
-          <thead>
-            <tr>
-              <th>Chef d'équipe</th><th>Chantier</th><th>Ville</th>
-              <th class="num">Salariés</th><th class="num">Total heures</th>
-              <th>État</th><th>Actions</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
+      <div class="chefs" id="chefs"></div>
     </section>
 
-    <section class="carte discrete">
-      <div class="barre-outils">
-        <div>
-          <h2 class="serree">Préparer la paie du mois</h2>
-          <p class="aide suite" id="apercu-mois"></p>
-        </div>
+    <!--
+      Une porte, et non quatre.
+
+      Il y avait ici « Tableau mensuel », « Calendrier du mois », « Non
+      productif » et « Paie non productif » : quatre destinations de meme poids,
+      dont trois se ressemblent par le nom, et rien ne disait laquelle ouvrir ni
+      dans quel ordre. Le mois n'a qu'une question — ou en est la paie.
+    -->
+    <section class="carte">
+      <div class="barre-outils detache-apres">
+        <h2 class="serree">La paie du mois</h2>
         <div class="actions">
-          <button class="petit" id="btn-calendrier-bas" type="button">Calendrier du mois</button>
-          <button class="petit" id="btn-non-productif-bas" type="button">Non productif</button>
-          <button class="petit" id="btn-paie-non-productif" type="button">Paie non productif</button>
-          <button class="principal" id="btn-mensuel" type="button">Tableau mensuel</button>
+          <button class="petit" id="btn-calendrier" type="button">Les congés du mois</button>
+          <button class="petit" id="btn-non-productif" type="button">Non productif</button>
+          <button class="principal" id="btn-mensuel" type="button">Ouvrir la paie</button>
         </div>
       </div>
+      <div id="etat-mois"></div>
     </section>
-
   </main>
 
   <script src="/js/regles.js"></script>

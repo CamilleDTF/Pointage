@@ -1095,3 +1095,88 @@ input[readonly] { background: #f7f9fc; color: var(--gris-texte); }
   font-size: 0.85rem;
   white-space: pre-line;
 }
+
+/* ------------------------- L'accueil de la direction ---------------------- */
+
+/*
+ * La semaine, en tete, et ce qu'elle vaut.
+ *
+ * Deux champs de saisie occupaient cette place en permanence — une annee et un
+ * numero de semaine qu'on remplit trois fois par an. Ils se replient derriere
+ * « une autre semaine… » ; les fleches font le reste.
+ */
+.bandeau-semaine { display: flex; align-items: baseline; gap: var(--e4); flex-wrap: wrap; }
+.bandeau-semaine .quand { font-size: 1.35rem; font-weight: 700; color: var(--bleu); }
+.bandeau-semaine .dates { color: var(--gris-texte); font-size: var(--t-normal); }
+.bandeau-semaine .actions { margin-left: auto; display: flex; gap: var(--e2); flex-wrap: wrap; }
+
+/*
+ * Deux parts et non une : ce qui est valide, et ce qui est rendu sans l'etre.
+ * Un seul remplissage confondrait « le travail est fait » et « le travail est
+ * arrive », qui sont precisement les deux choses a distinguer ici.
+ */
+.jauge-semaine { margin-top: var(--e3); }
+.jauge-semaine .piste {
+  height: 6px; border-radius: 3px; background: var(--gris-bord);
+  overflow: hidden; display: flex; gap: 2px;
+}
+.jauge-semaine .part { height: 100%; transition: width 0.3s; }
+.jauge-semaine .part.validee { background: var(--vert); }
+.jauge-semaine .part.rendue { background: var(--bleu-clair); }
+.jauge-semaine .legende { margin: var(--e2) 0 0; font-size: var(--t-petit); color: var(--gris-texte); }
+
+/* Ce qui vous attend : une action par ligne, et de l'air autour. */
+.appel-l {
+  display: flex; align-items: center; gap: var(--e4);
+  padding: var(--e4); border: 1px solid var(--gris-bord);
+  border-left: 4px solid var(--gris-bord); border-radius: var(--rayon);
+  margin-bottom: var(--e2); background: #fff;
+}
+.appel-l.agir { border-left-color: var(--orange); background: #fffaf3; }
+.appel-l.relancer { border-left-color: var(--rouge); background: #fdf4f3; }
+.appel-l.attendre { border-left-color: var(--bleu-clair); }
+.appel-l .compte {
+  font-size: 2rem; font-weight: 700; line-height: 1; min-width: 2.2rem;
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+.appel-l.agir .compte { color: #b45f09; }
+.appel-l.relancer .compte { color: var(--rouge); }
+.appel-l.attendre .compte { color: var(--bleu); }
+.appel-l .quoi { flex: 1; }
+.appel-l .quoi strong { display: block; font-size: var(--t-grand); }
+.appel-l .quoi .detail { color: var(--gris-texte); font-size: var(--t-normal); }
+
+/* Les chefs, en cartes de meme forme — a la place des fiches depliees. */
+.chefs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--e3); }
+.chef {
+  border: 1px solid var(--gris-bord); border-radius: var(--rayon);
+  padding: var(--e3); background: #fff;
+  display: flex; flex-direction: column; gap: var(--e1);
+}
+.chef .nom { font-weight: 700; }
+.chef .ou { color: var(--gris-texte); font-size: var(--t-petit); min-height: 2.1em; }
+.chef .bas { display: flex; align-items: center; justify-content: space-between; margin: var(--e2) 0; }
+.chef .heures { font-variant-numeric: tabular-nums; font-weight: 600; }
+.chef button { align-self: flex-start; }
+
+/*
+ * L'etat porte un symbole autant qu'une couleur.
+ *
+ * Le vert « validee » et le rouge « rien recu » ne se distinguent pas en vision
+ * deutan — mesure a 4,5 la ou il en faut 8. Ce sont precisement les deux qu'il
+ * ne faut pas confondre, et la couleur seule les ferait lire pareil.
+ */
+.marque {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: var(--t-petit); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.marque .signe { font-size: 0.9em; }
+.marque.verifier { color: #b45f09; }
+.marque.manquante { color: var(--rouge); }
+.marque.validee { color: var(--vert); }
+.marque.visa { color: var(--bleu-clair); }
+.marque.attente { color: var(--gris-texte); }
+
+.rien-a-faire { color: var(--vert); margin: 0; }
+

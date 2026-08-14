@@ -289,12 +289,33 @@ routes.get('/api/export/mois-apercu', A.exigerDirecteur, (req, res) => {
     return res.status(400).json({ erreur: 'Période invalide.' });
   }
   const donnees = M.agregerMois(annee, mois, { statut: req.query.statut || 'validee' });
+
+  /*
+   * Combien de fiches du mois ne sont PAS validees.
+   *
+   * L'apercu disait ce que l'export contiendrait ; il ne disait pas ce qu'il
+   * laisserait dehors. Or le tableau ne compte que les fiches validees : on
+   * pouvait transmettre un mois ampute de trois fiches sans rien voir. Ce
+   * nombre-la est le seul qui previenne avant, plutot qu'apres.
+   */
+  const semaines = donnees.semaines.map((s) => `${s.annee}-${String(s.semaine).padStart(2, '0')}`);
+  const nonValidees = semaines.length
+    ? db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM fiches
+            WHERE statut != 'validee'
+              AND (annee || '-' || substr('0' || semaine, -2)) IN (${semaines.map(() => '?').join(',')})`
+        )
+        .get(...semaines).n
+    : 0;
+
   res.json({
     annee,
     mois,
     semaines: donnees.semaines.map((s) => ({ annee: s.annee, semaine: s.semaine, debut: s.dates[0] })),
     nbSalaries: donnees.salaries.length,
     minutes: donnees.salaries.reduce((s, x) => s + x.minutesMois, 0),
+    nonValidees,
   });
 });
 
