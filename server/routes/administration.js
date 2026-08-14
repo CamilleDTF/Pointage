@@ -17,6 +17,7 @@ const I = require('../indicateurs');
 const T = require('../taux');
 const CONS = require('../conservation');
 const COFFRE = require('../coffre');
+const MES = require('../mise-en-service');
 const C = require('../courriel');
 const { DEBUT_SERVICE, repondre, autoriserMontants } = require('./commun');
 
@@ -457,6 +458,34 @@ routes.get('/api/admin/indicateurs', A.exigerAdministration, (req, res) => {
     delaiJours: I.DELAI_ATTENDU_JOURS,
     chefs: I.indicateursChefs(DEBUT_SERVICE),
   });
+});
+
+/* ---------------------------- Mise en service ------------------------------ */
+
+/*
+ * Ou en est-on, et peut-on tout armer maintenant.
+ *
+ * L'ecran ne DECLARE rien : chaque point est constate — le coffre en
+ * interrogeant la base, le HTTPS en regardant la requete en cours. Une liste
+ * de securites qui s'affirmerait active sans verifier serait pire qu'absente.
+ */
+routes.get('/api/mise-en-service', A.exigerDirecteur, (req, res) => {
+  res.json(MES.constater(req));
+});
+
+routes.post('/api/mise-en-service', A.exigerDirecteur, (req, res) => {
+  const resultat = MES.armer(
+    {
+      phrase: req.body.phrase,
+      question: req.body.question,
+      reponse: req.body.reponse,
+      actuel: req.body.actuel,
+      renouvelerLesCodes: Boolean(req.body.renouvelerLesCodes),
+    },
+    req.utilisateur
+  );
+  if (resultat.erreur) return res.status(resultat.code || 400).json({ erreur: resultat.erreur });
+  return res.json({ ...resultat, etat: MES.constater(req) });
 });
 
 module.exports = routes;

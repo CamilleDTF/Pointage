@@ -279,3 +279,75 @@ test('une valeur alteree en base ne se dechiffre pas en silence', () => {
   const altere = `${scelle.slice(0, -6)}${scelle.slice(-6) === 'AAAAAA' ? 'BBBBBB' : 'AAAAAA'}`;
   assert.equal(COFFRE.dechiffrerMontant(cle, altere), null);
 });
+
+/* ---------------------------- Mise en service ------------------------------ */
+
+/*
+ * Le bouton qui arme tout.
+ *
+ * Ces tests-ci verifient surtout ce que le bouton NE fait PAS : il ne pretend
+ * pas armer le HTTPS, qui ne depend pas de l'application, et il ne se
+ * verrouille pas lui-meme en renouvelant le code de celui qui appuie.
+ */
+test('le constat dit ce qui est arme, sans rien declarer', async () => {
+  const directeur = await connexion('dir', '9999');
+  const etat = await directeur('GET', '/api/mise-en-service');
+  assert.equal(etat.statut, 200);
+
+  const par = Object.fromEntries(etat.donnees.points.map((p) => [p.cle, p]));
+  assert.equal(par.coffre.arme, true, 'le coffre a ete cree plus haut dans ce fichier');
+  assert.equal(par.https.arme, false, 'le test tourne en HTTP simple');
+  assert.equal(par.https.armable, false, "le HTTPS ne s'arme pas depuis l'application");
+  assert.equal(par.separation.arme, true, 'un compte admin existe');
+});
+
+test('armer ne verrouille jamais celui qui appuie', async () => {
+  const directeur = await connexion('dir', '9999');
+
+  const avant = db.prepare("SELECT code_provisoire FROM utilisateurs WHERE identifiant = 'dir'").get();
+  const r = await directeur('POST', '/api/mise-en-service', {
+    question: 'La ville de mon premier chantier ?',
+    reponse: 'Toulouse',
+    actuel: '9999',
+    renouvelerLesCodes: true,
+  });
+  assert.equal(r.statut, 200, JSON.stringify(r.donnees));
+
+  const apres = db.prepare("SELECT code_provisoire FROM utilisateurs WHERE identifiant = 'dir'").get();
+  assert.equal(apres.code_provisoire, avant.code_provisoire, 'le compte qui arme ne doit pas se bloquer');
+
+  const autre = db.prepare("SELECT code_provisoire FROM utilisateurs WHERE identifiant = 'admin'").get();
+  assert.equal(autre.code_provisoire, 1, 'les autres comptes doivent renouveler leur code');
+
+  // La session du directeur tient toujours : c'est tout l'interet.
+  assert.equal((await directeur('GET', '/api/mise-en-service')).statut, 200);
+});
+
+test('la question de reprise posee par la mise en service vaut vraiment', async () => {
+  const question = await fetch(`${base}/api/reprise/question`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifiant: 'dir' }),
+  }).then((r) => r.json());
+  assert.equal(question.definie, true);
+  assert.match(question.question, /premier chantier/);
+});
+
+test('un code actuel faux n arme rien du tout', async () => {
+  const directeur = await connexion('dir', '9999');
+  const r = await directeur('POST', '/api/mise-en-service', {
+    question: 'Une autre question bien assez longue ?',
+    reponse: 'Autre',
+    actuel: '0000',
+    renouvelerLesCodes: false,
+  });
+  assert.equal(r.statut, 401);
+
+  // L'ancienne question n'a pas bouge.
+  const question = await fetch(`${base}/api/reprise/question`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifiant: 'dir' }),
+  }).then((r) => r.json());
+  assert.match(question.question, /premier chantier/);
+});

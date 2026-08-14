@@ -187,6 +187,26 @@ quand les montants le demandent. La direction change donc son code elle-même, e
 retrouve seule par sa **question de reprise** (*Paramètres ▸ Mon compte*), dont la
 réponse est hachée comme un code.
 
+### Tout armer d'un coup — *Paramètres ▸ Mise en service*
+
+Les sécurités se sont ajoutées une par une, chacune avec son écran. Tant qu'on essaie
+l'application, c'est commode de les poser au fur et à mesure. Le jour de la vraie mise
+en service, c'est un piège : il suffit d'en oublier une pour que le reste ne serve à
+rien, et rien ne dit laquelle manque.
+
+L'écran **Mise en service** liste les cinq points, avec leur état **constaté** — le
+coffre est interrogé dans la base, le chiffrement du lien sur la requête en cours.
+Rien n'y est déclaré. Un bouton arme d'un coup ce qui peut l'être.
+
+Trois choses ne peuvent pas être inventées à votre place — la phrase du coffre, la
+question de reprise et sa réponse : les inventer reviendrait à les connaître. Vous les
+saisissez dans le même formulaire, une fois. Une quatrième, le HTTPS, ne dépend pas de
+l'application du tout : elle est signalée, jamais prétendue armée.
+
+Le renouvellement des codes **épargne le compte qui appuie** : se verrouiller
+soi-même au milieu de sa propre mise en service serait une façon pénible de découvrir
+que le bouton fonctionne.
+
 ### Le coffre
 
 Le cloisonnement par les écrans ne protège que ceux qui passent par eux. Une lecture

@@ -35,7 +35,7 @@ function surClic(id, action) {
  * de toute facon — c'est lui qui fait autorite — mais afficher un onglet qui
  * repondrait 403 serait une promesse en trompe-l'oeil. On le retire donc.
  */
-const RESERVE_A_LA_DIRECTION = ['taux', 'coffre'];
+const RESERVE_A_LA_DIRECTION = ['taux', 'coffre', 'miseenservice'];
 let estAdministrateur = false;
 
 async function demarrer() {
@@ -115,7 +115,7 @@ surClic('btn-retour', () => { location.href = '/directeur.html'; });
 surClic('btn-quitter', deconnexion);
 
 /* Les volets de l'ecran Parametres. */
-const PANNEAUX = ['effectif', 'nonproductif', 'comptes', 'conducteurs', 'vehicules', 'taux', 'conservation', 'indicateurs', 'coffre', 'compte'];
+const PANNEAUX = ['effectif', 'nonproductif', 'comptes', 'conducteurs', 'vehicules', 'taux', 'conservation', 'indicateurs', 'miseenservice', 'coffre', 'compte'];
 
 surEvenement('onglets-parametres', 'click', (e) => {
   const onglet = e.target.closest('.onglet');
@@ -139,7 +139,88 @@ function ouvrirPanneau(nom) {
   if (nom === 'indicateurs') chargerIndicateurs();
   if (nom === 'compte') chargerMonCompte();
   if (nom === 'coffre') chargerCoffre();
+  if (nom === 'miseenservice') chargerMiseEnService();
 }
+
+/* ----------------------------- Mise en service ----------------------------- */
+
+/*
+ * L'ecran ne declare rien : chaque ligne vient du serveur, qui a constate. Une
+ * liste de securites qui s'affirmerait active sans verifier serait pire
+ * qu'absente — on s'y fierait.
+ */
+async function chargerMiseEnService() {
+  let etat;
+  try {
+    etat = await API.get('/api/mise-en-service');
+  } catch (e) {
+    $('liste-securites').innerHTML = `<p class="aide" style="color:var(--rouge)">${echapper(e.message)}</p>`;
+    return;
+  }
+
+  $('liste-securites').innerHTML = etat.points
+    .map((p) => `<div class="securite ${p.arme ? 'armee' : p.facultatif ? 'facultative' : 'ouverte'}">
+      <span class="signe">${p.arme ? '✓' : p.facultatif ? '○' : '▲'}</span>
+      <span class="texte">
+        <strong>${echapper(p.intitule)}</strong>
+        <span class="precision">${echapper(p.detail)}${
+          p.horsApplication ? ' <em>Ne se règle pas ici : voir docs/DEPLOIEMENT.md.</em>' : ''
+        }</span>
+      </span>
+    </div>`)
+    .join('');
+
+  // Le formulaire ne s'affiche que s'il reste quelque chose a armer.
+  $('armement').classList.toggle('masque', etat.restantArmable.length === 0);
+  $('resultat-armement').classList.add('masque');
+  if (!etat.restantArmable.includes('coffre')) {
+    // Le coffre existe deja : sa phrase n'a plus rien a faire dans ce formulaire.
+    for (const id of ['mes-phrase', 'mes-phrase2']) {
+      const champ = $(id);
+      if (champ) champ.closest('div').classList.add('masque');
+    }
+  }
+}
+
+surClic('btn-armer', async () => {
+  const aide = $('aide-armement');
+  const phrase = $('mes-phrase').value;
+  if (!$('mes-phrase').closest('div').classList.contains('masque') && phrase !== $('mes-phrase2').value) {
+    aide.textContent = 'Les deux phrases ne sont pas identiques.';
+    aide.style.color = 'var(--rouge)';
+    return;
+  }
+  try {
+    const r = await API.post('/api/mise-en-service', {
+      phrase,
+      question: $('mes-question').value,
+      reponse: $('mes-reponse').value,
+      actuel: $('mes-actuel').value,
+      renouvelerLesCodes: $('mes-renouveler').value === 'oui',
+    });
+    if (r.seance) Paie.poser(r.seance, r.dureeMs);
+
+    for (const id of ['mes-phrase', 'mes-phrase2', 'mes-reponse', 'mes-actuel']) $(id).value = '';
+    $('mes-fait').innerHTML = r.fait.map((f) => `<li>${echapper(f)}</li>`).join('');
+    $('mes-secours').textContent = r.secours || '';
+    $('mes-secours').classList.toggle('masque', !r.secours);
+    $('armement').classList.add('masque');
+    $('resultat-armement').classList.remove('masque');
+    aide.textContent = '';
+  } catch (e) {
+    aide.textContent = e.message;
+    aide.style.color = 'var(--rouge)';
+  }
+});
+
+surClic('btn-imprimer-mes', () => window.print());
+
+surClic('btn-mes-note', async () => {
+  $('mes-secours').textContent = '';
+  $('resultat-armement').classList.add('masque');
+  await chargerMiseEnService();
+  message('Sécurités armées.', 'succes', 5000);
+});
 
 /* ---------------------------- Coffre de la paie ---------------------------- */
 

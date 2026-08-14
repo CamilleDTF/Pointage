@@ -30,8 +30,87 @@
         <button class="onglet" type="button" data-onglet="taux">Taux de la paie</button>
         <button class="onglet" type="button" data-onglet="conservation">Conservation des données</button>
         <button class="onglet" type="button" data-onglet="indicateurs">Indicateurs de suivi</button>
+        <button class="onglet" type="button" data-onglet="miseenservice">Mise en service</button>
         <button class="onglet" type="button" data-onglet="coffre">Coffre de la paie</button>
         <button class="onglet" type="button" data-onglet="compte">Mon compte</button>
+      </div>
+    </section>
+
+    <!--
+      La mise en service.
+
+      Les securites se sont ajoutees une par une, chacune avec son ecran. Tant
+      qu'on essaie l'application c'est commode ; le jour de la vraie mise en
+      service c'est un piege, parce qu'il suffit d'en oublier une pour que le
+      reste ne serve a rien, et que rien ne dit laquelle manque.
+    -->
+    <section class="carte panneau masque" id="panneau-miseenservice">
+      <h2>Mise en service</h2>
+      <p class="aide detache-apres">
+        L'état ci-dessous est <strong>constaté</strong>, pas déclaré : le coffre est
+        interrogé dans la base, le chiffrement du lien sur cette page même.
+      </p>
+
+      <div id="liste-securites"></div>
+
+      <div id="armement" class="masque">
+        <h3 class="titre-bloc detache plus">Tout armer maintenant</h3>
+        <p class="aide detache-apres">
+          Trois choses ne peuvent pas être inventées à votre place — les inventer
+          reviendrait à les connaître. Vous les choisissez ici, une fois.
+        </p>
+        <div class="grille deux">
+          <div>
+            <label for="mes-phrase">Phrase du coffre (12 caractères minimum)</label>
+            <input id="mes-phrase" type="password" autocomplete="new-password">
+          </div>
+          <div>
+            <label for="mes-phrase2">Répétez la phrase</label>
+            <input id="mes-phrase2" type="password" autocomplete="new-password">
+          </div>
+          <div>
+            <label for="mes-question">Question de reprise</label>
+            <input id="mes-question" placeholder="Le prénom de mon premier chef de chantier ?">
+          </div>
+          <div>
+            <label for="mes-reponse">Réponse</label>
+            <input id="mes-reponse" autocapitalize="none">
+          </div>
+          <div>
+            <label for="mes-actuel">Votre code actuel</label>
+            <input id="mes-actuel" type="password" inputmode="numeric" autocomplete="off">
+          </div>
+          <div>
+            <label for="mes-renouveler">Codes des autres comptes</label>
+            <select id="mes-renouveler">
+              <option value="oui">Leur faire choisir un nouveau code</option>
+              <option value="non">Les laisser tels quels</option>
+            </select>
+          </div>
+        </div>
+        <div class="rangee detache">
+          <button class="principal" id="btn-armer" type="button">Armer toutes les sécurités</button>
+        </div>
+        <p class="aide suite" id="aide-armement"></p>
+      </div>
+
+      <div id="resultat-armement" class="masque">
+        <div class="etat-paie">
+          <span class="signe">▲</span>
+          <span class="texte">
+            <strong>Notez cette clé de secours maintenant. Elle ne sera plus jamais affichée.</strong>
+            <span class="precision">
+              Elle seule rouvre le coffre si la phrase est oubliée. Imprimez-la, rangez-la
+              ailleurs que sur le serveur.
+            </span>
+          </span>
+        </div>
+        <p class="cle-secours" id="mes-secours"></p>
+        <ul class="aide" id="mes-fait"></ul>
+        <div class="rangee">
+          <button class="petit" id="btn-imprimer-mes" type="button">Imprimer</button>
+          <button class="valide" id="btn-mes-note" type="button">Je l'ai notée</button>
+        </div>
       </div>
     </section>
 

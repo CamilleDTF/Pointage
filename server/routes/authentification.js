@@ -12,6 +12,8 @@ const express = require('express');
 
 const { db, journaliser } = require('../db');
 const A = require('../auth');
+const REPRISE = require('../reprise');
+const { repondre } = require('./commun');
 
 const routes = express.Router();
 
@@ -106,7 +108,7 @@ routes.post('/api/mon-code', A.exigerConnexion, (req, res) => {
  * sans rien resoudre.
  */
 
-const REPRISE_RESERVEE = ['directeur'];
+const REPRISE_RESERVEE = REPRISE.RESERVEE;
 
 /** Le compte joignable par une reprise, ou rien. Ne dit jamais pourquoi. */
 function compteReprise(identifiant) {
@@ -139,30 +141,13 @@ routes.get('/api/ma-reprise', A.exigerConnexion, (req, res) => {
  * de secours du compte, et a revenir quand on veut.
  */
 routes.post('/api/ma-reprise', A.exigerConnexion, (req, res) => {
-  const question = String(req.body.question || '').trim();
-  const reponse = String(req.body.reponse || '');
-  const actuel = String(req.body.actuel || '');
-
-  if (question.length < 8 || question.length > 200) {
-    return res.status(400).json({ erreur: 'La question doit comporter 8 a 200 caracteres.' });
-  }
-  if (A.normaliserReponse(reponse).length < 3) {
-    return res.status(400).json({ erreur: 'La reponse doit comporter au moins 3 caracteres.' });
-  }
-
-  const compte = db.prepare('SELECT pin_hash FROM utilisateurs WHERE id = ?').get(req.utilisateur.id);
-  if (!A.verifierPin(actuel, compte.pin_hash)) {
-    return res.status(401).json({ erreur: 'Code actuel incorrect.' });
-  }
-
-  db.prepare(
-    `UPDATE utilisateurs SET question_reprise = ?, reponse_reprise_hash = ?, reprise_le = datetime('now')
-      WHERE id = ?`
-  ).run(question, A.hacherReponse(reponse), req.utilisateur.id);
-
-  // La question part au journal, jamais la reponse.
-  journaliser(null, req.utilisateur.id, 'reprise_definie', question);
-  res.json({ ok: true });
+  repondre(
+    res,
+    REPRISE.poser(
+      { question: req.body.question, reponse: req.body.reponse, actuel: req.body.actuel },
+      req.utilisateur
+    )
+  );
 });
 
 /*

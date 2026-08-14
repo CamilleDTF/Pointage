@@ -253,6 +253,28 @@ button.petit { padding: 6px 10px; font-size: 0.82rem; }
 .etat-paie.fait .signe { color: var(--vert); }
 
 /*
+ * Une securite, armee ou non.
+ *
+ * Trois etats et trois signes, jamais la couleur seule : le vert « armee » et
+ * le rouge « ouverte » ne se distinguent pas en vision deutan — mesure a 4,5 la
+ * ou il en faut 8 — et ce sont precisement les deux qu'il ne faut pas confondre.
+ */
+.securite {
+  display: flex; align-items: flex-start; gap: var(--e3);
+  padding: var(--e3) var(--e4); margin-bottom: var(--e2);
+  border: 1px solid var(--gris-bord); border-left: 4px solid var(--gris-bord);
+  border-radius: var(--rayon); background: #fff;
+}
+.securite .signe { font-weight: 700; }
+.securite strong { display: block; }
+.securite .precision { color: var(--gris-texte); font-size: var(--t-petit); }
+.securite.armee { border-left-color: var(--vert); background: #f7fcf9; }
+.securite.armee .signe { color: var(--vert); }
+.securite.ouverte { border-left-color: var(--rouge); background: #fdf6f5; }
+.securite.ouverte .signe { color: var(--rouge); }
+.securite.facultative .signe { color: var(--gris-texte); }
+
+/*
  * La cle de secours, telle qu'on la recopie sur un papier. Chasse fixe et
  * lettres espacees : elle sera lue a voix haute ou transcrite a la main, et
  * c'est le seul moment ou elle existe.
