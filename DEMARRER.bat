@@ -90,6 +90,29 @@ if not exist data\pointage.db (
   echo.
 )
 
+rem ---------------------------------------------------------------------------
+rem  Deja en route ?
+rem
+rem  Le cas le plus frequent, et de loin : quelqu'un double-clique une seconde
+rem  fois, ou l'application est installee en service Windows et tourne donc
+rem  toute seule. Node repondait alors par une trace de quinze lignes commencant
+rem  par EADDRINUSE. Il n'y a pourtant rien de casse, et rien a faire : le
+rem  pointage est deja la, il suffit de l'ouvrir.
+rem ---------------------------------------------------------------------------
+netstat -ano | findstr /r /c:":3000 .*LISTENING" >nul 2>&1
+if not errorlevel 1 (
+  echo.
+  echo   ============================================================
+  echo     Le pointage tourne deja sur cette machine.
+  echo.
+  echo     Rien a relancer : votre navigateur va s'ouvrir dessus.
+  echo   ============================================================
+  echo.
+  start "" "http://localhost:3000"
+  timeout /t 4 >nul
+  exit /b 0
+)
+
 echo   ============================================================
 echo     Adresse      http://localhost:3000
 echo     Identifiant  directeur

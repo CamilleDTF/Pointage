@@ -87,7 +87,7 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
-  app.listen(PORT, () => {
+  const serveur = app.listen(PORT, () => {
     console.log(`Pointage DTF : http://localhost:${PORT}`);
     // Dit des le demarrage si les courriels partiront : sans cette ligne, on ne
     // s'en apercoit qu'au premier chef d'equipe qui transmet sa fiche.
@@ -98,6 +98,52 @@ if (require.main === module) {
           `${C.DOSSIER_COURRIELS} et le lien s'affiche sur la fiche. ` +
           'Pour les faire partir, remplissez les lignes SMTP de configuration.txt.'
     );
+  });
+
+  /*
+   * Ce qui empeche de demarrer, dit en francais.
+   *
+   * Sans ce gestionnaire, Node repond par une trace de quinze lignes qui
+   * commence par « EADDRINUSE » et cite `express/lib/application.js`. Or la
+   * cause est presque toujours la meme, et n'a rien de technique : quelqu'un a
+   * double-clique sur DEMARRER.bat une seconde fois, ou le service Windows
+   * tourne deja. La personne devant l'ecran n'a pas a traduire une trace pour
+   * apprendre qu'il n'y a rien de casse.
+   */
+  serveur.on('error', (err) => {
+    const explications = {
+      EADDRINUSE: [
+        `Le port ${PORT} est deja pris : l'application tourne deja sur cette machine.`,
+        '',
+        `  → Ouvrez simplement http://localhost:${PORT} dans votre navigateur.`,
+        '',
+        "Si vous vouliez la redemarrer, fermez d'abord l'autre fenetre. Si elle est",
+        'installee en service Windows, elle demarre toute seule : il n\'y a rien a',
+        'lancer a la main. Pour l\'arreter :',
+        '',
+        '  net stop Pointage',
+        '',
+        `Pour utiliser un autre port, ajoutez une ligne PORT=3001 dans configuration.txt.`,
+      ],
+      EACCES: [
+        `Le port ${PORT} est refuse par Windows : ce numero demande des droits`,
+        'administrateur, ou une regle de securite le reserve.',
+        '',
+        '  → Choisissez un port au-dessus de 1024 : ajoutez PORT=3001 dans configuration.txt.',
+      ],
+    };
+
+    const lignes = explications[err.code];
+    console.error('');
+    console.error('  Le pointage n\'a pas pu demarrer.');
+    console.error('');
+    if (lignes) {
+      for (const ligne of lignes) console.error(ligne ? `  ${ligne}` : '');
+    } else {
+      console.error(`  ${err.message}`);
+    }
+    console.error('');
+    process.exit(1);
   });
 }
 
