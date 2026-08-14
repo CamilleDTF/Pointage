@@ -157,6 +157,9 @@ peut la corriger, la valider, ou la renvoyer au chef avec un motif.
 
 ## L'administrateur technique, et le coffre de la paie
 
+> **Pour la direction** : [docs/MISE-EN-PLACE.md](docs/MISE-EN-PLACE.md) reprend
+> tout ce qui suit sous forme de marche à suivre, dans l'ordre où le faire.
+
 Deux métiers se cachaient dans le compte directeur : diriger l'entreprise, et tenir
 l'application. Le rôle **administrateur** prend le second — comptes, effectif,
 véhicules, réglages, diagnostics — et ne prend pas le premier.
