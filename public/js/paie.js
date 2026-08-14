@@ -21,6 +21,30 @@ let moisNP = null;        // la grille du personnel non productif
 let paieNP = null;        // ses montants, quand la seance est ouverte
 let onglet = 'chantier';
 
+/*
+ * Le billet, quand il n'y a pas de coffre.
+ *
+ * `ouvrirLesMontants()` a deux facons de rendre la main. Coffre arme : elle
+ * ouvre une seance, l'en-tete part tout seul, et elle rend `true`. Pas de
+ * coffre : elle echange le code du directeur contre un BILLET a usage unique,
+ * qu'elle rend tel quel — et qu'il faut glisser dans chaque requete.
+ *
+ * Cet ecran ne gardait que le `true` et jetait le billet. Le code etait donc
+ * accepte, puis rien ne changeait : le tableau revenait en version publique,
+ * sans un mot. C'est le « 246810 ne marche plus » — il marchait, mais sa
+ * reponse tombait par terre.
+ */
+let billet = null;
+
+/*
+ * Les montants sont-ils a l'ecran ?
+ *
+ * Distinct du billet, qui est brule des la premiere requete : sans ce
+ * drapeau, le bouton reproposait « Afficher les montants » alors qu'ils
+ * venaient d'apparaitre.
+ */
+let montantsAffiches = false;
+
 const $ = (id) => document.getElementById(id);
 
 function surEvenement(id, evenement, action) {
@@ -78,6 +102,9 @@ surEvenement('onglets-paie', 'click', (e) => {
   $('panneau-chantier').classList.toggle('masque', onglet !== 'chantier');
   $('panneau-nonproductif').classList.toggle('masque', onglet !== 'nonproductif');
   majEtatDuMois();
+  // La seance du coffre vaut pour les deux onglets ; le billet, non. On ne
+  // recharge donc que si l'on a de quoi montrer autre chose.
+  if (Paie.ouverte()) charger();
 });
 
 /*
@@ -99,24 +126,37 @@ function majEtatDuMois() {
  * bouton « Afficher les montants » de l'autre. Ils ouvraient pourtant la meme
  * chose, et le second n'existait que pour cela.
  */
-const montantsOuverts = () => Paie.ouverte();
+
+const montantsDemandes = () => Paie.ouverte() || Boolean(billet);
+
+/** Ouvre les montants par la voie qui s'applique, et retient ce qu'il faut. */
+async function demanderLesMontants() {
+  const reponse = await ouvrirLesMontants();
+  if (!reponse) return false;
+  // Une chaine est un billet a usage unique ; `true` est une seance ouverte.
+  billet = typeof reponse === 'string' ? reponse : null;
+  return true;
+}
 
 surClic('btn-montants', async () => {
-  if (montantsOuverts()) {
+  if (montantsAffiches) {
     Paie.fermer();
+    billet = null;
+    montantsAffiches = false;
     message('Montants masqués.', 'succes', 2500);
     return charger();
   }
-  if (await ouvrirLesMontants()) await charger();
+  if (await demanderLesMontants()) await charger();
 });
 
 function majBoutonMontants() {
-  $('btn-montants').textContent = montantsOuverts() ? 'Masquer les montants' : 'Afficher les montants';
+  $('btn-montants').textContent = montantsAffiches ? 'Masquer les montants' : 'Afficher les montants';
 }
 
 surClic('btn-telecharger', async () => {
-  if (!(await ouvrirLesMontants())) return;
+  if (!(await demanderLesMontants())) return;
   const p = new URLSearchParams({ annee, mois: numeroMois });
+  if (billet) p.set('billet', billet);
   const url = onglet === 'chantier'
     ? `/api/export/mois.xlsx?${p}&version=direction`
     : `/api/export/non-productif.xlsx?${p}`;
@@ -129,29 +169,61 @@ surClic('btn-telecharger', async () => {
 
 /* ------------------------------- Le chargement ---------------------------- */
 
+/*
+ * Un billet ne sert qu'une fois.
+ *
+ * C'est voulu : le code du directeur s'echange contre un droit d'une seule
+ * requete, pour qu'un ecran laisse ouvert ne redonne pas acces aux montants.
+ * Mais cet ecran charge DEUX tableaux — le chantier et le non productif — et
+ * le second consommait un billet deja depense : il retombait en version
+ * publique sans un mot.
+ *
+ * Les montants ne sont donc demandes que pour l'onglet affiche. Changer
+ * d'onglet ou de mois redemande le code, exactement comme les trois anciens
+ * ecrans le faisaient chacun de leur cote.
+ */
 async function charger() {
   $('quand-mois').textContent = `${Regles.MOIS[numeroMois - 1]} ${annee}`;
-  majBoutonMontants();
 
   const p = new URLSearchParams({ annee, mois: numeroMois });
-  const version = montantsOuverts() ? 'direction' : 'public';
+  const avecMontants = montantsDemandes();
 
+  // Le billet part avec la seule requete qui en a besoin, puis il est brule.
+  const pourCetOnglet = (cible) => {
+    const q = new URLSearchParams(p);
+    if (billet && avecMontants && cible === onglet) q.set('billet', billet);
+    return q;
+  };
+
+  const versionChantier = avecMontants && onglet === 'chantier' ? 'direction' : 'public';
   try {
-    mois = await API.get(`/api/mois?${p}&version=${version}`);
-  } catch (e) {
-    // Coffre ferme : on retombe sur la version publique plutot que de ne rien
-    // montrer. Les heures ne sont pas un secret.
+    mois = await API.get(`/api/mois?${pourCetOnglet('chantier')}&version=${versionChantier}`);
+  } catch {
+    // Coffre ferme ou billet refuse : on retombe sur la version publique plutot
+    // que de ne rien montrer. Les heures ne sont pas un secret.
     mois = await API.get(`/api/mois?${p}&version=public`).catch(() => null);
   }
 
   try {
     moisNP = await API.get(`/api/non-productif?${p}`);
-    paieNP = montantsOuverts() ? await API.get(`/api/non-productif/paie?${p}`).catch(() => null) : null;
+    paieNP =
+      avecMontants && onglet === 'nonproductif'
+        ? await API.get(`/api/non-productif/paie?${pourCetOnglet('nonproductif')}`).catch(() => null)
+        : null;
   } catch {
     moisNP = null;
     paieNP = null;
   }
 
+  // Le billet est consomme ; le suivant se redemandera. Ce qui est a l'ecran,
+  // en revanche, y reste : c'est ce que le bouton doit refleter.
+  montantsAffiches = Boolean(
+    (onglet === 'chantier' && mois && mois.version === 'direction')
+      || (onglet === 'nonproductif' && paieNP)
+  );
+  if (billet) billet = null;
+
+  majBoutonMontants();
   afficherEtatDuMois();
   majEtatDuMois();
   afficherChantier();

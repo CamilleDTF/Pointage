@@ -53,17 +53,30 @@ function moisComplet(annee, mois, { debutService = null } = {}) {
   const premier = jours[0].date;
   const dernier = jours[jours.length - 1].date;
 
+  /*
+   * Tout le monde, et non le seul personnel de chantier.
+   *
+   * Le calendrier des conges s'arretait a `productif = 1` : une comptable en
+   * conges payes n'avait aucune facon d'y figurer, et son absence n'apparaissait
+   * ni ici ni dans la grille du mois qui la reprend. Or les conges ne sont pas
+   * une affaire de chantier — ils se posent pour tout le monde, et c'est
+   * precisement le point de cet ecran.
+   *
+   * Le tri place le chantier d'abord, puis le non productif : deux effectifs
+   * distincts, qu'on ne parcourt pas ensemble.
+   */
   const personnes = db
     .prepare(
       `SELECT s.id, s.matricule, s.nom, s.prenom, s.chef_id, u.nom AS chef_nom,
+              s.productif,
               CASE WHEN EXISTS (SELECT 1 FROM utilisateurs c
                                  WHERE c.role = 'chef' AND c.actif = 1
                                    AND upper(c.nom) = upper(s.nom || ' ' || s.prenom))
                    THEN 1 ELSE 0 END AS est_chef
          FROM salaries s
          LEFT JOIN utilisateurs u ON u.id = s.chef_id
-        WHERE s.actif = 1 AND s.productif = 1
-        ORDER BY COALESCE(u.nom, 'zzz'), s.nom, s.prenom`
+        WHERE s.actif = 1
+        ORDER BY s.productif DESC, COALESCE(u.nom, 'zzz'), s.nom, s.prenom`
     )
     .all();
 
@@ -168,6 +181,8 @@ function moisComplet(annee, mois, { debutService = null } = {}) {
       matricule: personne.matricule || '',
       chef_nom: personne.chef_nom || '',
       estChef: Boolean(personne.est_chef),
+      // Deux effectifs distincts : l'ecran doit pouvoir les separer.
+      productif: personne.productif === 0 ? 0 : 1,
       cases,
       totaux: {
         minutes: cases.reduce((t, c) => t + (c.minutes || 0), 0),
