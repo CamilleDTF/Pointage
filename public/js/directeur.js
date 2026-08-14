@@ -98,9 +98,9 @@ surClic('btn-suivante', () => decalerSemaine(1));
 surClic('btn-admin', () => { location.href = '/parametres.html'; });
 surClic('btn-export-xlsx', () => exporter('xlsx'));
 surClic('btn-export-csv', () => exporter('csv'));
-surClic('btn-mensuel', () => { location.href = '/mensuel.html'; });
+surClic('btn-mensuel', () => { location.href = '/paie.html'; });
 surClic('btn-calendrier', () => { location.href = '/calendrier.html'; });
-surClic('btn-non-productif', () => { location.href = '/non-productif.html'; });
+surClic('btn-non-productif', () => { location.href = '/paie.html#nonproductif'; });
 
 /*
  * Les deux champs de saisie ne servent qu'a sauter loin — changer d'annee, ou

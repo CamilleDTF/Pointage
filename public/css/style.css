@@ -1180,3 +1180,28 @@ input[readonly] { background: #f7f9fc; color: var(--gris-texte); }
 
 .rien-a-faire { color: var(--vert); margin: 0; }
 
+
+/* ---------------------------- La paie du mois ----------------------------- */
+
+/*
+ * Le mois, ses fleches et ses actions sur une seule ligne. Il y avait un menu
+ * deroulant de douze mois et un champ d'annee, sur trois ecrans differents ;
+ * une seule tete suffit, et les fleches font l'essentiel du deplacement.
+ */
+.tete-mois { display: flex; align-items: center; gap: var(--e3); flex-wrap: wrap; }
+.tete-mois h1 { font-size: 1.35rem; margin: 0; color: var(--bleu); }
+.tete-mois .fleches { display: flex; gap: var(--e2); }
+.tete-mois .a-droite { margin-left: auto; display: flex; gap: var(--e2); align-items: center; }
+
+/* Le compte, dans l'onglet : « Personnel de chantier · 5 ». */
+.onglet .compte { opacity: 0.7; font-weight: 400; }
+
+table.np-totaux { width: 100%; border-collapse: collapse; font-size: var(--t-normal); }
+table.np-totaux th, table.np-totaux td {
+  padding: 8px 10px; border-bottom: 1px solid var(--gris-bord); text-align: left; white-space: nowrap;
+}
+table.np-totaux th {
+  font-size: var(--t-petit); text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--gris-texte); background: #f7f9fb;
+}
+table.np-totaux td.num, table.np-totaux th.num { text-align: right; font-variant-numeric: tabular-nums; }

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10416b">
+  <title>Pointage — La paie du mois</title>
+  <link rel="icon" href="/icone.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="appbar">
+    <div class="titre">
+      La paie du mois
+      <small id="entete-nom">…</small>
+    </div>
+    <nav>
+      <button class="petit" id="btn-conges" type="button">Les congés du mois</button>
+      <span class="separateur-nav"></span>
+      <button class="petit discret" id="btn-retour" type="button">◀ Accueil</button>
+      <button class="petit discret" id="btn-quitter" type="button">Quitter</button>
+    </nav>
+  </header>
+
+  <!--
+    Un ecran, la ou il y en avait quatre.
+
+    « Tableau mensuel », « Non productif », « Paie non productif », plus un
+    detour par Parametres pour inscrire les gens : quatre adresses, dont trois
+    se ressemblent par le nom, et rien ne disait laquelle ouvrir ni dans quel
+    ordre. Le quatrieme n'etait meme pas un ecran — il n'affichait rien tant
+    qu'on n'avait pas saisi le code, puis montrait le tableau du troisieme avec
+    une colonne de plus. C'etait un mode d'affichage, pas une destination.
+
+    Le mois se choisit donc une fois, en haut. Les deux populations deviennent
+    deux onglets. Les montants ont un seul interrupteur.
+  -->
+  <main>
+    <section class="carte">
+      <div class="tete-mois">
+        <h1 id="quand-mois">…</h1>
+        <span class="fleches">
+          <button class="petit" id="btn-precedent" type="button">◀ Précédent</button>
+          <button class="petit" id="btn-suivant" type="button">Suivant ▶</button>
+        </span>
+        <span class="a-droite">
+          <button class="petit" id="btn-montants" type="button">Afficher les montants</button>
+          <button class="principal" id="btn-telecharger" type="button">Télécharger pour le cabinet</button>
+        </span>
+      </div>
+      <div id="etat-mois"></div>
+    </section>
+
+    <section class="carte">
+      <div class="onglets detache-apres" id="onglets-paie">
+        <button class="onglet actif" type="button" data-onglet="chantier">
+          Personnel de chantier <span class="compte" id="compte-chantier"></span>
+        </button>
+        <button class="onglet" type="button" data-onglet="nonproductif">
+          Personnel non productif <span class="compte" id="compte-np"></span>
+        </button>
+      </div>
+
+      <div id="panneau-chantier">
+        <p class="aide detache-apres" id="aide-chantier"></p>
+        <div id="tableau-mois"></div>
+      </div>
+
+      <div id="panneau-nonproductif" class="masque">
+        <p class="aide detache-apres">
+          Ils sont à <strong>7 h par jour ouvré</strong> : rien à saisir pour un mois ordinaire.
+          Cliquez sur une case pour déclarer un écart — une absence, un grand déplacement,
+          des heures particulières. Les congés saisis au calendrier apparaissent ici sans
+          être ressaisis.
+        </p>
+        <div id="calendrier-np"></div>
+        <div class="legende-annee" id="legende-np"></div>
+        <p class="aide suite" id="resume-np"></p>
+        <h3 class="titre-bloc detache plus">Ce qui part en paie</h3>
+        <div class="enveloppe-table">
+          <table class="np-totaux">
+            <thead>
+              <tr>
+                <th>Nom</th><th>Prénom</th><th class="num">Jours travaillés</th>
+                <th class="num">Heures</th><th class="num">Absences</th>
+                <th class="num">GD 72</th><th class="num">GD 80</th>
+                <th class="num">Primes</th><th>Détail des primes</th>
+              </tr>
+            </thead>
+            <tbody id="totaux-np"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="fenetre masque" id="fenetre"></div>
+
+  <script src="/js/regles.js"></script>
+  <script src="/js/commun.js"></script>
+  <script src="/js/paie.js"></script>
+</body>
+</html>

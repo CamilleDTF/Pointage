@@ -97,12 +97,6 @@ function preparerDirecteur() {
     "  Demo.indisponible(`Export ${format.toUpperCase()}`);",
     'exports de la période'
   );
-  source = adapter(
-    source,
-    '        window.location.href = `/api/export/fiche/${fiche.id}.xlsx`;',
-    "        Demo.indisponible('Fiche Excel');",
-    'export Excel d’une fiche'
-  );
   // La demonstration n'a pas d'adresses : la navigation passe par l'aiguillage.
   source = adapter(
     source,
@@ -112,27 +106,32 @@ function preparerDirecteur() {
   );
   source = adapter(
     source,
-    "  surClic(bouton, () => { location.href = '/mensuel.html'; });",
-    "  surClic(bouton, () => Demo.aller('mensuel'));",
-    'accès au tableau mensuel'
+    "surClic('btn-mensuel', () => { location.href = '/paie.html'; });",
+    "surClic('btn-mensuel', () => Demo.aller('mensuel'));",
+    'accès à la paie du mois'
   );
   source = adapter(
     source,
-    "  surClic(bouton, () => { location.href = '/calendrier.html'; });",
-    "  surClic(bouton, () => Demo.aller('calendrier'));",
+    "surClic('btn-calendrier', () => { location.href = '/calendrier.html'; });",
+    "surClic('btn-calendrier', () => Demo.aller('calendrier'));",
     'accès au calendrier du mois'
   );
   source = adapter(
     source,
-    "  surClic(bouton, () => { location.href = '/non-productif.html'; });",
-    "  surClic(bouton, () => Demo.aller('nonproductif'));",
+    "surClic('btn-non-productif', () => { location.href = '/paie.html#nonproductif'; });",
+    "surClic('btn-non-productif', () => Demo.aller('nonproductif'));",
     'accès au personnel non productif'
   );
+  /*
+   * Ouvrir une fiche mene desormais a son propre ecran, avec un identifiant
+   * dans l'adresse. La demonstration n'a pas d'adresses : plutot que d'ouvrir
+   * un ecran qui n'existe pas ici, elle le dit.
+   */
   source = adapter(
     source,
-    "surClic('btn-paie-non-productif', () => { location.href = '/paie-non-productif.html'; });",
-    "surClic('btn-paie-non-productif', () => Demo.aller('paienonproductif'));",
-    'accès à la paie du personnel non productif'
+    '  location.href = `/fiche.html?id=${ficheId}`;',
+    "  Demo.indisponible('La fiche détaillée');",
+    'ouverture d’une fiche'
   );
   return source;
 }
@@ -148,8 +147,8 @@ function preparerMensuel() {
   );
   source = adapter(
     source,
-    '  window.location.href = `/api/export/mois.xlsx?${parametres}`;',
-    "  Demo.indisponible(`Tableau mensuel (version ${version})`);",
+    '    await telechargerFichier(`/api/export/mois.xlsx?${parametres}`);',
+    "    Demo.indisponible(`Tableau mensuel (version ${version})`);",
     'téléchargement du tableau mensuel'
   );
   return source;
@@ -202,8 +201,8 @@ function preparerPaieNonProductif() {
   );
   source = adapter(
     source,
-    '  window.location.href = `/api/export/non-productif.xlsx?${parametres}`;',
-    "  Demo.indisponible('Classeur de paie du personnel non productif');",
+    '    await telechargerFichier(`/api/export/non-productif.xlsx?${parametres}`);',
+    "    Demo.indisponible('Classeur de paie du personnel non productif');",
     'téléchargement de la paie non productive'
   );
   return source;
