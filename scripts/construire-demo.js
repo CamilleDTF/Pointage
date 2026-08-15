@@ -104,24 +104,10 @@ function preparerDirecteur() {
     "surClic('btn-admin', () => Demo.aller('parametres'));",
     'accès aux paramètres'
   );
-  source = adapter(
-    source,
-    "surClic('btn-mensuel', () => { location.href = '/paie.html'; });",
-    "surClic('btn-mensuel', () => Demo.aller('mensuel'));",
-    'accès à la paie du mois'
-  );
-  source = adapter(
-    source,
-    "surClic('btn-calendrier', () => { location.href = '/calendrier.html'; });",
-    "surClic('btn-calendrier', () => Demo.aller('calendrier'));",
-    'accès au calendrier du mois'
-  );
-  source = adapter(
-    source,
-    "surClic('btn-non-productif', () => { location.href = '/paie.html#nonproductif'; });",
-    "surClic('btn-non-productif', () => Demo.aller('nonproductif'));",
-    'accès au personnel non productif'
-  );
+  /*
+   * Le tableau de bord ne mene plus au mois : la paie a quitte cet ecran pour
+   * l'accueil, qui separe les deux rythmes. Il ne reste ici que la semaine.
+   */
   /*
    * Ouvrir une fiche mene desormais a son propre ecran, avec un identifiant
    * dans l'adresse. La demonstration n'a pas d'adresses : plutot que d'ouvrir
@@ -159,7 +145,7 @@ function preparerCalendrier() {
   source = adapter(source, "location.href = '/chef.html';", "Demo.aller('chef');", 'redirection chef');
   source = adapter(
     source,
-    "surClic('btn-retour', () => { location.href = '/directeur.html'; });",
+    "surClic('btn-retour', () => { location.href = '/accueil.html'; });",
     "surClic('btn-retour', () => Demo.aller('directeur'));",
     'retour au tableau de bord'
   );

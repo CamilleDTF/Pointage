@@ -45,50 +45,12 @@ async function demarrer() {
   $('semaine').value = Number(url.get('semaine')) || reference.semaineCourante.semaine;
 
   await charger();
-  await apercuMois();
 }
 
 /** Applique une action a un element, s'il existe sur la page. */
 function poser(id, action) {
   const element = $(id);
   if (element) action(element);
-}
-
-/*
- * L'etat du mois, la ou il y avait quatre boutons.
- *
- * Le tableau du cabinet ne compte QUE les fiches validees. C'est juste, et
- * c'est le piege : rien ne le disait, et on pouvait transmettre un mois ampute
- * de trois fiches sans s'en apercevoir. La ligne le dit avant qu'on ouvre quoi
- * que ce soit.
- */
-async function apercuMois() {
-  const zone = $('etat-mois');
-  if (!zone) return;
-  const maintenant = new Date();
-  const annee = maintenant.getFullYear();
-  const mois = maintenant.getMonth() + 1;
-
-  try {
-    const a = await API.get(`/api/export/mois-apercu?annee=${annee}&mois=${mois}`);
-    const nom = `${Regles.MOIS[a.mois - 1]} ${a.annee || annee}`;
-    const manquantes = Number(a.nonValidees) || 0;
-
-    zone.innerHTML = `<div class="etat-paie${manquantes ? '' : ' fait'}">
-      <span class="signe">${manquantes ? '▲' : '✓'}</span>
-      <span class="texte">
-        <strong>${a.nbSalaries
-          ? `${nom} — ${a.nbSalaries} salarié(s), ${versTexte(a.minutes)} comptées.`
-          : `${nom} — aucune fiche validée pour l'instant.`}</strong>
-        <span class="precision">${manquantes
-          ? `${manquantes} fiche(s) du mois ne sont pas validées : tant qu'elles ne le sont pas, `
-            + 'elles ne comptent pas dans le tableau du cabinet.'
-          : 'Rien ne bloque la transmission au cabinet.'}</span>
-      </span>
-    </div>`;
-  } catch (e) {
-    zone.innerHTML = `<p class="aide" style="color:var(--rouge)">${echapper(e.message)}</p>`;
-  }
 }
 
 surClic('btn-charger', charger);
@@ -98,9 +60,6 @@ surClic('btn-suivante', () => decalerSemaine(1));
 surClic('btn-admin', () => { location.href = '/parametres.html'; });
 surClic('btn-export-xlsx', () => exporter('xlsx'));
 surClic('btn-export-csv', () => exporter('csv'));
-surClic('btn-mensuel', () => { location.href = '/paie.html'; });
-surClic('btn-calendrier', () => { location.href = '/calendrier.html'; });
-surClic('btn-non-productif', () => { location.href = '/paie.html#nonproductif'; });
 
 /*
  * Les deux champs de saisie ne servent qu'a sauter loin — changer d'annee, ou

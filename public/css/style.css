@@ -1267,3 +1267,87 @@ table.np-totaux td.num, table.np-totaux th.num { text-align: right; font-variant
 header.appbar .titre.retour-accueil { cursor: pointer; border-radius: 6px; padding: 2px 6px; margin: -2px -6px; }
 header.appbar .titre.retour-accueil:hover { background: rgba(255, 255, 255, 0.14); }
 header.appbar .titre.retour-accueil:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+
+/* ------------------------------- L'accueil -------------------------------- */
+
+/*
+ * Deux portes, cote a cote, de meme poids.
+ *
+ * Ni l'une ni l'autre n'est « la principale » : on vient pour le pointage le
+ * lundi, pour la paie le 5 du mois. Elles se distinguent par leur couleur
+ * d'accent et par ce qu'elles annoncent, jamais par leur taille.
+ */
+.portes {
+  display: grid;
+  gap: var(--e5);
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  margin-top: var(--e5);
+}
+
+.porte {
+  background: #fff;
+  border: 1px solid var(--gris-bord);
+  border-top: 4px solid var(--bleu);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre);
+  padding: var(--e5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+}
+.porte.paie { border-top-color: var(--vert); }
+
+.porte .tete { display: flex; align-items: center; gap: var(--e3); }
+.porte .tete h2 { margin: 0; font-size: 1.5rem; color: var(--bleu); }
+.porte.paie .tete h2 { color: var(--vert); }
+.porte .quand {
+  margin: 2px 0 0;
+  font-size: var(--t-petit);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gris-texte);
+}
+
+/*
+ * Le marqueur porte la lettre du rythme — S pour la semaine, M pour le mois.
+ * Une lettre se lit en vision peripherique la ou deux ronds de couleur se
+ * confondent.
+ */
+.porte .marqueur {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 1.2rem;
+  background: #e8eff6;
+  color: var(--bleu);
+}
+.porte.paie .marqueur { background: #e6f3ec; color: var(--vert); }
+
+.porte .quoi { margin: 0; color: var(--gris-texte); }
+
+.porte .etat {
+  /* Deux filets, et rien d'autre : une regle plus generale posait un contour
+     complet avec son arrondi, ce qui dessinait un ovale autour du bloc. */
+  border: 0;
+  border-top: 1px solid var(--gris-bord);
+  border-bottom: 1px solid var(--gris-bord);
+  border-radius: 0;
+  padding: var(--e3) 0;
+  min-height: 92px;
+}
+.porte .etat .periode { margin: 0 0 var(--e2); font-weight: 600; }
+.porte .etat .aide { margin: var(--e1) 0 0; }
+
+.porte .points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--e1); }
+.porte .points li { display: flex; align-items: baseline; gap: var(--e2); }
+.porte .points strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.porte .points li.agir strong { color: #b45f09; }
+.porte .points li.manque strong { color: var(--rouge); }
+
+.porte .actions { display: flex; flex-wrap: wrap; gap: var(--e2); margin-top: auto; }
+.porte.paie .actions button.principal { background: var(--vert); border-color: var(--vert); }
+.porte.paie .actions button.principal:hover { filter: brightness(1.1); }

@@ -11,8 +11,8 @@
 </head>
 <body>
   <header class="appbar">
-    <div class="titre">
-      Pointage hebdomadaire — Direction
+    <div class="titre retour-accueil" role="link" tabindex="0" title="Revenir a l'accueil" data-accueil="/accueil.html">
+      Pointage de la semaine
       <small id="entete-nom">…</small>
     </div>
     <nav>
@@ -91,24 +91,14 @@
     </section>
 
     <!--
-      Une porte, et non quatre.
+      La paie n'est plus ici.
 
-      Il y avait ici « Tableau mensuel », « Calendrier du mois », « Non
-      productif » et « Paie non productif » : quatre destinations de meme poids,
-      dont trois se ressemblent par le nom, et rien ne disait laquelle ouvrir ni
-      dans quel ordre. Le mois n'a qu'une question — ou en est la paie.
+      Elle occupait le bas de cet ecran, avec ses quatre destinations puis sa
+      porte unique : on verifiait des fiches, et l'on tombait sur le mois sans
+      que rien ne dise qu'on avait change de sujet. Ce sont deux rythmes — le
+      pointage chaque lundi, la paie une fois par mois — et l'accueil les
+      separe desormais. Cet ecran ne parle plus que de la semaine.
     -->
-    <section class="carte">
-      <div class="barre-outils detache-apres">
-        <h2 class="serree">La paie du mois</h2>
-        <div class="actions">
-          <button class="petit" id="btn-calendrier" type="button">Les congés du mois</button>
-          <button class="petit" id="btn-non-productif" type="button">Non productif</button>
-          <button class="principal" id="btn-mensuel" type="button">Ouvrir la paie</button>
-        </div>
-      </div>
-      <div id="etat-mois"></div>
-    </section>
   </main>
 
   <script src="/js/regles.js"></script>

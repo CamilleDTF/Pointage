@@ -53,7 +53,7 @@ async function demarrer() {
   await chargerConges();
 }
 
-surClic('btn-retour', () => { location.href = '/directeur.html'; });
+surClic('btn-retour', () => { location.href = '/accueil.html'; });
 surClic('btn-quitter', deconnexion);
 surClic('btn-precedent', () => decalerMois(-1));
 surClic('btn-suivant', () => decalerMois(1));
@@ -84,7 +84,7 @@ async function charger() {
 
   // La liste des equipes se deduit des lignes : elle suit l'organisation reelle
   // sans avoir a la redemander au serveur.
-  const equipes = [...new Set(mois.lignes.map((l) => l.chef_nom).filter(Boolean))].sort();
+  const equipes = [...new Set(mois.lignes.filter((l) => l.productif !== 0).map((l) => l.chef_nom).filter(Boolean))].sort();
   const choisie = $('filtre-equipe').value;
   $('filtre-equipe').innerHTML =
     '<option value="">Toutes les équipes</option>' +
@@ -92,6 +92,25 @@ async function charger() {
 
   afficher();
 }
+
+/*
+ * Deux populations, deux onglets.
+ *
+ * Elles se suivaient dans une seule grille : on faisait defiler trente-huit
+ * operateurs pour atteindre les trois personnes du bureau. La paie les separe
+ * deja ainsi, et l'on ne consulte jamais les deux ensemble.
+ */
+let onglet = 'chantier';
+
+document.getElementById('onglets-conges').addEventListener('click', (e) => {
+  const bouton = e.target.closest('.onglet');
+  if (!bouton) return;
+  onglet = bouton.dataset.onglet;
+  document.querySelectorAll('#onglets-conges .onglet').forEach((o) => {
+    o.classList.toggle('actif', o.dataset.onglet === onglet);
+  });
+  afficher();
+});
 
 const ETIQUETTES_ETAT = {
   travaille: 'Pointé',
@@ -106,11 +125,34 @@ function afficher() {
   const zone = $('calendrier-mensuel');
   if (!mois) return;
 
+  /*
+   * La population d'abord, l'equipe ensuite : le personnel non productif n'a
+   * pas de chef d'equipe, et le filtre par equipe ne le concerne donc pas.
+   */
+  const duChantier = mois.lignes.filter((l) => l.productif !== 0);
+  const duBureau = mois.lignes.filter((l) => l.productif === 0);
+  $('compte-chantier').textContent = `· ${duChantier.length}`;
+  $('compte-np').textContent = `· ${duBureau.length}`;
+
+  // Le filtre par equipe n'a de sens que sur le chantier : on le masque ailleurs
+  // plutot que de le laisser sans effet.
+  const bloc = $('filtre-equipe').closest('div');
+  if (bloc) bloc.classList.toggle('masque', onglet !== 'chantier');
+
   const equipe = $('filtre-equipe').value;
-  const lignes = equipe ? mois.lignes.filter((l) => l.chef_nom === equipe) : mois.lignes;
+  const lignes =
+    onglet === 'nonproductif'
+      ? duBureau
+      : equipe
+        ? duChantier.filter((l) => l.chef_nom === equipe)
+        : duChantier;
 
   if (!lignes.length) {
-    zone.innerHTML = '<p class="vide">Aucun salarié dans cette sélection.</p>';
+    zone.innerHTML = `<p class="vide">${
+      onglet === 'nonproductif'
+        ? 'Aucune personne enregistrée dans le personnel non productif.'
+        : 'Aucun salarié dans cette sélection.'
+    }</p>`;
     return;
   }
 

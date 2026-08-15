@@ -426,7 +426,7 @@ if ('serviceWorker' in navigator) {
 document.addEventListener('DOMContentLoaded', () => {
   const titre = document.querySelector('.titre.retour-accueil');
   if (!titre) return;
-  const aller = () => { location.href = titre.dataset.accueil || '/directeur.html'; };
+  const aller = () => { location.href = titre.dataset.accueil || '/accueil.html'; };
   titre.addEventListener('click', aller);
   // Au clavier : c'est un lien, il repond donc a Entree et a Espace.
   titre.addEventListener('keydown', (e) => {

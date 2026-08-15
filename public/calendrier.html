@@ -11,7 +11,7 @@
 </head>
 <body>
   <header class="appbar">
-    <div class="titre retour-accueil" role="link" tabindex="0" title="Revenir au tableau de bord" data-accueil="/directeur.html">
+    <div class="titre retour-accueil" role="link" tabindex="0" title="Revenir au tableau de bord" data-accueil="/accueil.html">
       Calendrier du mois — Direction
       <small id="entete-nom">…</small>
     </div>
@@ -43,6 +43,23 @@
     </section>
 
     <section class="carte">
+      <!--
+        Deux populations, deux onglets — comme la paie.
+
+        Elles se suivaient dans une seule grille, separees par un simple
+        intertitre : on faisait defiler trente-huit operateurs pour atteindre
+        les trois personnes du bureau. Ce sont deux effectifs qu'on ne consulte
+        jamais ensemble, et la paie les separe deja ainsi.
+      -->
+      <div class="onglets detache-apres" id="onglets-conges">
+        <button class="onglet actif" type="button" data-onglet="chantier">
+          Personnel de chantier <span class="compte" id="compte-chantier"></span>
+        </button>
+        <button class="onglet" type="button" data-onglet="nonproductif">
+          Personnel non productif <span class="compte" id="compte-np"></span>
+        </button>
+      </div>
+
       <div id="calendrier-mensuel"></div>
       <div class="legende-annee" id="legende-calendrier"></div>
       <p class="aide detache">

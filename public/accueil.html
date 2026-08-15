@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10416b">
+  <title>Pointage — Accueil</title>
+  <link rel="icon" href="/icone.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="appbar">
+    <div class="titre">
+      Pointage hebdomadaire — Direction
+      <small id="entete-nom">…</small>
+    </div>
+    <nav>
+      <button class="petit discret" id="btn-admin" type="button">Paramètres</button>
+      <button class="petit discret" id="btn-quitter" type="button">Quitter</button>
+    </nav>
+  </header>
+
+  <!--
+    Deux mondes, deux portes.
+
+    Le tableau de bord melait la semaine et le mois : on y verifiait des fiches,
+    puis on tombait sur la paie du mois, sans que rien ne dise qu'on avait
+    change de sujet. Ce sont pourtant deux rythmes et deux gestes — le pointage
+    se fait chaque lundi, la paie une fois par mois — et l'un n'a pas a
+    encombrer l'autre.
+
+    L'accueil ne fait donc rien d'autre que poser la question : de quoi
+    s'occupe-t-on ? Chaque porte annonce ce qui l'attend derriere, pour qu'on
+    choisisse en sachant, et non en devinant.
+  -->
+  <main>
+    <div class="portes">
+
+      <section class="porte pointage">
+        <div class="tete">
+          <span class="marqueur" aria-hidden="true">S</span>
+          <div>
+            <h2>Pointage</h2>
+            <p class="quand">Chaque semaine</p>
+          </div>
+        </div>
+
+        <p class="quoi">
+          Les fiches des chefs d’équipe : ce qui est arrivé, ce qui manque,
+          ce qui attend votre validation.
+        </p>
+
+        <div class="etat" id="etat-pointage">
+          <p class="aide">Chargement…</p>
+        </div>
+
+        <div class="actions">
+          <button class="principal" id="btn-semaine" type="button">Ouvrir la semaine</button>
+          <button class="petit" id="btn-conges" type="button">Les congés du mois</button>
+        </div>
+      </section>
+
+      <section class="porte paie">
+        <div class="tete">
+          <span class="marqueur" aria-hidden="true">M</span>
+          <div>
+            <h2>Paie</h2>
+            <p class="quand">Chaque mois</p>
+          </div>
+        </div>
+
+        <p class="quoi">
+          Ce qui part au cabinet comptable : les heures du mois, les primes,
+          les montants — personnel de chantier et non productif.
+        </p>
+
+        <div class="etat" id="etat-paie">
+          <p class="aide">Chargement…</p>
+        </div>
+
+        <div class="actions">
+          <button class="principal" id="btn-paie" type="button">Ouvrir la paie du mois</button>
+          <button class="petit" id="btn-non-productif" type="button">Personnel non productif</button>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script src="/js/regles.js"></script>
+  <script src="/js/commun.js"></script>
+  <script src="/js/accueil.js"></script>
+</body>
+</html>
