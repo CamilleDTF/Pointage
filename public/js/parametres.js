@@ -982,6 +982,37 @@ async function chargerAdmin() {
         .join('')
     : '<tr><td colspan="5" class="vide">Aucun compte de chef d’équipe.</td></tr>';
 
+  /*
+   * Les administrateurs, dans leur propre liste.
+   *
+   * Le role existait dans le code — cloisonnement compris — mais aucun ecran ne
+   * permettait de creer le compte : le formulaire des chefs pose « chef » en
+   * dur. La separation entre qui tient la machine et qui decide des salaires
+   * etait ecrite, et inapplicable.
+   */
+  const admins = utilisateurs.filter((u) => u.role === 'admin');
+  const tableAdmins = $('table-admins');
+  if (tableAdmins) {
+    tableAdmins.querySelector('tbody').innerHTML = admins.length
+      ? admins
+          .map(
+            (u) => `<tr style="${u.actif ? '' : 'opacity:.5'}">
+              <td>${echapper(u.nom)}</td>
+              <td>${echapper(u.identifiant)}</td>
+              <td>
+                <button class="petit" onclick="reinitialiserCode(${u.id})">Nouveau code</button>
+                <button class="petit" onclick="basculerActif(${u.id}, ${u.actif ? 0 : 1})">${
+                  u.actif ? 'Désactiver' : 'Réactiver'
+                }</button>
+                <button class="petit danger" onclick="supprimerCompte(${u.id}, '${echapper(u.nom).replace(/'/g, "\\'")}')">Supprimer</button>
+              </td>
+            </tr>`
+          )
+          .join('')
+      : '<tr><td colspan="3" class="vide">Aucun administrateur technique — '
+        + 'la direction assure elle-même l’administration.</td></tr>';
+  }
+
   const chefs = utilisateurs.filter((u) => u.role === 'chef' && u.actif);
   const options = (selectionne) =>
     `<option value="">—</option>${chefs
@@ -1093,6 +1124,27 @@ surClic('btn-ajout-chef', async () => {
     $('u-nom').value = $('u-identifiant').value = $('u-pin').value = '';
     await chargerAdmin();
     message('Chef d’équipe ajouté.', 'succes');
+  } catch (e) {
+    message(e.message, 'erreur');
+  }
+});
+
+surClic('btn-ajout-admin', async () => {
+  try {
+    await API.post('/api/admin/utilisateurs', {
+      nom: $('a-nom').value,
+      identifiant: $('a-identifiant').value,
+      pin: $('a-pin').value,
+      role: 'admin',
+    });
+    $('a-nom').value = $('a-identifiant').value = $('a-pin').value = '';
+    await chargerAdmin();
+    message(
+      'Administrateur ajouté. Son code est provisoire : il devra en choisir un autre '
+        + 'à sa première connexion, et personne d’autre ne connaîtra le nouveau.',
+      'succes',
+      8000
+    );
   } catch (e) {
     message(e.message, 'erreur');
   }

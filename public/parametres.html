@@ -300,6 +300,39 @@
         <input id="u-pin" placeholder="code" inputmode="numeric" class="champ-court">
         <button class="petit principal" id="btn-ajout-chef" type="button">Ajouter un chef</button>
       </div>
+
+      <!--
+        L'administrateur technique.
+
+        Ce role existait dans le code — cloisonnement compris — mais aucun ecran
+        ne permettait de creer le compte : le formulaire ci-dessus pose « chef »
+        en dur. La separation entre qui tient la machine et qui decide des
+        salaires etait donc ecrite, et inapplicable.
+
+        Il vit a part des chefs d'equipe parce qu'il n'en est pas un : il ne
+        pointe rien. Et ce qu'il faut comprendre avant de creer ce compte n'est
+        pas « qui est-ce », mais ce qu'il pourra et ce qu'il ne pourra pas.
+      -->
+      <h3 class="titre-bloc detache plus">Administrateur technique</h3>
+      <p class="aide detache-apres">
+        Pour la personne qui tient la machine sans décider des salaires — un prestataire,
+        un collègue informatique. Il gère les comptes, l’effectif, les véhicules et les
+        réglages, et <strong>voit le pointage sans pouvoir le valider</strong>.
+        Aucun montant ne lui est accessible : ni les taux horaires, ni les primes,
+        ni la paie du mois, ni les exports de direction.
+      </p>
+
+      <div class="enveloppe-table"><table id="table-admins">
+        <thead><tr><th>Nom</th><th>Identifiant</th><th>Actions</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+
+      <div class="rangee detache">
+        <input id="a-nom" placeholder="NOM Prénom" class="champ-libre">
+        <input id="a-identifiant" placeholder="identifiant" class="champ-moyen">
+        <input id="a-pin" placeholder="code" inputmode="numeric" class="champ-court">
+        <button class="petit principal" id="btn-ajout-admin" type="button">Ajouter un administrateur</button>
+      </div>
     </section>
 
     <section class="carte panneau masque" id="panneau-conducteurs">
