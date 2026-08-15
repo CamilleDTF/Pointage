@@ -1229,3 +1229,41 @@ table.np-totaux td.num, table.np-totaux th.num { text-align: right; font-variant
   font-size: var(--t-petit);
   white-space: pre-line;
 }
+
+/* ------------------- La fenetre d'un ecart, non productif ------------------ */
+
+/*
+ * Deux blocs, et non cinq champs en vrac.
+ *
+ * Ils se suivaient dans une meme grille : rien ne disait que « du … au … »
+ * commandait les trois autres. On lisait ces dates comme un reglage de
+ * l'absence, et « heures travaillees » comme une question separee — alors que
+ * c'est l'inverse. Le premier bloc dit de QUAND on parle, le second CE QUI
+ * s'est passe ; le filet entre les deux porte cette lecture.
+ */
+.bloc-quand,
+.bloc-quoi {
+  padding: var(--e3) 0;
+}
+.bloc-quand { border-bottom: 1px solid var(--gris-bord); margin-bottom: var(--e3); }
+
+.bloc-quand > h3,
+.bloc-quoi > h3 {
+  margin: 0 0 var(--e3);
+  font-size: var(--t-petit);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--bleu);
+}
+
+/* Les deux dates cote a cote, a leur largeur naturelle. */
+.bloc-quand .rangee > div { flex: 0 0 auto; }
+.bloc-quand input[type="date"] { width: var(--champ-moyen); }
+
+/* Un champ ferme n'est pas une erreur : il attend qu'une seule journee le rende utile. */
+.bloc-quoi input:disabled { background: #f4f6f9; color: #9aa4b1; }
+
+/* Le titre ramene a l'accueil : il doit se donner pour cliquable. */
+header.appbar .titre.retour-accueil { cursor: pointer; border-radius: 6px; padding: 2px 6px; margin: -2px -6px; }
+header.appbar .titre.retour-accueil:hover { background: rgba(255, 255, 255, 0.14); }
+header.appbar .titre.retour-accueil:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }

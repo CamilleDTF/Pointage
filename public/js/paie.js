@@ -524,47 +524,61 @@ function ouvrirJour(salarieId, date) {
   fenetre.className = 'fenetre';
   fenetre.innerHTML = `
     <div class="fenetre-corps">
-      <h2>${echapper(`${ligne.nom} ${ligne.prenom}`.trim())} — ${echapper(dateFrancaise(date))}</h2>
+      <h2>${echapper(`${ligne.nom} ${ligne.prenom}`.trim())}</h2>
       <p class="aide">
-        Sans rien déclarer, la journée vaut <strong>7 h</strong> si elle est ouvrée. Renseignez
-        seulement ce qui s'en écarte.
+        Sans rien déclarer, une journée ouvrée vaut <strong>7 h</strong>. Renseignez
+        seulement ce qui s’en écarte.
       </p>
 
       <!--
-        Du … au …, plutot que case par case.
-
-        Un accident du travail dure trois semaines : il fallait ouvrir quinze
-        fois cette fenetre. Les deux dates valent par defaut le jour clique,
-        donc declarer une seule journee ne demande rien de plus qu'avant.
+        Deux blocs, et non cinq champs en vrac.
+        
+        Les cinq champs se suivaient dans une meme grille : rien ne disait que
+        « du … au … » commandait les trois autres, ni que les heures allaient
+        avec le motif. On lisait « Du 3 au 3 » comme un reglage de l'absence, et
+        « Heures travaillees » comme une question separee — alors que c'est
+        l'inverse : la periode porte tout, et les heures qualifient le motif.
+        
+        Le premier bloc dit DE QUAND on parle. Le second, CE QU'il s'est passe.
       -->
-      <div class="grille deux">
-        <div>
-          <label for="j-debut">Du</label>
-          <input id="j-debut" type="date" value="${date}">
+      <section class="bloc-quand">
+        <h3>Quelles journées ?</h3>
+        <div class="rangee">
+          <div>
+            <label for="j-debut">Du</label>
+            <input id="j-debut" type="date" value="${date}">
+          </div>
+          <div>
+            <label for="j-fin">Au</label>
+            <input id="j-fin" type="date" value="${date}">
+          </div>
         </div>
-        <div>
-          <label for="j-fin">Au</label>
-          <input id="j-fin" type="date" value="${date}">
+        <p class="aide suite" id="j-portee"></p>
+      </section>
+
+      <section class="bloc-quoi">
+        <h3>Que s’est-il passé ?</h3>
+        <div class="grille deux">
+          <div>
+            <label for="j-code">Absence</label>
+            <select id="j-code"><option value="">— aucune —</option>${codes}</select>
+          </div>
+          <div>
+            <label for="j-gd">Grand déplacement</label>
+            <select id="j-gd">
+              <option value="">— aucun —</option>
+              <option value="72"${jour.gd === '72' ? ' selected' : ''}>GD 72</option>
+              <option value="80"${jour.gd === '80' ? ' selected' : ''}>GD 80</option>
+            </select>
+          </div>
         </div>
-        <div>
-          <label for="j-code">Absence</label>
-          <select id="j-code"><option value="">— aucune —</option>${codes}</select>
-        </div>
-        <div>
-          <label for="j-gd">Grand déplacement</label>
-          <select id="j-gd">
-            <option value="">— aucun —</option>
-            <option value="72"${jour.gd === '72' ? ' selected' : ''}>GD 72</option>
-            <option value="80"${jour.gd === '80' ? ' selected' : ''}>GD 80</option>
-          </select>
-        </div>
-        <div>
+        <div class="champ-moyen detache">
           <label for="j-heures"><span id="j-libelle">Heures travaillées</span></label>
           <input id="j-heures" value="${jour.etat === 'travaille' ? '' : echapper(versSaisie(jour.minutes))}"
                  placeholder="7h00 par défaut" inputmode="decimal">
-          <p class="aide suite" id="j-explication"></p>
         </div>
-      </div>
+        <p class="aide suite" id="j-explication"></p>
+      </section>
 
       <div class="rangee detache">
         <button class="petit" type="button" data-effacer>Revenir à l'ordinaire</button>
@@ -614,10 +628,30 @@ function ouvrirJour(salarieId, date) {
     return n;
   };
 
+  const portee = fenetre.querySelector('#j-portee');
+
   const majFormulaire = () => {
     const absent = Boolean(champCode.value);
     const nb = joursOuvres();
     const surUnJour = nb <= 1;
+
+    /*
+     * Le premier bloc dit toujours sur quoi porte la declaration, meme quand
+     * elle ne couvre qu'un jour. C'est ce qui manquait : « du 3 au 3 » se
+     * lisait comme un reglage de l'absence, faute d'une phrase disant que ces
+     * dates commandent tout ce qui suit.
+     */
+    if (champDebut.value && champFin.value && champFin.value < champDebut.value) {
+      portee.textContent = 'La date de fin précède la date de début.';
+    } else if (!nb) {
+      portee.textContent = 'Aucun jour ouvré dans cette période — samedis et dimanches exclus.';
+    } else if (surUnJour) {
+      portee.textContent = 'Une seule journée. Ce que vous déclarez ci-dessous ne vaut que pour elle.';
+    } else {
+      portee.textContent =
+        `${nb} journées ouvrées — samedis et dimanches exclus. Ce que vous déclarez `
+        + 'ci-dessous vaut pour chacune d’elles.';
+    }
 
     libelle.textContent = absent ? 'Durée de l’absence' : 'Heures travaillées';
     champHeures.placeholder = absent ? 'journée entière par défaut' : '7h00 par défaut';
@@ -631,20 +665,16 @@ function ouvrirJour(salarieId, date) {
     champHeures.disabled = !surUnJour;
     if (!surUnJour) champHeures.value = '';
 
-    if (champDebut.value && champFin.value && champFin.value < champDebut.value) {
-      explication.textContent = 'La date de fin précède la date de début.';
-      return;
-    }
     if (!nb) {
-      explication.textContent = 'Cette période ne contient aucun jour ouvré.';
+      explication.textContent = '';
       return;
     }
     if (!absent) {
-      explication.textContent = surUnJour ? '' : `${nb} jours ouvrés — samedis et dimanches exclus.`;
+      explication.textContent = '';
       return;
     }
     if (!surUnJour) {
-      explication.textContent = `${nb} journées entières d’absence — samedis et dimanches exclus.`;
+      explication.textContent = `${nb} journées entières d’absence.`;
       return;
     }
     const saisie = champHeures.value.trim();

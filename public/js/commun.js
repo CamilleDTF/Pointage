@@ -411,3 +411,25 @@ if ('serviceWorker' in navigator) {
     .catch(() => {});
   if (window.caches) caches.keys().then((cles) => cles.forEach((c) => caches.delete(c))).catch(() => {});
 }
+
+/*
+ * Le titre de la barre ramene au tableau de bord.
+ *
+ * C'est le geste que tout le monde essaie en premier — on clique le nom de
+ * l'application pour revenir chez soi — et il ne faisait rien. Le bouton de
+ * retour existe, mais il faut le chercher a l'autre bout de la barre, et il ne
+ * s'appelle pas pareil d'un ecran a l'autre.
+ *
+ * Pose ici plutot que dans chaque page : il n'y a qu'une facon de revenir a
+ * l'accueil, et elle ne doit pas se recrire cinq fois.
+ */
+document.addEventListener('DOMContentLoaded', () => {
+  const titre = document.querySelector('.titre.retour-accueil');
+  if (!titre) return;
+  const aller = () => { location.href = titre.dataset.accueil || '/directeur.html'; };
+  titre.addEventListener('click', aller);
+  // Au clavier : c'est un lien, il repond donc a Entree et a Espace.
+  titre.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); aller(); }
+  });
+});
