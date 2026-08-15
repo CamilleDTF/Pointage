@@ -71,17 +71,28 @@
         </div>
 
         <p class="quoi">
-          Ce qui part au cabinet comptable : les heures du mois, les primes,
-          les montants — personnel de chantier et non productif.
+          Ce qui part au cabinet comptable : les heures du mois, les primes et les
+          montants, pour le personnel de chantier comme pour le non productif.
         </p>
 
         <div class="etat" id="etat-paie">
           <p class="aide">Chargement…</p>
         </div>
 
+        <!--
+          Une seule action.
+
+          Il y avait ici un raccourci « Personnel non productif ». Mais le
+          personnel non productif n'est pas une destination : c'est un ONGLET
+          de l'ecran que le bouton d'a cote ouvre deja. Le proposer ici
+          defaisait ce que l'ecran de paie venait de reunir — deux populations,
+          un seul endroit — et laissait croire a deux chemins la ou il n'y en a
+          qu'un.
+
+          « Les conges du mois », en face, reste : c'est un autre ecran.
+        -->
         <div class="actions">
           <button class="principal" id="btn-paie" type="button">Ouvrir la paie du mois</button>
-          <button class="petit" id="btn-non-productif" type="button">Personnel non productif</button>
         </div>
       </section>
 

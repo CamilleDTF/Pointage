@@ -45,7 +45,6 @@ surClic('btn-quitter', deconnexion);
 surClic('btn-semaine', () => { location.href = '/directeur.html'; });
 surClic('btn-conges', () => { location.href = '/calendrier.html'; });
 surClic('btn-paie', () => { location.href = '/paie.html'; });
-surClic('btn-non-productif', () => { location.href = '/paie.html#nonproductif'; });
 
 /*
  * Ce qui attend derriere la porte « Pointage » : la semaine en cours.
