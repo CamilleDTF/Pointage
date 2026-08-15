@@ -336,6 +336,30 @@ surClic('btn-quitter', deconnexion);
 surClic('btn-code', changerCode);
 surClic('btn-transmettre', transmettre);
 surClic('btn-reprendre', reprendre);
+
+/*
+ * Supprimer la fiche en cours de redaction.
+ *
+ * La confirmation nomme la semaine et le chantier : « supprimer cette fiche ? »
+ * ne dit pas laquelle quand on en tient deux dans la meme semaine.
+ */
+surClic('btn-supprimer', async () => {
+  if (!fiche || fiche.statut !== 'brouillon') return;
+  const quoi = fiche.chantier ? `« ${fiche.chantier} »` : 'sans chantier renseigné';
+  if (!confirm(
+    `Supprimer la fiche de la semaine ${fiche.semaine} — ${quoi} ?\n\n`
+      + 'Tout ce qui y a été saisi sera perdu. Cette action est irréversible.'
+  )) return;
+
+  try {
+    await API.supprimer(`/api/fiches/${fiche.id}`);
+    message('Fiche supprimée.', 'succes');
+    // On repart de la semaine, qui rouvrira un brouillon vide si besoin.
+    location.href = '/chef.html';
+  } catch (e) {
+    message(e.message, 'erreur', 8000);
+  }
+});
 surClic('btn-presentation', () => {
   presentation = presentation === 'tableau' ? 'cartes' : 'tableau';
   majBoutonPresentation();
@@ -554,6 +578,17 @@ function afficher() {
   // faut plus attendre une reouverture de la direction pour une virgule.
   poser('btn-reprendre', (bouton) => {
     bouton.classList.toggle('masque', fiche.statut !== 'soumise');
+  });
+
+  /*
+   * Supprimer ne se propose que sur un brouillon jamais transmis.
+   *
+   * Une fiche renvoyee par la direction porte un motif et une histoire :
+   * l'effacer effacerait la raison du renvoi. Celle-la se corrige. Le serveur
+   * applique la meme regle — le bouton ne fait que cesser de tenter.
+   */
+  poser('btn-supprimer', (bouton) => {
+    bouton.classList.toggle('masque', fiche.statut !== 'brouillon' || Boolean(fiche.soumise_le));
   });
 }
 

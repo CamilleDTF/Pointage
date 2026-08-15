@@ -90,6 +90,14 @@
       </div>
 
       <button class="principal" type="submit" style="width:100%" id="btn-reprise">Continuer</button>
+      <!--
+        Le message de la reprise se voit.
+
+        C'etait une note grise en bas de carte, de la taille d'une mention
+        legale : quand la reponse etait « aucune question n'est enregistree »,
+        on ne la lisait pas, et l'on concluait que le bouton ne faisait rien.
+        Un refus qui ne se voit pas est un refus qui n'existe pas.
+      -->
       <p class="aide" id="aide-reprise">La réponse ne s'affiche jamais et n'est conservée que sous forme chiffrée.</p>
       <p class="aide suite"><button class="lien" id="btn-retour-connexion" type="button">◀ Revenir à la connexion</button></p>
     </form>
@@ -159,6 +167,9 @@
     function direReprise(texte, couleur) {
       aideReprise.textContent = texte;
       aideReprise.style.color = couleur || '';
+      // Une nouvelle — refus, avancement — se detache ; la mention legale du
+      // depart reste une mention legale.
+      aideReprise.classList.toggle('dit-quelque-chose', Boolean(couleur));
     }
 
     function basculer(versReprise) {

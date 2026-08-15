@@ -186,3 +186,166 @@ test('une periode a l envers ou trop longue est refusee', () => {
   );
   assert.match(trop.erreur, /trop longue/i);
 });
+
+/* ---------------- Supprimer une fiche en cours de redaction ---------------- */
+
+/*
+ * Un chantier qui n'a pas eu lieu, une seconde fiche ouverte par erreur : le
+ * chef doit pouvoir l'effacer. Mais une fiche qui a suivi son circuit porte
+ * une histoire — le motif d'un renvoi, la trace de qui a valide — et cette
+ * histoire ne se supprime pas.
+ */
+const F = require('../server/fiches');
+
+function unChefAvecSaFiche() {
+  const chef = db
+    .prepare("INSERT INTO utilisateurs (nom, identifiant, pin_hash, role, actif) VALUES (?, ?, '', 'chef', 1)")
+    .run('ESSAI Suppression', `chef-suppr-${Date.now()}-${Math.random()}`).lastInsertRowid;
+  const fiche = db
+    .prepare(
+      "INSERT INTO fiches (chef_id, annee, semaine, chantier, ville, statut) VALUES (?, 2026, 40, 'Chantier essai', 'Toulouse', 'brouillon')"
+    )
+    .run(chef).lastInsertRowid;
+  return { chef: { id: chef, role: 'chef', identifiant: 'essai' }, fiche };
+}
+
+test('un chef supprime son brouillon, et tout part avec lui', () => {
+  const { chef, fiche } = unChefAvecSaFiche();
+  const ligne = db
+    .prepare("INSERT INTO fiche_lignes (fiche_id, salarie_id, nom_affiche, ordre) VALUES (?, NULL, 'ESSAI Jean', 0)")
+    .run(fiche).lastInsertRowid;
+  db.prepare("INSERT INTO fiche_jours (ligne_id, jour, minutes, code_absence, saisi) VALUES (?, 0, 420, '', 1)").run(ligne);
+
+  const r = F.supprimerFiche(fiche, chef);
+  assert.ok(!r.erreur, r.erreur);
+
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM fiches WHERE id = ?').get(fiche).n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM fiche_lignes WHERE fiche_id = ?').get(fiche).n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM fiche_jours WHERE ligne_id = ?').get(ligne).n, 0);
+});
+
+test('un chef ne supprime pas la fiche d un autre', () => {
+  const { fiche } = unChefAvecSaFiche();
+  const autre = { id: 999999, role: 'chef', identifiant: 'autre' };
+  const r = F.supprimerFiche(fiche, autre);
+  assert.equal(r.code, 403);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM fiches WHERE id = ?').get(fiche).n, 1);
+});
+
+test('une fiche deja transmise ne se supprime pas : son renvoi a une raison', () => {
+  const { chef, fiche } = unChefAvecSaFiche();
+  // Renvoyee par la direction : brouillon a nouveau, mais elle a une histoire.
+  db.prepare("UPDATE fiches SET soumise_le = datetime('now') WHERE id = ?").run(fiche);
+
+  const r = F.supprimerFiche(fiche, chef);
+  assert.equal(r.code, 409);
+  assert.match(r.erreur, /transmise/i);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM fiches WHERE id = ?').get(fiche).n, 1);
+});
+
+test('une fiche validee ne se supprime pas', () => {
+  const { chef, fiche } = unChefAvecSaFiche();
+  db.prepare("UPDATE fiches SET statut = 'validee' WHERE id = ?").run(fiche);
+
+  const r = F.supprimerFiche(fiche, chef);
+  assert.equal(r.code, 409);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM fiches WHERE id = ?').get(fiche).n, 1);
+});
+
+test('le directeur ne passe pas par cette porte', () => {
+  const { fiche } = unChefAvecSaFiche();
+  const r = F.supprimerFiche(fiche, { id: 1, role: 'directeur', identifiant: 'directeur' });
+  assert.equal(r.code, 403);
+});
+
+/* ------------------ La question de reprise suit le coffre ----------------- */
+
+/*
+ * Creer le coffre depuis l'ecran des parametres acceptait une question de
+ * reprise sans l'enregistrer. Le coffre se creait, et « Retrouver son code »
+ * repondait ensuite qu'aucune question n'existait — sans que rien, au moment
+ * de la creation, n'ait laisse entendre qu'elle avait ete ignoree. Le seul
+ * filet de securite du directeur tombait en silence.
+ */
+const REPRISE = require('../server/reprise');
+
+test('poser une question de reprise la rend interrogeable', () => {
+  const directeur = db
+    .prepare("INSERT INTO utilisateurs (nom, identifiant, pin_hash, role, actif) VALUES (?, ?, '', 'directeur', 1)")
+    .run('ESSAI Direction', `dir-reprise-${Date.now()}`).lastInsertRowid;
+  db.prepare('UPDATE utilisateurs SET pin_hash = ? WHERE id = ?')
+    .run(require('../server/auth').hacherPin('246810'), directeur);
+  const compte = { id: directeur, role: 'directeur', identifiant: 'essai' };
+
+  // `poser` exige le code actuel : c'est ce qui empeche une session laissee
+  // ouverte de reecrire le filet de securite.
+  const sansCode = REPRISE.poser(
+    { question: 'Ma ville de naissance', reponse: 'Toulouse', actuel: null },
+    compte
+  );
+  assert.ok(sansCode.erreur, 'sans le code actuel, la question doit etre refusee');
+
+  const pose = REPRISE.poser(
+    { question: 'Ma ville de naissance', reponse: 'Toulouse', actuel: '246810' },
+    compte
+  );
+  assert.ok(!pose.erreur, pose.erreur);
+
+  const enregistre = db
+    .prepare('SELECT question_reprise, reponse_reprise_hash FROM utilisateurs WHERE id = ?')
+    .get(directeur);
+  assert.equal(enregistre.question_reprise, 'Ma ville de naissance');
+  assert.ok(enregistre.reponse_reprise_hash, 'la reponse est conservee, mais hachee');
+});
+
+/*
+ * La reprise elle-meme vit dans la route, et non dans le module : on
+ * l'interroge donc comme le navigateur le fait. Le serveur est monte sur un
+ * port ephemere, le temps de trois appels.
+ */
+test('la reprise rend le code, et la question suit la creation du coffre', async () => {
+  const app = require('../server/index.js');
+  const serveur = app.listen(0);
+  await new Promise((r) => serveur.once('listening', r));
+  const base = `http://127.0.0.1:${serveur.address().port}`;
+
+  const poste = (chemin, corps, cookie) =>
+    fetch(base + chemin, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
+      body: JSON.stringify(corps),
+    });
+
+  try {
+    // Un directeur tout neuf, avec sa question.
+    const identifiant = `dir-http-${Date.now()}`;
+    const compte = db
+      .prepare("INSERT INTO utilisateurs (nom, identifiant, pin_hash, role, actif) VALUES (?, ?, '', 'directeur', 1)")
+      .run('ESSAI HTTP', identifiant).lastInsertRowid;
+    db.prepare('UPDATE utilisateurs SET pin_hash = ? WHERE id = ?')
+      .run(require('../server/auth').hacherPin('246810'), compte);
+    REPRISE.poser(
+      { question: 'Ma ville de naissance', reponse: 'Nîmes', actuel: '246810' },
+      { id: compte, role: 'directeur', identifiant }
+    );
+
+    const q = await (await poste('/api/reprise/question', { identifiant })).json();
+    assert.equal(q.definie, true, 'la question doit se retrouver');
+    assert.equal(q.question, 'Ma ville de naissance');
+
+    // Les accents et les majuscules ne comptent pas : on tape vite, au telephone.
+    const r = await poste('/api/reprise/code', { identifiant, reponse: 'NIMES', nouveau: '975310' });
+    assert.equal(r.status, 200, `« NIMES » doit valoir « Nîmes » (${r.status})`);
+
+    const bonne = await poste('/api/connexion', { identifiant, pin: '975310' });
+    assert.equal(bonne.status, 200, 'le nouveau code doit ouvrir la session');
+
+    // Une mauvaise reponse ne rend rien.
+    const mauvaise = await poste('/api/reprise/code', { identifiant, reponse: 'Bordeaux', nouveau: '111111' });
+    assert.notEqual(mauvaise.status, 200, 'une mauvaise reponse doit etre refusee');
+    const refuse = await poste('/api/connexion', { identifiant, pin: '111111' });
+    assert.notEqual(refuse.status, 200, 'et ne doit pas avoir change le code');
+  } finally {
+    serveur.close();
+  }
+});

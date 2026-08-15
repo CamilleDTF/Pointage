@@ -1351,3 +1351,14 @@ header.appbar .titre.retour-accueil:focus-visible { outline: 2px solid #fff; out
 .porte .actions { display: flex; flex-wrap: wrap; gap: var(--e2); margin-top: auto; }
 .porte.paie .actions button.principal { background: var(--vert); border-color: var(--vert); }
 .porte.paie .actions button.principal:hover { filter: brightness(1.1); }
+
+/* Le message de la reprise de code : lisible, quelle que soit la nouvelle. */
+#aide-reprise.dit-quelque-chose {
+  font-size: var(--t-normal);
+  font-weight: 600;
+  padding: var(--e3);
+  border-radius: 8px;
+  border-left: 3px solid currentColor;
+  background: #f7f9fb;
+  margin-top: var(--e3);
+}

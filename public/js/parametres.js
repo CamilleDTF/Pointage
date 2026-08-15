@@ -281,6 +281,30 @@ surClic('btn-creer-coffre', async () => {
     $('creation-coffre').classList.add('masque');
     $('secours-coffre').classList.remove('masque');
     aide.textContent = '';
+
+    /*
+     * Le coffre est cree — mais sans question de reprise, un code oublie
+     * enferme la direction dehors, et personne ne peut lui en remettre un.
+     *
+     * Cet ecran ne demande pas la question : c'est « Mise en service » qui la
+     * pose. Le silence laissait croire que tout etait en place, et l'on ne
+     * s'en apercevait qu'au jour ou l'on avait oublie son code — c'est-a-dire
+     * trop tard. On le dit maintenant, pendant qu'il est encore temps.
+     */
+    try {
+      const etat = await API.get('/api/mise-en-service');
+      const sansQuestion = (etat.points || []).find((p) => p.cle === 'reprise' && !p.arme);
+      if (sansQuestion) {
+        message(
+          'Coffre créé. Il vous reste à poser votre question de reprise, dans '
+            + '« Mise en service » : sans elle, un code oublié n’est pas récupérable.',
+          'erreur',
+          12000
+        );
+      }
+    } catch {
+      // L'etat n'est pas joignable : le coffre est cree, c'est l'essentiel.
+    }
   } catch (e) {
     aide.textContent = e.message;
     aide.style.color = 'var(--rouge)';

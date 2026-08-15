@@ -1050,6 +1050,64 @@ function lignesPourExport({ annee, semaine, statut }) {
   return lignes;
 }
 
+/*
+ * Supprimer une fiche en cours de redaction.
+ *
+ * Un chef ouvre parfois une fiche pour rien : un chantier qui n'a finalement
+ * pas eu lieu, une seconde fiche ouverte par erreur dans la semaine. Elle
+ * restait la, vide, et comptait comme une fiche attendue — le tableau de bord
+ * de la direction la reclamait indefiniment.
+ *
+ * Trois conditions, et elles ne se negocient pas :
+ *
+ *  - c'est SA fiche. Un chef ne touche pas a celle d'un autre ;
+ *  - elle est encore un brouillon. Une fiche validee est partie en paie ;
+ *  - elle n'a JAMAIS ete transmise. Une fiche renvoyee par la direction porte
+ *    un motif et une histoire — l'effacer effacerait la raison du renvoi, et
+ *    c'est precisement ce qu'on cherchera dans six mois. Celle-la se corrige,
+ *    elle ne se supprime pas.
+ */
+function supprimerFiche(ficheId, utilisateur) {
+  const fiche = db
+    .prepare('SELECT id, chef_id, statut, soumise_le, annee, semaine, chantier FROM fiches WHERE id = ?')
+    .get(Number(ficheId));
+  if (!fiche) return { erreur: 'Fiche introuvable.', code: 404 };
+
+  if (utilisateur.role !== 'chef' || fiche.chef_id !== utilisateur.id) {
+    return { erreur: 'Vous ne pouvez supprimer que vos propres fiches.', code: 403 };
+  }
+  if (fiche.statut !== 'brouillon') {
+    return {
+      erreur:
+        'Cette fiche n’est plus un brouillon : elle a déjà suivi son circuit. '
+        + 'Corrigez-la et transmettez-la de nouveau.',
+      code: 409,
+    };
+  }
+  if (fiche.soumise_le) {
+    return {
+      erreur:
+        'Cette fiche a déjà été transmise une fois : la supprimer effacerait le motif '
+        + 'de son renvoi. Corrigez-la et transmettez-la de nouveau.',
+      code: 409,
+    };
+  }
+
+  // Les lignes et les journees partent avec elle ; le journal aussi, puisqu'il
+  // ne raconte qu'une saisie qui n'a jamais quitte le chef.
+  const effacer = db.transaction(() => {
+    db.prepare(
+      'DELETE FROM fiche_jours WHERE ligne_id IN (SELECT id FROM fiche_lignes WHERE fiche_id = ?)'
+    ).run(fiche.id);
+    db.prepare('DELETE FROM fiche_lignes WHERE fiche_id = ?').run(fiche.id);
+    db.prepare('DELETE FROM journal WHERE fiche_id = ?').run(fiche.id);
+    db.prepare('DELETE FROM fiches WHERE id = ?').run(fiche.id);
+  });
+  effacer();
+
+  return { ok: true, semaine: fiche.semaine, annee: fiche.annee };
+}
+
 module.exports = {
   NB_LIGNES_FICHE,
   optionsControle,
@@ -1063,6 +1121,7 @@ module.exports = {
   fichesDeLaSemaine,
   ouvrirFicheSupplementaire,
   enregistrerFiche,
+  supprimerFiche,
   soumettre,
   reprendre,
   statuer,

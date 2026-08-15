@@ -105,6 +105,18 @@ routes.get('/api/fiches/:id', A.exigerConnexion, (req, res) => {
   res.json({ fiche });
 });
 
+/*
+ * Supprimer une fiche en cours de redaction.
+ *
+ * Un chantier qui n'a pas eu lieu, une seconde fiche ouverte par erreur : elle
+ * restait la, vide, et le tableau de bord de la direction la reclamait
+ * indefiniment. Les conditions sont dans `F.supprimerFiche` — c'est SA fiche,
+ * elle est encore un brouillon, et elle n'a jamais ete transmise.
+ */
+routes.delete('/api/fiches/:id', A.exigerConnexion, (req, res) => {
+  repondre(res, F.supprimerFiche(Number(req.params.id), req.utilisateur));
+});
+
 routes.put('/api/fiches/:id', A.exigerConnexion, (req, res) => {
   const resultat = F.enregistrerFiche(Number(req.params.id), req.body, req.utilisateur);
   if (resultat.fiche) {

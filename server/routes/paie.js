@@ -19,6 +19,7 @@ const XM = require('../export-mensuel');
 const M = require('../mensuel');
 const T = require('../taux');
 const COFFRE = require('../coffre');
+const REPRISE = require('../reprise');
 const { asyncRoute, autoriserMontants } = require('./commun');
 
 const routes = express.Router();
@@ -158,8 +159,38 @@ routes.post('/api/coffre', A.exigerDirecteur, (req, res) => {
   const bascule = COFFRE.chiffrerExistant(resultat.cle);
   journaliser(null, req.utilisateur.id, 'coffre_cree', JSON.stringify(bascule));
 
+  /*
+   * La question de reprise part avec le coffre, quand elle est fournie.
+   *
+   * Cette route l'acceptait sans l'enregistrer : le coffre se creait, et
+   * « Retrouver son code » repondait ensuite qu'aucune question n'existait —
+   * sans que rien, au moment de la creation, n'ait laisse entendre qu'elle
+   * avait ete ignoree. Le seul filet de securite du directeur tombait en
+   * silence. « Mise en service » la posait deja ; ici, elle etait perdue.
+   */
+  const question = String(req.body.question || '').trim();
+  const reponse = String(req.body.reponse || '').trim();
+  let repriseRefusee = null;
+  if (question && reponse) {
+    const pose = REPRISE.poser(
+      { question, reponse, actuel: req.body.pin || req.body.actuel },
+      req.utilisateur
+    );
+    /*
+     * Un refus ne s'avale pas.
+     *
+     * `poser` exige le code actuel : sans lui, la question est rejetee. Ignorer
+     * ce rejet laissait le coffre se creer avec, pour le directeur, la
+     * conviction d'avoir pose son filet de securite — et « Retrouver son code »
+     * repondait ensuite qu'aucune question n'existait. Le coffre est cree, on
+     * ne revient pas dessus ; mais on dit ce qui n'a pas suivi.
+     */
+    if (pose.erreur) repriseRefusee = pose.erreur;
+  }
+
   return res.json({
     secours: resultat.secours,
+    repriseRefusee,
     bascule,
     montantsEnClair: COFFRE.resteDuClair(),
     seance: COFFRE.ouvrirSeance(resultat.cle, req.utilisateur.id),
