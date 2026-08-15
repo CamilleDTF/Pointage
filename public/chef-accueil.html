@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10416b">
+  <title>Pointage — Accueil</title>
+  <link rel="icon" href="/icone.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="appbar">
+    <div class="titre">
+      Pointage hebdomadaire
+      <small id="entete-nom">…</small>
+    </div>
+    <nav>
+      <button class="petit discret" id="btn-code" type="button">Code</button>
+      <button class="petit discret" id="btn-quitter" type="button">Quitter</button>
+    </nav>
+  </header>
+
+  <div class="hors-ligne masque" id="banniere-reseau"></div>
+
+  <!--
+    L'accueil du chef d'equipe.
+
+    Il arrivait droit dans la grille : onze lignes sur sept jours, des la
+    connexion. Ce qui avait change sur ses fiches — un renvoi de la direction,
+    une correction du conducteur — s'affichait au-dessus, mais il fallait le
+    lire en passant, avant de descendre saisir. Et l'annee de ses fiches se
+    depliait sous un volet qu'on ouvrait rarement.
+
+    L'ecran pose donc la question dans l'ordre ou elle se pose un lundi matin :
+    est-ce qu'on me demande quelque chose, et par ou je commence.
+  -->
+  <main>
+    <section class="carte alerte-accueil masque" id="bloc-notifications">
+      <h2 id="titre-notifications">À votre attention</h2>
+      <div id="liste-notifications"></div>
+    </section>
+
+    <div class="portes">
+
+      <section class="porte pointage">
+        <div class="tete">
+          <span class="marqueur" aria-hidden="true">S</span>
+          <div>
+            <h2>Ma semaine</h2>
+            <p class="quand" id="quand-semaine">…</p>
+          </div>
+        </div>
+
+        <p class="quoi">
+          La fiche de pointage de votre équipe : les heures, les déplacements,
+          les signatures, puis la transmission.
+        </p>
+
+        <div class="etat" id="etat-semaine">
+          <p class="aide">Chargement…</p>
+        </div>
+
+        <div class="actions">
+          <button class="principal" id="btn-semaine" type="button">Ouvrir ma fiche</button>
+        </div>
+      </section>
+
+      <section class="porte paie">
+        <div class="tete">
+          <span class="marqueur" aria-hidden="true">A</span>
+          <div>
+            <h2>Mes fiches</h2>
+            <p class="quand">Toute l’année</p>
+          </div>
+        </div>
+
+        <p class="quoi">
+          Le calendrier de vos semaines : celles qui sont validées, celles qui
+          attendent, celles où rien n’a été saisi.
+        </p>
+
+        <div class="etat" id="etat-annee">
+          <p class="aide">Chargement…</p>
+        </div>
+
+        <div class="actions">
+          <button class="principal" id="btn-calendrier" type="button">Voir mon année</button>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script src="/js/regles.js"></script>
+  <script src="/js/commun.js"></script>
+  <script src="/js/chef-accueil.js"></script>
+</body>
+</html>
