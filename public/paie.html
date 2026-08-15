@@ -77,6 +77,16 @@
         <div id="calendrier-np"></div>
         <div class="legende-annee" id="legende-np"></div>
         <p class="aide suite" id="resume-np"></p>
+        <!--
+          « Ce qui part en paie » ne s'ouvre qu'avec les montants.
+
+          Le bloc s'affichait toujours, en version publique : des jours, des
+          heures, des absences — soit exactement ce que la grille du dessus
+          venait de dire, en moins lisible. Il ne prend son sens qu'avec les
+          primes et les montants, c'est-a-dire une fois le code donne. Le
+          reste du temps, il repetait.
+        -->
+        <div id="bloc-paie-np" class="masque">
         <h3 class="titre-bloc detache plus">Ce qui part en paie</h3>
         <div class="enveloppe-table">
           <table class="np-totaux">
@@ -91,6 +101,9 @@
             <tbody id="totaux-np"></tbody>
           </table>
         </div>
+        </div>
+
+        <p class="aide detache" id="invite-paie-np"></p>
       </div>
     </section>
   </main>

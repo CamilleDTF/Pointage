@@ -279,7 +279,20 @@ function afficherNonProductif() {
   }
   $('compte-np').textContent = `· ${moisNP.lignes.length}`;
   afficher();
-  afficherTotaux();
+
+  /*
+   * Le tableau de paie ne s'ouvre qu'avec les montants.
+   *
+   * Il s'affichait toujours : des jours, des heures, des absences — ce que la
+   * grille du dessus venait de dire, en moins lisible. Il ne prend son sens
+   * qu'avec les primes et les montants, donc une fois le code donne.
+   */
+  const ouvert = Boolean(paieNP);
+  $('bloc-paie-np').classList.toggle('masque', !ouvert);
+  $('invite-paie-np').textContent = ouvert
+    ? ''
+    : 'Les primes et les montants de ces personnes s’ouvrent avec « Afficher les montants », en haut.';
+  if (ouvert) afficherTotaux();
 }
 
 
