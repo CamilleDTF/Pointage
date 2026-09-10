@@ -329,10 +329,25 @@ test('les semaines anterieures a la mise en service ne sont pas reclamees', asyn
   const bascule = calendrier.semaines.find((s) => s.debut === '2026-08-31');
   assert.notEqual(bascule.etat, 'horsPerimetre');
 
-  // Et rien de tout cela ne compte comme du retard.
+  /*
+   * Et rien de tout cela ne compte comme du retard.
+   *
+   * On regarde les semaines ANTERIEURES a la mise en service, et non le total
+   * de l'annee : ce total incluait aussi les semaines deja ecoulees depuis, qui
+   * manquent legitimement. Le test passait tant que la date du jour precedait
+   * le 1er septembre 2026, et tombait le lendemain — une assertion qui depend
+   * du calendrier reel finit toujours par mentir.
+   */
   const horsPerimetre = calendrier.semaines.filter((s) => s.etat === 'horsPerimetre');
   assert.ok(horsPerimetre.length > 30, 'les 8 premiers mois de 2026 sortent du perimetre');
-  assert.equal(calendrier.totaux.manquante + calendrier.totaux.brouillon, 0);
+
+  const avantService = calendrier.semaines.filter((s) => s.fin < calendrier.debutService);
+  const reclamees = avantService.filter((s) => ['manquante', 'brouillon'].includes(s.etat));
+  assert.deepEqual(
+    reclamees.map((s) => s.semaine),
+    [],
+    'aucune semaine anterieure a la mise en service ne doit etre reclamee'
+  );
 });
 
 test('une journee mise a zero par le chef est conservee comme telle', async () => {
@@ -1240,7 +1255,9 @@ test('les GD declares sur deux fiches se comptent ensemble', async () => {
 
   const gd = apres.corps.anomalies.find((x) => /grand deplacement/.test(x.message));
   assert.ok(gd, `le cumul doit etre vu : ${JSON.stringify(apres.corps.anomalies)}`);
-  assert.equal(gd.niveau, 'bloquant');
+  // Alerte, et non blocage : plus de deplacements que de jours travailles est
+  // un cas reel, que le chef connait mieux que ce controle.
+  assert.equal(gd.niveau, 'alerte');
   assert.match(gd.message, /10 jours de grand deplacement/);
   assert.match(gd.message, /« Lycee Jean Moulin »/);
 

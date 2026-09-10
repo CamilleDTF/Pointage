@@ -763,8 +763,8 @@ function carteSalarie(ligne, index) {
         <div><label>Heures trajet 50%</label><input class="trajet" value="${versSaisie(ligne.minutes_trajet)}" placeholder="0h00"></div>
         <div><label>Jours en zone</label><input class="zone" type="number" min="0" max="7" step="0.5" value="${ligne.jours_zone || ''}"></div>
         <div><label>Type de masque</label><select class="masque-type">${optionsMasque(ligne.type_masque)}</select></div>
-        <div><label>Jours GD 72</label><input class="gd72" type="number" min="0" max="7" step="1" value="${ligne.nb_gd72 || ''}"></div>
-        <div><label>Jours GD 80</label><input class="gd80" type="number" min="0" max="7" step="1" value="${ligne.nb_gd80 || ''}"></div>
+        <div><label>Jours GD 72</label><input class="gd72" type="number" min="0" max="31" step="1" value="${ligne.nb_gd72 || ''}"></div>
+        <div><label>Jours GD 80</label><input class="gd80" type="number" min="0" max="31" step="1" value="${ligne.nb_gd80 || ''}"></div>
       </div>
 
       <div class="detache">
@@ -815,8 +815,8 @@ function gabaritTableau() {
           <td class="num"><input class="cellule trajet" value="${versSaisie(ligne.minutes_trajet)}" placeholder="0h00"></td>
           <td class="num"><input class="cellule zone" type="number" min="0" max="7" step="0.5" value="${ligne.jours_zone || ''}"></td>
           <td class="num"><select class="cellule masque-type">${optionsMasque(ligne.type_masque)}</select></td>
-          <td class="num"><input class="cellule gd72" type="number" min="0" max="7" step="1" value="${ligne.nb_gd72 || ''}"></td>
-          <td class="num"><input class="cellule gd80" type="number" min="0" max="7" step="1" value="${ligne.nb_gd80 || ''}"></td>
+          <td class="num"><input class="cellule gd72" type="number" min="0" max="31" step="1" value="${ligne.nb_gd72 || ''}"></td>
+          <td class="num"><input class="cellule gd80" type="number" min="0" max="31" step="1" value="${ligne.nb_gd80 || ''}"></td>
           <td><input class="cellule observation" value="${echapper(ligne.observation)}"></td>
           <td class="num"><button type="button" class="petit signer">Signer</button></td>
         </tr>`;

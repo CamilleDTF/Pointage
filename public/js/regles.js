@@ -504,6 +504,7 @@
       const autresChantiers = nommerAilleurs(ailleurs);
       let totalSemaine = 0;
       let joursTravailles = 0;
+      const journeesLongues = [];
 
       for (let j = 0; j < 7; j += 1) {
         const jour = (ligne.jours || []).find((x) => x.jour === j) || { minutes: 0, code_absence: '' };
@@ -533,9 +534,10 @@
         // journee etait feriee, les heures ce qu'on y a fait.
         // Heures et motif se completent : les heures sont ce qui a ete
         // travaille, le motif couvre le reste de la journee.
-        if (minutes > 12 * 60) {
-          alerte(`${nom} - ${JOURS[j]} : ${versTexte(minutes)} sur la journee, a confirmer.`, { ligne: index, jour: j });
-        }
+        // Les journees longues se comptent, et se disent en UNE ligne plus bas :
+        // cinq alertes pour un meme salarie donnaient un ecran qui crie, et
+        // qu'on finit par ne plus lire.
+        if (minutes > 12 * 60) journeesLongues.push(JOURS[j]);
       }
 
       /*
@@ -543,6 +545,22 @@
        * de papier. Compte fiche par fiche, quelqu'un a 30 h ici et 25 h la-bas
        * passait deux controles sans que ses 55 h apparaissent nulle part.
        */
+      /*
+       * Les journees longues, en une ligne.
+       *
+       * Elles n'ont jamais bloque la transmission — ce sont des alertes — mais
+       * cinq lignes identiques sous une meme fiche donnaient l'impression d'un
+       * refus. Une ligne dit la meme chose et se lit.
+       */
+      if (journeesLongues.length) {
+        alerte(
+          journeesLongues.length === 1
+            ? `${nom} - ${journeesLongues[0]} : plus de 12h sur la journee, a confirmer.`
+            : `${nom} : ${journeesLongues.length} journees de plus de 12h (${journeesLongues.join(', ')}), a confirmer.`,
+          { ligne: index }
+        );
+      }
+
       const semaineEntiere = totalSemaine + ailleurs.minutesTotal;
       if (semaineEntiere > 48 * 60) {
         alerte(
@@ -569,8 +587,22 @@
        */
       const gdFiche = (Number(ligne.nb_gd72) || 0) + (Number(ligne.nb_gd80) || 0);
       const gdSemaine = gdFiche + ailleurs.joursGD;
+      /*
+       * Plus de deplacements que de jours travailles : cela arrive.
+       *
+       * C'etait un blocage, par crainte d'un double comptage entre deux fiches
+       * qui ferait disparaitre les paniers sans rien dire. Mais le cas est
+       * reel — un depart la veille, un retour le lendemain, deux
+       * deplacements dans une meme journee — et le chef sait ce qui s'est
+       * passe sur son chantier mieux que ce controle.
+       *
+       * Le calcul du panier n'en souffre pas : « jours travailles moins jours
+       * de GD », plancher a zero, donne zero panier quand tout est en
+       * deplacement, ce qui est precisement juste. On alerte donc, sans
+       * empecher.
+       */
       if (gdSemaine > joursTravailles) {
-        bloquant(
+        alerte(
           ailleurs.joursGD
             ? `${nom} : ${gdSemaine} jours de grand deplacement declares sur la semaine (dont ${ailleurs.joursGD} sur ${autresChantiers}) pour ${joursTravailles} jours travailles.`
             : `${nom} : ${gdSemaine} jours de grand deplacement declares pour ${joursTravailles} jours travailles.`,

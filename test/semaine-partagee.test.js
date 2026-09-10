@@ -49,6 +49,7 @@ function ligne(nom, joursTravailles, extra = {}) {
 
 const messages = (anomalies) => anomalies.map((a) => a.message).join(' | ');
 const bloquantes = (anomalies) => anomalies.filter((a) => a.niveau === 'bloquant');
+const alertes = (anomalies) => anomalies.filter((a) => a.niveau === 'alerte');
 
 test('une personne se reconnait d une fiche a l autre, par son numero ou son nom', () => {
   assert.equal(D.clePointage({ salarie_id: 12, nom_affiche: 'ANDRE Alain' }), 'id:12');
@@ -92,7 +93,13 @@ test('le plafond de 48h se compte sur la semaine, pas sur la fiche', () => {
  * Le coeur du sujet. Cinq jours de GD declares de chaque cote font dix jours de
  * grand deplacement dans une semaine qui n'en compte que cinq — et zero panier.
  */
-test('les jours de grand deplacement ne peuvent pas depasser les jours travailles', () => {
+/*
+ * Plus de deplacements que de jours travailles : cela arrive, et le chef l'a
+ * demande. Un depart la veille, un retour le lendemain, deux deplacements dans
+ * une meme journee. C'etait un blocage ; c'est desormais une alerte — le cumul
+ * entre fiches reste dit, mais il n'empeche plus de transmettre.
+ */
+test('les jours de grand deplacement au-dela des jours travailles alertent sans bloquer', () => {
   const lignes = [ligne('ANDRE Alain', [0, 1, 2, 3, 4], { nb_gd72: 5 })];
 
   const seul = D.controlerFiche(ficheType(), lignes, { conducteursDisponibles: 1 });
@@ -111,8 +118,9 @@ test('les jours de grand deplacement ne peuvent pas depasser les jours travaille
       },
     },
   });
-  const gd = bloquantes(double).find((a) => /grand deplacement/.test(a.message));
-  assert.ok(gd, 'dix jours de GD pour cinq jours travailles doit bloquer');
+  assert.deepEqual(bloquantes(double), [], 'le cumul ne doit plus empecher de transmettre');
+  const gd = alertes(double).find((a) => /grand deplacement/.test(a.message));
+  assert.ok(gd, 'dix jours de GD pour cinq jours travailles doit s annoncer');
   assert.match(gd.message, /10 jours de grand deplacement/);
   assert.match(gd.message, /dont 5 sur « Gymnase Sud »/);
   assert.match(gd.message, /pour 5 jours travailles/);
@@ -206,7 +214,8 @@ test('un chantier d un autre chef ne se nomme pas', () => {
       },
     },
   });
-  const gd = bloquantes(anomalies).find((a) => /grand deplacement/.test(a.message));
+  const gd = alertes(anomalies).find((a) => /grand deplacement/.test(a.message));
+  assert.ok(gd, 'le cumul doit etre signale');
   assert.match(gd.message, /dont 5 sur un autre chantier/);
   assert.ok(!/Gymnase|Lycee/.test(gd.message));
 });
