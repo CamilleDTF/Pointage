@@ -970,7 +970,9 @@ async function chargerAdmin() {
                    onchange="corrigerCompte(${u.id}, 'prenom', this.value, this)"></td>
         <td><input value="${echapper(u.identifiant)}" class="cellule-calme champ-court"
                    onchange="corrigerCompte(${u.id}, 'identifiant', this.value, this)"></td>
-        <td>${u.role}</td>
+        <td><input value="${echapper(u.courriel || '')}" type="email" class="cellule-calme champ-moyen"
+                   placeholder="—"
+                   onchange="corrigerCompte(${u.id}, 'courriel', this.value, this)"></td>
         <td>
           <button class="petit" onclick="reinitialiserCode(${u.id})">Nouveau code</button>
           <button class="petit" onclick="basculerActif(${u.id}, ${u.actif ? 0 : 1})">${u.actif ? 'Désactiver' : 'Réactiver'}</button>
@@ -996,9 +998,20 @@ async function chargerAdmin() {
     tableAdmins.querySelector('tbody').innerHTML = admins.length
       ? admins
           .map(
-            (u) => `<tr style="${u.actif ? '' : 'opacity:.5'}">
-              <td>${echapper(u.nom)}</td>
-              <td>${echapper(u.identifiant)}</td>
+            (u) => {
+              // Meme traitement que les chefs : une faute de frappe se corrige,
+              // elle n'oblige pas a supprimer le compte et a le refaire.
+              const { nom, prenom } = Regles.separerNomPrenom(u.nom);
+              return `<tr style="${u.actif ? '' : 'opacity:.5'}">
+              <td><input value="${echapper(nom)}" class="cellule-calme champ-moyen"
+                         onchange="corrigerCompte(${u.id}, 'nom', this.value, this)"></td>
+              <td><input value="${echapper(prenom)}" class="cellule-calme champ-court"
+                         onchange="corrigerCompte(${u.id}, 'prenom', this.value, this)"></td>
+              <td><input value="${echapper(u.identifiant)}" class="cellule-calme champ-court"
+                         onchange="corrigerCompte(${u.id}, 'identifiant', this.value, this)"></td>
+              <td><input value="${echapper(u.courriel || '')}" type="email" class="cellule-calme champ-moyen"
+                         placeholder="—"
+                         onchange="corrigerCompte(${u.id}, 'courriel', this.value, this)"></td>
               <td>
                 <button class="petit" onclick="reinitialiserCode(${u.id})">Nouveau code</button>
                 <button class="petit" onclick="basculerActif(${u.id}, ${u.actif ? 0 : 1})">${
@@ -1006,10 +1019,11 @@ async function chargerAdmin() {
                 }</button>
                 <button class="petit danger" onclick="supprimerCompte(${u.id}, '${echapper(u.nom).replace(/'/g, "\\'")}')">Supprimer</button>
               </td>
-            </tr>`
+            </tr>`;
+            }
           )
           .join('')
-      : '<tr><td colspan="3" class="vide">Aucun administrateur technique — '
+      : '<tr><td colspan="5" class="vide">Aucun administrateur technique — '
         + 'la direction assure elle-même l’administration.</td></tr>';
   }
 
@@ -1030,12 +1044,39 @@ async function chargerAdmin() {
         <td><input value="${echapper(s.prenom)}" class="cellule-calme champ-moyen"
                    onchange="corrigerSalarie(${s.id}, 'prenom', this.value, this)"></td>
         <td><select class="cellule-calme" onchange="affecter(${s.id}, this.value)">${options(s.chef_id)}</select></td>
+        <!-- Pour lui envoyer son pointage une fois vise. Il n'ouvre aucune
+             session : les salaries n'ont pas de compte. -->
+        <td><input value="${echapper(s.courriel || '')}" type="email" class="cellule-calme champ-moyen"
+                   placeholder="—"
+                   onchange="corrigerSalarie(${s.id}, 'courriel', this.value, this)"></td>
         ${celluleTaux(s)}
-        <td><button class="petit" onclick="basculerSalarie(${s.id}, ${s.actif ? 0 : 1})">${s.actif ? 'Sortie' : 'Réactiver'}</button></td>
+        <td><button class="petit" onclick="basculerSalarie(${s.id}, ${s.actif ? 0 : 1})">${s.actif ? 'Sortie' : 'Réactiver'}</button>
+            <button class="petit danger" onclick="supprimerSalarie(${s.id}, '${echapper(`${s.nom} ${s.prenom}`.trim()).replace(/'/g, "\\'")}')">Supprimer</button></td>
       </tr>`
     )
     .join('');
 }
+
+/*
+ * Supprimer un salarie saisi par erreur.
+ *
+ * On ne pouvait que le sortir de l'effectif : une faute de frappe a la
+ * creation laissait une ligne grise pour toujours. La sortie est faite pour un
+ * depart, pas pour une erreur.
+ *
+ * Le serveur refuse d'effacer quelqu'un qui a deja ete pointe — ses heures
+ * sont parties en paie — et son refus dit quoi faire a la place.
+ */
+window.supprimerSalarie = async (id, nom) => {
+  if (!confirm(`Supprimer définitivement ${nom} de l’effectif ?\n\nCette action est irréversible.`)) return;
+  try {
+    await API.supprimer(`/api/admin/salaries/${id}`);
+    message(`${nom} supprimé de l’effectif.`, 'succes');
+    await chargerAdmin();
+  } catch (e) {
+    message(e.message, 'erreur', 10000);
+  }
+};
 
 window.reinitialiserCode = async (id) => {
   const pin = prompt('Nouveau code (4 à 8 chiffres) :');
@@ -1119,9 +1160,10 @@ surClic('btn-ajout-chef', async () => {
       nom: $('u-nom').value,
       identifiant: $('u-identifiant').value,
       pin: $('u-pin').value,
+      courriel: $('u-courriel').value,
       role: 'chef',
     });
-    $('u-nom').value = $('u-identifiant').value = $('u-pin').value = '';
+    $('u-nom').value = $('u-identifiant').value = $('u-pin').value = $('u-courriel').value = '';
     await chargerAdmin();
     message('Chef d’équipe ajouté.', 'succes');
   } catch (e) {
@@ -1135,9 +1177,10 @@ surClic('btn-ajout-admin', async () => {
       nom: $('a-nom').value,
       identifiant: $('a-identifiant').value,
       pin: $('a-pin').value,
+      courriel: $('a-courriel').value,
       role: 'admin',
     });
-    $('a-nom').value = $('a-identifiant').value = $('a-pin').value = '';
+    $('a-nom').value = $('a-identifiant').value = $('a-pin').value = $('a-courriel').value = '';
     await chargerAdmin();
     message(
       'Administrateur ajouté. Son code est provisoire : il devra en choisir un autre '

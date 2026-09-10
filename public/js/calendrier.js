@@ -45,10 +45,6 @@ async function demarrer() {
   ).join('');
   $('annee').value = maintenant.getFullYear();
 
-  $('conge-salarie').innerHTML = effectif
-    .map((s) => `<option value="${s.id}">${echapper(`${s.nom} ${s.prenom}`.trim())}</option>`)
-    .join('');
-
   await charger();
   await chargerConges();
 }
@@ -90,7 +86,34 @@ async function charger() {
     '<option value="">Toutes les équipes</option>' +
     equipes.map((e) => `<option value="${echapper(e)}"${e === choisie ? ' selected' : ''}>${echapper(e)}</option>`).join('');
 
+  remplirListeConges();
   afficher();
+}
+
+/*
+ * Qui peut recevoir un conge : tout le monde.
+ *
+ * La liste se remplissait avec `reference.effectif`, qui s'arrete au personnel
+ * de chantier — et pour cause : c'est la liste dans laquelle un chef d'equipe
+ * pioche pour pointer, et une comptable n'a rien a y faire. Mais un conge se
+ * pose pour tout le monde, et le mois affiche porte deja les deux populations.
+ *
+ * Elles restent separees dans la liste : ce sont deux effectifs, et l'on ne
+ * cherche jamais dans les deux a la fois.
+ */
+function remplirListeConges() {
+  const choix = $('conge-salarie');
+  if (!choix || !mois) return;
+
+  const nomme = (l) => `<option value="${l.salarie_id}">${echapper(l.nom)}</option>`;
+  const groupe = (intitule, gens) =>
+    gens.length ? `<optgroup label="${intitule} (${gens.length})">${gens.map(nomme).join('')}</optgroup>` : '';
+
+  const garde = choix.value;
+  choix.innerHTML =
+    groupe('Personnel de chantier', mois.lignes.filter((l) => l.productif !== 0))
+    + groupe('Personnel non productif', mois.lignes.filter((l) => l.productif === 0));
+  if (garde) choix.value = garde;
 }
 
 /*

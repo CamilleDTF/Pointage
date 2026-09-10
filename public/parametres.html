@@ -250,7 +250,7 @@
       <div class="enveloppe-table"><table id="table-salaries">
         <thead><tr>
           <th>Matricule</th><th>Nom</th><th>Prénom</th><th>Chef d'équipe</th>
-          <th class="num">Taux horaire</th><th></th>
+          <th>Courriel</th><th class="num">Taux horaire</th><th></th>
         </tr></thead>
         <tbody></tbody>
       </table></div>
@@ -291,13 +291,16 @@
     <section class="carte panneau masque" id="panneau-comptes">
       <h2>Comptes des chefs d'équipe</h2>
       <div class="enveloppe-table"><table id="table-utilisateurs">
-        <thead><tr><th>Nom</th><th>Prénom</th><th>Identifiant</th><th>Rôle</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Nom</th><th>Prénom</th><th>Identifiant</th><th>Courriel</th><th>Actions</th></tr></thead>
         <tbody></tbody>
       </table></div>
       <div class="rangee detache">
         <input id="u-nom" placeholder="NOM Prénom" class="champ-libre">
         <input id="u-identifiant" placeholder="identifiant" class="champ-libre">
         <input id="u-pin" placeholder="code" inputmode="numeric" class="champ-court">
+        <!-- Le courriel n'etait pas demande a la creation : il fallait creer le
+             compte, puis y revenir. Il sert a prevenir, jamais a ouvrir. -->
+        <input id="u-courriel" type="email" placeholder="courriel (facultatif)" class="champ-moyen">
         <button class="petit principal" id="btn-ajout-chef" type="button">Ajouter un chef</button>
       </div>
 
@@ -323,7 +326,7 @@
       </p>
 
       <div class="enveloppe-table"><table id="table-admins">
-        <thead><tr><th>Nom</th><th>Identifiant</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Nom</th><th>Prénom</th><th>Identifiant</th><th>Courriel</th><th>Actions</th></tr></thead>
         <tbody></tbody>
       </table></div>
 
@@ -331,6 +334,7 @@
         <input id="a-nom" placeholder="NOM Prénom" class="champ-libre">
         <input id="a-identifiant" placeholder="identifiant" class="champ-moyen">
         <input id="a-pin" placeholder="code" inputmode="numeric" class="champ-court">
+        <input id="a-courriel" type="email" placeholder="courriel (facultatif)" class="champ-moyen">
         <button class="petit principal" id="btn-ajout-admin" type="button">Ajouter un administrateur</button>
       </div>
     </section>

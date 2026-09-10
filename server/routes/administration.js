@@ -58,7 +58,7 @@ routes.get('/api/admin/utilisateurs', A.exigerAdministration, (req, res) => {
     // deux circuits qui n'ont pas les memes pouvoirs.
     utilisateurs: db
       .prepare(
-        `SELECT id, nom, identifiant, role, actif FROM utilisateurs
+        `SELECT id, nom, identifiant, role, actif, courriel FROM utilisateurs
           WHERE role IN ('chef', 'directeur', 'admin') ORDER BY role DESC, nom`
       )
       .all(),
@@ -303,15 +303,57 @@ routes.post('/api/admin/salaries', A.exigerAdministration, (req, res) => {
   // Non productif : pas de chef d'equipe, il ne figure sur aucune fiche.
   const productif = req.body.productif === 0 || req.body.productif === false ? 0 : 1;
   const r = db
-    .prepare('INSERT INTO salaries (matricule, nom, prenom, chef_id, productif) VALUES (?, ?, ?, ?, ?)')
+    .prepare('INSERT INTO salaries (matricule, nom, prenom, chef_id, productif, courriel) VALUES (?, ?, ?, ?, ?, ?)')
     .run(
       String(req.body.matricule || '').trim(),
       nom,
       prenom,
       productif ? req.body.chef_id || null : null,
-      productif
+      productif,
+      String(req.body.courriel || '').trim()
     );
   res.json({ id: r.lastInsertRowid });
+});
+
+/*
+ * Supprimer un salarie saisi par erreur.
+ *
+ * On ne pouvait que le desactiver : une faute de frappe a la creation laissait
+ * une ligne grise dans l'effectif pour toujours, et un « MARTNEZ Camille »
+ * qu'on relit chaque semaine. La desactivation est faite pour un depart, pas
+ * pour une erreur.
+ *
+ * Mais un salarie qui a ete POINTE ne s'efface pas : son nom est recopie sur
+ * les lignes de fiche, ses heures sont parties en paie, et son dossier doit
+ * survivre a sa sortie. Celui-la se desactive, puis s'anonymise a l'echeance
+ * de conservation — c'est l'ecran « Conservation des donnees ».
+ */
+routes.delete('/api/admin/salaries/:id', A.exigerAdministration, (req, res) => {
+  const id = Number(req.params.id);
+  const salarie = db.prepare('SELECT id, nom, prenom FROM salaries WHERE id = ?').get(id);
+  if (!salarie) return res.status(404).json({ erreur: 'Salarié introuvable.' });
+
+  const nom = `${salarie.nom} ${salarie.prenom}`.trim();
+  const pointe = db.prepare('SELECT COUNT(*) AS n FROM fiche_lignes WHERE salarie_id = ?').get(id).n;
+  const nonProductif = db
+    .prepare('SELECT COUNT(*) AS n FROM jours_non_productifs WHERE salarie_id = ?')
+    .get(id).n;
+
+  if (pointe || nonProductif) {
+    return res.status(409).json({
+      erreur:
+        `${nom} a déjà été pointé — ${pointe ? `${pointe} ligne(s) de fiche` : ''}`
+        + `${pointe && nonProductif ? ', ' : ''}`
+        + `${nonProductif ? `${nonProductif} journée(s) déclarée(s)` : ''}. `
+        + 'Le supprimer effacerait des heures déjà comptées. Désactivez-le : il sort '
+        + 'de l’effectif, et son dossier s’efface à l’échéance de conservation.',
+    });
+  }
+
+  // Rien ne le retient : ni fiche, ni journee, ni conge.
+  db.prepare('DELETE FROM conges WHERE salarie_id = ?').run(id);
+  db.prepare('DELETE FROM salaries WHERE id = ?').run(id);
+  res.json({ ok: true, supprime: nom });
 });
 
 routes.put('/api/admin/salaries/:id', A.exigerAdministration, (req, res) => {
@@ -322,10 +364,23 @@ routes.put('/api/admin/salaries/:id', A.exigerAdministration, (req, res) => {
    * se solde pas par une erreur incomprehensible — le reste de la correction
    * passe, le taux est simplement ignore.
    */
-  const champs = ['matricule', 'nom', 'prenom', 'chef_id', 'actif', 'taux_horaire']
+  const champs = ['matricule', 'nom', 'prenom', 'chef_id', 'actif', 'taux_horaire', 'courriel']
     .filter((c) => c !== 'taux_horaire' || !A.estAdmin(req));
   const maj = {};
   for (const champ of champs) if (req.body[champ] !== undefined) maj[champ] = req.body[champ];
+
+  /*
+   * Le courriel du salarie ne sert qu'a lui envoyer son pointage vise : il
+   * n'ouvre aucune session. Mais une adresse fausse ne se voit qu'au premier
+   * envoi qui ne part pas, c'est-a-dire trop tard.
+   */
+  if (maj.courriel !== undefined) {
+    const courriel = String(maj.courriel).trim();
+    if (courriel && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(courriel)) {
+      return res.status(400).json({ erreur: 'Adresse de courriel invalide.' });
+    }
+    maj.courriel = courriel;
+  }
 
   /*
    * Le taux horaire, coffre ouvert, part scelle et laisse la colonne en clair a

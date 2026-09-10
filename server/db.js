@@ -406,6 +406,15 @@ ajouterColonne('fiche_jours', 'saisi', 'INTEGER NOT NULL DEFAULT 0');
 ajouterColonne('salaries', 'taux_horaire', 'REAL NOT NULL DEFAULT 0');
 
 /*
+ * Le courriel du salarie.
+ *
+ * Le chef d'equipe veut que ses operateurs recoivent leur pointage une fois
+ * vise. Ce n'est pas une donnee d'identification : elle ne sert qu'a envoyer,
+ * jamais a ouvrir une session — les salaries n'ont pas de compte.
+ */
+ajouterColonne('salaries', 'courriel', "TEXT NOT NULL DEFAULT ''");
+
+/*
  * Zone de deplacement du chantier : PARIS, NICE ou AUTRE. Elle decide seule du
  * taux de grand deplacement (80 pour Paris et Nice, 72 ailleurs). Avant, ce
  * taux se devinait en cherchant « paris » ou « nice » dans le nom de la ville —
