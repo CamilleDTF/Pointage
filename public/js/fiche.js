@@ -16,6 +16,15 @@ let ficheCourante = null;
 let reference = null;
 
 /*
+ * L'administrateur regarde, il ne decide pas.
+ *
+ * Le serveur refuse deja ses ecritures — `adminEnLectureSeule` — mais lui
+ * presenter « Valider » et « Renvoyer au chef » revient a lui promettre un
+ * geste qui echouera. Une porte fermee vaut mieux qu'une porte qui claque.
+ */
+let enLectureSeule = false;
+
+/*
  * Recharge la fiche affichee.
  *
  * Le code venait du tableau de bord, ou `charger()` relisait la semaine
@@ -45,6 +54,7 @@ const $ = (id) => document.getElementById(id);
 
 async function demarrer() {
   const { utilisateur } = await API.get('/api/moi');
+  enLectureSeule = utilisateur.role === 'admin';
   if (!['directeur', 'admin'].includes(utilisateur.role)) {
     location.href = '/chef.html';
     return;
@@ -353,9 +363,22 @@ function cablerFiche(bloc, fiche) {
    * plutot que laissees ouvertes sur un enregistrement qui sera refuse. Le
    * bandeau dit par ou passer — le rectificatif.
    */
-  if (fiche.statut === 'validee') {
+  /*
+   * Deux raisons de fermer la grille, et une seule facon de le faire : une
+   * fiche validee est partie en paie, un administrateur n'a pas a la corriger.
+   */
+  if (fiche.statut === 'validee' || enLectureSeule) {
     bloc.querySelectorAll('.cellule, .entete').forEach((champ) => { champ.disabled = true; });
-    cablerDecisions(bloc, fiche);
+    if (enLectureSeule) {
+      // Les decisions disparaissent : elles seraient refusees par le serveur.
+      bloc.querySelectorAll('[data-action]').forEach((bouton) => {
+        if (bouton.dataset.action !== 'excel') bouton.remove();
+      });
+      const etat = bloc.querySelector('.etat-enregistrement');
+      if (etat) etat.textContent = 'Lecture seule : les décisions appartiennent à la direction.';
+    } else {
+      cablerDecisions(bloc, fiche);
+    }
     afficherAnomalies(bloc, fiche.anomalies || []);
     return;
   }

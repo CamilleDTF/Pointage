@@ -90,7 +90,14 @@ function preparerChef() {
 
 function preparerDirecteur() {
   let source = lire('public', 'js', 'directeur.js');
-  source = adapter(source, "location.href = '/chef.html';", "Demo.aller('chef');", 'redirection chef');
+  // L'ecran accepte desormais l'administrateur : la redirection porte donc sur
+  // deux roles, et non plus sur le seul chef d'equipe.
+  source = adapter(
+    source,
+    "location.href = utilisateur.role === 'conducteur' ? '/conducteur.html' : '/chef.html';",
+    "Demo.aller('chef');",
+    'redirection hors direction'
+  );
   source = adapter(
     source,
     '  window.location.href = `/api/export/periode.${format}?${params}`;',
@@ -199,7 +206,7 @@ function preparerParametres() {
   source = adapter(source, "location.href = '/chef.html';", "Demo.aller('chef');", 'redirection chef');
   source = adapter(
     source,
-    "surClic('btn-retour', () => { location.href = '/directeur.html'; });",
+    "surClic('btn-retour', () => { location.href = '/accueil.html'; });",
     "surClic('btn-retour', () => Demo.aller('directeur'));",
     'retour au tableau de bord'
   );

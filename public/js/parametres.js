@@ -74,7 +74,14 @@ async function demarrer() {
   }
 
   await chargerAdmin();
-  ouvrirPanneau('effectif');
+  /*
+   * L'ancre de l'adresse ouvre son onglet.
+   *
+   * L'accueil de l'administrateur mene ici avec « #indicateurs » : sans cela,
+   * il atterrit sur l'effectif et doit chercher le suivi qu'il venait voir.
+   */
+  const demande = String(location.hash || '').replace('#', '');
+  ouvrirPanneau(PANNEAUX.includes(demande) ? demande : 'effectif');
 }
 
 /*
@@ -111,7 +118,9 @@ function poserMention(texte) {
   onglets.parentElement.appendChild(p);
 }
 
-surClic('btn-retour', () => { location.href = '/directeur.html'; });
+// L'accueil, et non le tableau de bord : c'est de la que l'on vient, et
+// l'administrateur n'a rien a faire sur la semaine s'il n'a pas choisi d'y aller.
+surClic('btn-retour', () => { location.href = '/accueil.html'; });
 surClic('btn-quitter', deconnexion);
 
 /* Les volets de l'ecran Parametres. */

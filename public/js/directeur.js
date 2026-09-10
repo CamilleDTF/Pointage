@@ -25,11 +25,18 @@ function surClic(id, action) {
 
 async function demarrer() {
   const { utilisateur } = await API.get('/api/moi');
-  if (utilisateur.role !== 'directeur') {
-    location.href = '/chef.html';
+  /*
+   * L'administrateur voit le pointage, il ne le decide pas.
+   *
+   * L'API le lui accorde depuis le debut — `voitToutLePointage` l'inclut — mais
+   * cet ecran le renvoyait dehors. Le cloisonnement porte sur les montants, pas
+   * sur les heures : qui a transmis et qui est en retard le regarde.
+   */
+  if (!['directeur', 'admin'].includes(utilisateur.role)) {
+    location.href = utilisateur.role === 'conducteur' ? '/conducteur.html' : '/chef.html';
     return;
   }
-  definirRole('directeur');
+  definirRole(utilisateur.role);
   $('entete-nom').textContent = utilisateur.nom;
 
   reference = await API.get('/api/reference');
