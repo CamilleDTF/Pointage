@@ -342,6 +342,14 @@ surClic('btn-changer-phrase', async () => {
 /* ------------------------------- Mon compte ------------------------------- */
 
 async function chargerMonCompte() {
+  // L'identifiant actuel, pre-rempli : on le corrige, on ne le retape pas.
+  try {
+    const { utilisateur } = await API.get('/api/moi');
+    if ($('mon-identifiant')) $('mon-identifiant').value = utilisateur.identifiant || '';
+  } catch {
+    // Sans lui, le champ reste vide : on peut toujours en saisir un.
+  }
+
   const etat = await API.get('/api/ma-reprise');
   const zone = $('etat-reprise');
 
@@ -365,6 +373,31 @@ async function chargerMonCompte() {
     zone.style.color = '';
   }
 }
+
+/*
+ * Changer son propre identifiant.
+ *
+ * Le code se changeait, l'identifiant non : une faute de frappe a la creation
+ * s'emportait pour toujours. Le code actuel est exige — sans lui, une session
+ * laissee ouverte permettrait de renommer le compte de son proprietaire, qui
+ * ne saurait plus sous quel nom se connecter.
+ */
+surClic('btn-changer-identifiant', async () => {
+  const aide = $('aide-identifiant');
+  try {
+    const r = await API.post('/api/mon-identifiant', {
+      identifiant: $('mon-identifiant').value,
+      actuel: $('identifiant-code').value,
+    });
+    $('identifiant-code').value = '';
+    $('mon-identifiant').value = r.identifiant;
+    aide.textContent = `Identifiant changé. Vous vous connecterez désormais avec « ${r.identifiant} ».`;
+    aide.style.color = 'var(--vert)';
+  } catch (e) {
+    aide.textContent = e.message;
+    aide.style.color = 'var(--rouge)';
+  }
+});
 
 surClic('btn-changer-code', async () => {
   const aide = $('aide-code');

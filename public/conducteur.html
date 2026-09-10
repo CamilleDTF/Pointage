@@ -34,6 +34,20 @@
         <div id="liste-attente"></div>
       </section>
 
+      <!--
+        Ce qui n'est pas arrive.
+
+        L'ecran ne montrait que les fiches transmises : une semaine ou personne
+        n'envoie rien laissait un ecran vide, ou l'on ne distingue pas « tout
+        est vise » de « personne n'a rien fait ». Relancer un chef qui a oublie
+        est pourtant le role du conducteur.
+      -->
+      <section class="carte" id="bloc-manquantes" hidden>
+        <h2 id="titre-manquantes">Pointages qui manquent</h2>
+        <p class="aide detache-apres" id="resume-manquantes"></p>
+        <div class="chefs" id="liste-manquantes"></div>
+      </section>
+
       <section class="carte" id="bloc-recentes" hidden>
         <h2>Vos derniers visas</h2>
         <div id="liste-recentes"></div>

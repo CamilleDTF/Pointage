@@ -26,6 +26,7 @@ async function demarrer() {
   $('btn-quitter').addEventListener('click', deconnexion, { once: true });
 
   afficherAttente(tableau.enAttente);
+  afficherManquantes(tableau.manquantes || [], tableau.semaine);
   afficherRecentes(tableau.recentes);
 }
 
@@ -68,6 +69,44 @@ function afficherAttente(fiches) {
         )
         .join('')
     : '';
+}
+
+/*
+ * Ce qui n'est pas arrive, et qu'il faut aller chercher.
+ *
+ * Un ecran vide ne disait pas si tout etait vise ou si personne n'avait rien
+ * envoye. Ces deux-la demandent des gestes opposes : l'un est fini, l'autre
+ * commence par un coup de telephone.
+ */
+const ETATS_MANQUANTS = {
+  manquante: { texte: 'Rien de saisi', classe: 'manquante', signe: '●' },
+  commencee: { texte: 'Commencée, pas transmise', classe: 'attente', signe: '◌' },
+  renvoyee: { texte: 'Renvoyée au chef', classe: 'verifier', signe: '▲' },
+};
+
+function afficherManquantes(chefs, semaine) {
+  const bloc = $('bloc-manquantes');
+  if (!bloc) return;
+  bloc.hidden = !chefs.length;
+  if (!chefs.length) return;
+
+  $('titre-manquantes').textContent =
+    chefs.length === 1 ? 'Un pointage manque' : `${chefs.length} pointages manquent`;
+  $('resume-manquantes').textContent = semaine
+    ? `Semaine ${semaine.semaine} — ces chefs d’équipe ne vous ont encore rien transmis.`
+    : 'Ces chefs d’équipe ne vous ont encore rien transmis.';
+
+  $('liste-manquantes').innerHTML = chefs
+    .map((c) => {
+      const m = ETATS_MANQUANTS[c.etat] || ETATS_MANQUANTS.manquante;
+      return `<article class="chef">
+        <span class="nom">${echapper(c.chef_nom)}</span>
+        <span class="bas">
+          <span class="marque ${m.classe}"><span class="signe">${m.signe}</span>${m.texte}</span>
+        </span>
+      </article>`;
+    })
+    .join('');
 }
 
 function afficherRecentes(fiches) {

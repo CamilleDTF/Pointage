@@ -87,6 +87,42 @@ routes.post('/api/mon-code', A.exigerConnexion, (req, res) => {
   res.json({ ok: true, sessionsFermees: true });
 });
 
+/*
+ * Changer son propre identifiant.
+ *
+ * Le code se changeait, l'identifiant non : une faute de frappe a la creation
+ * — « jdupont » pour « jdupond » — s'emportait pour toujours, et seule la
+ * direction pouvait la corriger sur le compte d'un autre. Or c'est ce qu'on
+ * tape chaque matin.
+ *
+ * Le code actuel est exige. Sans lui, une session laissee ouverte sur un poste
+ * partage permettrait de renommer le compte de son proprietaire, qui ne
+ * saurait meme plus sous quel nom se connecter.
+ */
+routes.post('/api/mon-identifiant', A.exigerConnexion, (req, res) => {
+  const actuel = String(req.body.actuel || '');
+  const identifiant = String(req.body.identifiant || '').trim().toLowerCase();
+
+  if (!/^[a-z0-9._-]{3,32}$/.test(identifiant)) {
+    return res.status(400).json({
+      erreur: 'Identifiant invalide : 3 a 32 caracteres, lettres, chiffres, point, tiret ou soulignement.',
+    });
+  }
+
+  const u = db.prepare('SELECT pin_hash, identifiant FROM utilisateurs WHERE id = ?').get(req.utilisateur.id);
+  if (!A.verifierPin(actuel, u.pin_hash)) return res.status(401).json({ erreur: 'Code actuel incorrect.' });
+  if (identifiant === u.identifiant) return res.json({ ok: true, identifiant });
+
+  try {
+    db.prepare('UPDATE utilisateurs SET identifiant = ? WHERE id = ?').run(identifiant, req.utilisateur.id);
+  } catch {
+    return res.status(409).json({ erreur: 'Cet identifiant est deja pris.' });
+  }
+
+  journaliser(null, req.utilisateur.id, 'identifiant_change', `${u.identifiant} -> ${identifiant}`);
+  res.json({ ok: true, identifiant });
+});
+
 /* ------------------------- La question de reprise ------------------------- */
 
 /*

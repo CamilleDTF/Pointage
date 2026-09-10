@@ -230,12 +230,47 @@ function tableauConducteur(conducteur, { historique = 60 } = {}) {
     )
     .all({ id: conducteur.id, limite: historique });
 
+  /*
+   * Ce qui n'est PAS arrive.
+   *
+   * Le conducteur ne voyait que les fiches qu'on lui avait transmises : une
+   * semaine ou un chef n'envoie rien est une semaine ou son ecran reste vide,
+   * et rien ne distingue « tout est vise » de « personne n'a rien fait ». Or
+   * relancer un chef qui a oublie est precisement son role.
+   *
+   * On regarde les chefs qui lui sont rattaches — le rattachement par defaut,
+   * `u.conducteur_id` — et l'on retire ceux dont la fiche de la semaine est
+   * partie. Un chef qui a designe quelqu'un d'autre cette semaine-la ne le
+   * regarde pas : sa fiche est chez l'autre.
+   */
+  const courante = D.semaineISO(new Date());
+  const manquantes = db
+    .prepare(
+      `SELECT u.id AS chef_id, u.nom AS chef_nom,
+              (SELECT statut FROM fiches f
+                WHERE f.chef_id = u.id AND f.annee = @annee AND f.semaine = @semaine
+                ORDER BY f.id DESC LIMIT 1) AS statut
+         FROM utilisateurs u
+        WHERE u.role = 'chef' AND u.actif = 1 AND u.conducteur_id = @id
+        ORDER BY u.nom`
+    )
+    .all({ id: conducteur.id, annee: courante.annee, semaine: courante.semaine })
+    .filter((c) => !c.statut || ['brouillon', 'rejetee'].includes(c.statut))
+    .map((c) => ({
+      ...c,
+      // « Rien de saisi » et « commencee mais pas transmise » n'appellent pas
+      // la meme relance : on le dit plutot que de les confondre.
+      etat: c.statut === 'brouillon' ? 'commencee' : c.statut === 'rejetee' ? 'renvoyee' : 'manquante',
+    }));
+
   return {
     conducteur: { nom: conducteur.nom },
+    semaine: { annee: courante.annee, semaine: courante.semaine },
     enAttente: enAttente.map((f) => ({
       ...f,
       lien: `/visa.html?fiche=${f.id}`,
     })),
+    manquantes,
     recentes: recentes.map((f) => ({ ...f, lien: `/visa.html?fiche=${f.id}` })),
   };
 }

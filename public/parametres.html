@@ -217,6 +217,30 @@
       </div>
       <p class="aide suite" id="aide-code"></p>
 
+      <!--
+        L'identifiant se change aussi.
+
+        Le code se changeait, l'identifiant non : une faute de frappe a la
+        creation s'emportait pour toujours. Or c'est ce qu'on tape chaque matin.
+      -->
+      <h3 class="titre-bloc detache plus">Mon identifiant</h3>
+      <p class="aide detache-apres">
+        C’est ce que vous tapez pour vous connecter. Le changer ne touche à rien d’autre —
+        vos fiches, vos droits et votre code restent les mêmes.
+      </p>
+      <div class="rangee">
+        <div class="champ-moyen">
+          <label for="mon-identifiant">Nouvel identifiant</label>
+          <input id="mon-identifiant" autocapitalize="none" autocorrect="off" spellcheck="false">
+        </div>
+        <div class="champ-moyen">
+          <label for="identifiant-code">Votre code</label>
+          <input id="identifiant-code" type="password" inputmode="numeric" autocomplete="off">
+        </div>
+        <button class="principal" id="btn-changer-identifiant" type="button">Changer mon identifiant</button>
+      </div>
+      <p class="aide suite" id="aide-identifiant"></p>
+
       <h3 class="titre-bloc detache plus">Ma question de reprise</h3>
       <div id="bloc-reprise"></div>
       <p class="aide detache-apres" id="etat-reprise"></p>
